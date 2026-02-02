@@ -1,0 +1,46 @@
+# === Project V-PACK Exclusions ===
+
+# --- Rust / Cargo ---
+/target/
+**/*.rs.bk
+Cargo.lock
+# We keep Cargo.lock for the main library but ignore it for experimental sub-crates
+# if they are just for sniffing.
+
+# --- Go ---
+# Compiled binaries and test artifacts
+bin/
+*.test
+*.exe
+*.test.exe
+*.out
+vendor/
+
+# --- Databases (Ark & Bark) ---
+# Second Tech (bark) creates local SQLite databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# --- Data Sniffing & Logs ---
+# We ignore the massive raw text dumps, but we KEEP the .json vectors
+*.log
+ark_labs_sniffed_data.txt
+second_raw.txt
+# Ensure we don't ignore our deliberate research data
+!research/audit_data/**/*.json
+!tests/conformance/vectors/**/*.json
+
+# --- Operating System & IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.env
+*.swp
+
+# --- Compression & Packages ---
+*.zip
+*.tar.gz
+*.vpk_temp
