@@ -1,0 +1,39 @@
+{
+    "meta": {
+      "variant": "0x04",
+      "description": "Ark Labs Round Leaf (V3 Anchored)"
+    },
+    "raw_evidence": {
+      "psbt_base64": "cHNidP8BAIkCAAAAAQZHuXAvWnEYgYReWDaFtPv0XrHEeexSLKuobldGsGtaAAAAAAD/////AuQMAAAAAAAAIlEgXmSOkaLuhGQ4avDJ3wB6f1JOC7ZcUJxqybPhafWSmei4CwAAAAAAACJRICPeS+JBxJ9nwAPr8rA/kSEeHg9wCEMHPhcgiJyfB4r2AAAAAAABASDoAwAAAAAAABepFOqfSG6C77Pdg6af2W4/ARN1faA8hwAAAA==",
+      "unsigned_tx_json": {
+        "Version":3,
+        "TxIn":[
+            {
+                "PreviousOutPoint":{
+                    "Hash":"c0f729ee5077ee16addf6ce2cd98b3a47b438f38cfdc30c37173cb2341199f5e",
+                    "Index":0
+                },
+                "SignatureScript":null,
+                "Witness":null,
+                "Sequence":4294967295
+            }
+        ],
+        "TxOut":[
+            {"Value":2200,"PkScript":"USCLBv/YfIl4724BjJDycjnJy+KLBRDu5i/uIlztBbmxfQ=="},
+            {"Value":1100,"PkScript":"USCvohZwMtVfSkcrhccKR9KsmE77eciLGPStULCokL1RGQ=="},
+            {"Value":0,"PkScript":"UQJOcw=="}
+        ],
+        "LockTime":0
+      },
+      "expected_vtxo_id": "0b3803bb6bc9a886bbbf0d935248399b3b7a7bd226c730096c8e6a06818922a3"
+    },
+    "reconstruction_ingredients": {
+      "tx_version": 3,
+      "locktime": 0,
+      "input_sequence": 4294967295,
+      "outputs": [
+        { "value": 600, "script": "512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967" },
+        { "value": 0, "script": "51024e73", "note": "Mandatory Fee Anchor" }
+      ]
+    }
+  }

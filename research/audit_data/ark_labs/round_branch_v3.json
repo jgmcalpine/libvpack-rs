@@ -1,0 +1,39 @@
+{
+    "meta": {
+      "variant": "0x04",
+      "description": "Ark Labs Intermediate Branch Node (V3 Anchored)"
+    },
+    "raw_evidence": {
+      "psbt_base64": "cHNidP8BAIkCAAAAAct6jsOLEICt1RuMeK6VPdHJkTFc5c00VUX+wmv1xLe3AAAAAAD/////AkwEAAAAAAAAIlEg+qxTOqDe9smxGW5QHZL8ftwZcpZHk71PoN3oNbH7muPoAwAAAAAAACJRICPeS+JBxJ9nwAPr8rA/kSEeHg9wCEMHPhcgiJyfB4r2AAAAAAABASDoAwAAAAAAABepFOqfSG6C77Pdg6af2W4/ARN1faA8hwAAAA==",
+      "expected_vtxo_id": "f259d88f76b67559f51cd3c6c22f6579219ad75000d60ee78caaedc7418b1802",
+      "unsigned_tx_json": {
+        "Version": 3,
+        "TxIn": [
+          {
+            "PreviousOutPoint": {
+              "Hash": "f60017a41c1fb808202c2781bfefc2d57b1aa85e6a473f2873d7c3b7cef2514e",
+              "Index": 0
+            },
+            "SignatureScript": null,
+            "Witness": null,
+            "Sequence": 4294967295
+          }
+        ],
+        "TxOut": [
+          { "Value": 600, "PkScript": "USD6rFM6oN72ybEZblAdkvx+3BlylkeTvU+g3eg1sfua4w==" },
+          { "Value": 500, "PkScript": "USD6rFM6oN72ybEZblAdkvx+3BlylkeTvU+g3eg1sfua4w==" },
+          { "Value": 0, "PkScript": "UQJOcw==" }
+        ],
+        "LockTime": 0
+      }
+    },
+    "reconstruction_ingredients": {
+      "tx_version": 3,
+      "input_sequence": 4294967295,
+      "outputs": [
+        { "value": 600, "note": "Target for Child 0" },
+        { "value": 500, "note": "Target for Child 1" },
+        { "value": 0, "script": "51024e73", "note": "Mandatory Fee Anchor" }
+      ]
+    }
+  }
