@@ -5,14 +5,10 @@
 ## 1. Abstract
 V-PACK is a deterministic binary container for off-chain Bitcoin transaction trees. It standardizes the storage and transport of Virtual UTXOs (vUTXOs) across different Ark Service Provider (ASP) implementations. It prioritizes **Compactness** (via Hybrid Proofs), **Fail-Fast Verification**, and **Hardware Alignment**.
 
-## 2. Security & Validation Rules
-1.  **Bounded Reader:** Parsers MUST NOT read more `path` items than specified in the `Tree Depth` header.
 2.  **Consensus Variants:**
-    *   **Variant 0x03 (V3-Plain):** Derived from Second Tech logic. Hashing is applied to a serialized object. 
-    *   **Variant 0x04 (V3-Anchored):** Derived from Ark Labs logic. Hashing is applied to a reconstructed BIP-431 (TRUC) transaction including a mandatory Fee Anchor.
-3.  **Expiry & Delta:** The `expiry` and `exit_delta` fields MUST be interpreted as absolute block heights or relative durations per BIP-113.
-4.  **Checksum Exclusion:** Calculated over Bytes 0-19 of the Header + the Payload.
-
+    *   **Variant 0x03 (V3-Chain):** Targets the Second Tech model. Verification requires recursive transaction reconstruction with `nSequence = 0`. ID is returned as an `OutPoint`.
+    *   **Variant 0x04 (V3-Tree):** Targets the Ark Labs model. Verification requires Merkle-tree reconstruction with `nSequence = MAX/MAX-1`. ID is returned as a raw `Hash`.
+    
 ## 3. The Header (24 Bytes)
 **Alignment:** 4-byte aligned. **Endianness:** Little-Endian.
 
