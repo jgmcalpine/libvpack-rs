@@ -1,10 +1,10 @@
 //! V-PACK serialization (pack). Builds a byte buffer from header + tree.
 //! Symmetric to payload::reader; used by conformance tests and ASPs.
 
+use byteorder::ByteOrder;
 use crate::error::VPackError;
 use crate::header::{Header, HEADER_SIZE, MAGIC_BYTES};
-use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
-use bitcoin::OutPoint;
+use crate::payload::tree::{SiblingNode, VPackTree};
 use bitcoin::TxOut;
 use byteorder::LittleEndian;
 use borsh::BorshSerialize;

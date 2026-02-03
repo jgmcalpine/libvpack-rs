@@ -47,6 +47,12 @@ pub enum VPackError {
 
     /// Invalid or out-of-range vout (e.g. for OutPoint-based IDs).
     InvalidVout(u32),
+
+    /// Reconstructed VTXO ID did not match the expected ID (verification gate).
+    IdMismatch,
+
+    /// VTXO ID string could not be parsed (expected raw 64-char hex or "Hash:Index").
+    InvalidVtxoIdFormat,
 }
 
 // Manual implementation of Display for no_std environments.
@@ -68,6 +74,8 @@ impl core::fmt::Display for VPackError {
             Self::SequenceMismatch(s) => write!(f, "Sequence mismatch: 0x{:08x} (expected 0xFFFFFFFF or 0xFFFFFFFE)", s),
             Self::FeeAnchorMissing => write!(f, "Fee anchor script missing (required for V3-Anchored)"),
             Self::InvalidVout(v) => write!(f, "Invalid vout: {}", v),
+            Self::IdMismatch => write!(f, "VTXO ID mismatch: reconstructed ID does not match expected"),
+            Self::InvalidVtxoIdFormat => write!(f, "Invalid VTXO ID format (expected 64-char hex or Hash:Index)"),
         }
     }
 }
