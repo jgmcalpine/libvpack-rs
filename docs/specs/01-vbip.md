@@ -32,9 +32,13 @@ V-PACK is a deterministic binary container for off-chain Bitcoin transaction tre
 ## 4. The Payload Structure
 
 ### 4.1 The Prefix Section (Fail-Fast)
-1.  **Asset ID (Optional, 32 Bytes):** Present if `Flags & 0x08`.
-2.  **Anchor OutPoint (36 Bytes):** `TxID` (32B) + `Vout` (4B).
-3. **fee_anchor_script:** Vec<u8>
+Parsed in order; all fields must be consumed before the Tree Section (VtxoLeaf) begins.
+
+| Order | Size / Encoding | Name | Type | Description |
+|:------|:----------------|:-----|:-----|:------------|
+| 1 | 32 (conditional) | Asset ID | [u8; 32] | Present only if `Flags & 0x08` |
+| 2 | 36 | Anchor OutPoint | TxID (32B) + Vout (4B) | On-chain anchor |
+| 3 | Borsh `Vec<u8>` | fee_anchor_script | length-prefixed bytes | Fee anchor script; non-empty required for V3-Anchored |
 
 ### 4.2 The Tree Section (Borsh Encoded)
 ```rust
@@ -45,17 +49,18 @@ struct VPackTree {
 
 struct VtxoLeaf {
     amount: u64,
-    script_pubkey: Vec<u8>, 
     vout: u32,           // Mandatory for OutPoint-based IDs (Variant 0x03)
     sequence: u32,       // 0xFFFFFFFF (Round) or 0xFFFFFFFE (OOR)
     expiry: u32,         // Timelock
     exit_delta: u16,     // Required for Second Tech security model
+    script_pubkey: Vec<u8>,
 }
 
 struct GenesisItem {
-    siblings: Vec<SiblingNode>, 
+    siblings: Vec<SiblingNode>,
     parent_index: u32,
     sequence: u32,
     child_amount: u64,       // Needed to reconstruct the Parent's Output Value
     child_script_pubkey: Vec<u8>, // Needed to reconstruct the Parent's Output Script
+    signature: Option<[u8; 64]>,  // Cosigned transitions (Second Tech audit)
 }
