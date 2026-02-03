@@ -8,10 +8,10 @@
       "expected_vtxo_id": "c806f5fc2cf7a5b0e8e2fa46cc9e0c7a511f43144f9d27f85a9108e4b8c4d662:0"
     },
     "reconstruction_ingredients": {
-      "id_type": "OutPoint (Hash:Index)",
-      "amount": 10000,
-      "expiry_height": 101010,
-      "exit_delta": 2016,
-      "serialization": "Borsh"
+      "topology": "Chain",
+      "tx_version": 3,
+      "nSequence": 0,
+      "fee_anchor_script": "51024e73",
+      "id_type": "OutPoint"
     }
 }

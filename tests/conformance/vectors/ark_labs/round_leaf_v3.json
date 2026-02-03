@@ -28,12 +28,10 @@
       "expected_vtxo_id": "0b3803bb6bc9a886bbbf0d935248399b3b7a7bd226c730096c8e6a06818922a3"
     },
     "reconstruction_ingredients": {
+      "topology": "Tree",
       "tx_version": 3,
-      "locktime": 0,
-      "input_sequence": 4294967295,
-      "outputs": [
-        { "value": 600, "script": "512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967" },
-        { "value": 0, "script": "51024e73", "note": "Mandatory Fee Anchor" }
-      ]
+      "nSequence": 4294967295,
+      "fee_anchor_script": "51024e73",
+      "id_type": "Hash"
     }
   }

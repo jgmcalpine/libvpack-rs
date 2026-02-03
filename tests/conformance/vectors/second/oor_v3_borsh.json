@@ -8,8 +8,10 @@
       "expected_vtxo_id": "07ad5f30a024945a59d63f055879d2e022115bcb1e35ff266f82a462a5226401:0"
     },
     "reconstruction_ingredients": {
-      "genesis_vector_len": "Matches OOR_3 history count",
-      "is_recursive": true,
-      "serialization": "Borsh"
+      "topology": "Chain",
+      "tx_version": 3,
+      "nSequence": 0,
+      "fee_anchor_script": "51024e73",
+      "id_type": "OutPoint"
     }
   }

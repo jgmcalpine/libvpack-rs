@@ -28,12 +28,10 @@
       }
     },
     "reconstruction_ingredients": {
+      "topology": "Tree",
       "tx_version": 3,
-      "input_sequence": 4294967295,
-      "outputs": [
-        { "value": 600, "note": "Target for Child 0" },
-        { "value": 500, "note": "Target for Child 1" },
-        { "value": 0, "script": "51024e73", "note": "Mandatory Fee Anchor" }
-      ]
+      "nSequence": 4294967295,
+      "fee_anchor_script": "51024e73",
+      "id_type": "Hash"
     }
   }

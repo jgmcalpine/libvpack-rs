@@ -8,8 +8,10 @@
       "expected_vtxo_id": "0008e3859346af4a85eba6a16ed45c8efa03f04b7930f370709b00ad44b7994c:0"
     },
     "reconstruction_ingredients": {
-      "genesis_depth": 0,
-      "amount": "Matches BOARDING amount",
-      "serialization": "Borsh"
+      "topology": "Chain",
+      "tx_version": 3,
+      "nSequence": 0,
+      "fee_anchor_script": "51024e73",
+      "id_type": "OutPoint"
     }
 }

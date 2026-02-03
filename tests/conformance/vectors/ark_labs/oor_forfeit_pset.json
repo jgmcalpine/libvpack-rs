@@ -9,9 +9,10 @@
       "expected_vtxo_id": "COMPUTE_FROM_HEX"
     },
     "reconstruction_ingredients": {
+      "topology": "SingleSpend",
       "tx_version": 3,
-      "input_sequence": 4294967294,
+      "nSequence": 4294967294,
       "fee_anchor_script": "51024e73",
-      "note": "NOTICE: Sequence is 0xFFFFFFFE, differs from Round sequence."
+      "id_type": "Hash"
     }
   }
