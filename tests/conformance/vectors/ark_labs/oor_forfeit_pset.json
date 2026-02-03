@@ -1,0 +1,17 @@
+{
+    "meta": {
+      "variant": "0x04",
+      "description": "Ark Labs OOR Forfeit Transaction (V3 Anchored)"
+    },
+    "raw_evidence": {
+      "unsigned_tx_hex": "0300000001411d0d848ab79c0f7ae5a73742c4addd4e5b5646c2bc4bea854d287107825c750000000000feffffff02e803000000000000150014a1b2c3d4e5f6789012345678901234567890ab00000000000000000451024e7300000000",
+      "spending_vtxo_id": "755c820771284d85ea4bbcc246565b4eddadc44237a7e57a0f9cb78a840d1d41",
+      "expected_vtxo_id": "COMPUTE_FROM_HEX"
+    },
+    "reconstruction_ingredients": {
+      "tx_version": 3,
+      "input_sequence": 4294967294,
+      "fee_anchor_script": "51024e73",
+      "note": "NOTICE: Sequence is 0xFFFFFFFE, differs from Round sequence."
+    }
+  }
