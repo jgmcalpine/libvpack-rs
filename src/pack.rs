@@ -1,14 +1,17 @@
 //! V-PACK serialization (pack). Builds a byte buffer from header + tree.
 //! Symmetric to payload::reader; used by conformance tests and ASPs.
 
+use alloc::vec::Vec;
+
 use byteorder::ByteOrder;
+use byteorder::LittleEndian;
+use borsh::BorshSerialize;
+use bitcoin::TxOut;
+
+use crate::compact_size::write_compact_size;
 use crate::error::VPackError;
 use crate::header::{Header, HEADER_SIZE, MAGIC_BYTES};
 use crate::payload::tree::{SiblingNode, VPackTree};
-use bitcoin::TxOut;
-use byteorder::LittleEndian;
-use borsh::BorshSerialize;
-use alloc::vec::Vec;
 
 /// Packs a pre-built payload (prefix + tree section) with the given header into a complete V-PACK.
 /// Used by conformance tests that supply raw tree bytes (e.g. from audit borsh_hex).
@@ -135,25 +138,7 @@ fn encode_txout(txout: &TxOut, out: &mut Vec<u8>) -> Result<(), VPackError> {
     LittleEndian::write_u64(&mut val_buf, value);
     out.extend_from_slice(&val_buf);
     let script = txout.script_pubkey.as_bytes();
-    let len = script.len();
-    if len < 253 {
-        out.push(len as u8);
-    } else if len < 0x10000 {
-        out.push(0xfd);
-        let mut b = [0u8; 2];
-        LittleEndian::write_u16(&mut b, len as u16);
-        out.extend_from_slice(&b);
-    } else if len < 0x100000000 {
-        out.push(0xfe);
-        let mut b = [0u8; 4];
-        LittleEndian::write_u32(&mut b, len as u32);
-        out.extend_from_slice(&b);
-    } else {
-        out.push(0xff);
-        let mut b = [0u8; 8];
-        LittleEndian::write_u64(&mut b, len as u64);
-        out.extend_from_slice(&b);
-    }
+    write_compact_size(out, script.len() as u64);
     out.extend_from_slice(script);
     Ok(())
 }

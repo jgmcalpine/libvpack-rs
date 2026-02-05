@@ -13,6 +13,10 @@ use bitcoin::Txid;
 use crate::error::VPackError;
 use crate::payload::tree::VPackTree;
 
+pub mod tx_factory;
+
+pub use tx_factory::{tx_preimage, TxInPreimage, TxOutPreimage};
+
 // -----------------------------------------------------------------------------
 // VtxoId
 // -----------------------------------------------------------------------------
