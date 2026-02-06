@@ -5,7 +5,7 @@
     },
     "raw_evidence": {
       "psbt_base64": "cHNidP8BAIkCAAAAAct6jsOLEICt1RuMeK6VPdHJkTFc5c00VUX+wmv1xLe3AAAAAAD/////AkwEAAAAAAAAIlEg+qxTOqDe9smxGW5QHZL8ftwZcpZHk71PoN3oNbH7muPoAwAAAAAAACJRICPeS+JBxJ9nwAPr8rA/kSEeHg9wCEMHPhcgiJyfB4r2AAAAAAABASDoAwAAAAAAABepFOqfSG6C77Pdg6af2W4/ARN1faA8hwAAAA==",
-      "expected_vtxo_id": "f259d88f76b67559f51cd3c6c22f6579219ad75000d60ee78caaedc7418b1802",
+      "expected_vtxo_id": "8ab0b71cc66c494ebef13b8b995e5ce5ab3d1b365b289761fefadb0ceb1baec5",
       "unsigned_tx_json": {
         "Version": 3,
         "TxIn": [
@@ -37,6 +37,7 @@
       "siblings": [
         { "hash": "25a89a946d6bf1b3d4c353bbcf0de80942cd00cab2bb2afd431f43a45bda2695", "value": 600, "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3" },
         { "hash": "a531344d6f8f18d6ce6bff480149061c33792f4546d6414ea6fa0180aa132e06", "value": 500, "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3" }
-      ]
+      ],
+      "child_output": { "value": 600, "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3" }
     }
   }

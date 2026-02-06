@@ -3,6 +3,8 @@
 //! Proves we can compute the correct vTXO/tx IDs from raw sniffed hex using
 //! only the `bitcoin` crate. No library logic — naked deserialize + compute_txid.
 
+mod common;
+
 use bitcoin::consensus::Decodable;
 use bitcoin::hashes::Hash;
 use std::io::Cursor;
@@ -359,36 +361,64 @@ fn test_iterator() {
                 let contents = fs::read_to_string(&path).expect("read JSON");
                 let vector: AuditVector = serde_json::from_str(&contents).expect("parse audit JSON");
 
-                // Skip vectors without both borsh_hex and expected_vtxo_id
-                if let (Some(borsh_hex), Some(expected_id_str)) = 
-                    (&vector.raw_evidence.borsh_hex, &vector.raw_evidence.expected_vtxo_id) {
-                    
-                    // Build valid V-PACK
-                    let vpack_bytes = build_vpack_bytes(&vector, borsh_hex);
-                    let expected_id = vpack::VtxoId::from_str(expected_id_str)
-                        .expect("parse expected VTXO ID");
+                let expected_id_str = match &vector.raw_evidence.expected_vtxo_id {
+                    Some(s) if s != "COMPUTE_FROM_HEX" => s.as_str(),
+                    _ => continue,
+                };
 
-                    // Valid vector must succeed
-                    let result = vpack::verify(&vpack_bytes, &expected_id);
+                let tx_variant = variant_from_meta(&vector.meta.variant);
+                let fee_script: Vec<u8> = vector.reconstruction_ingredients["fee_anchor_script"]
+                    .as_str()
+                    .map(|h| hex::decode(h).expect("decode fee_anchor_script"))
+                    .unwrap_or_else(|| vec![0x51, 0x02, 0x4e, 0x73]);
+                // Logic Adapters produce Compact siblings; use FLAG_PROOF_COMPACT for reader/writer symmetry.
+                let header = Header {
+                    flags: FLAG_PROOF_COMPACT,
+                    version: 1,
+                    tx_variant,
+                    tree_arity: 16,
+                    tree_depth: 32,
+                    node_count: 0,
+                    asset_type: 0,
+                    payload_len: 0,
+                    checksum: 0,
+                };
+
+                let vpack_bytes = match common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+                    Some(Ok(tree)) => pack(&header, &tree).expect("pack"),
+                    Some(Err(e)) => panic!("logic adapter failed for {}: {:?}", path.display(), e),
+                    None => {
+                        let borsh_hex = vector.raw_evidence.borsh_hex.as_ref().expect("no ingredients and no borsh_hex");
+                        if tx_variant == TxVariant::V3Plain {
+                            let tree_bytes = hex::decode(borsh_hex).expect("decode borsh_hex");
+                            let tree = vpack::adapters::second_tech::bark_to_vpack(&tree_bytes, &fee_script)
+                                .expect("bark_to_vpack");
+                            pack(&header, &tree).expect("pack")
+                        } else {
+                            build_vpack_bytes(&vector, borsh_hex)
+                        }
+                    }
+                };
+
+                let expected_id = vpack::VtxoId::from_str(expected_id_str)
+                    .expect("parse expected VTXO ID");
+
+                let result = vpack::verify(&vpack_bytes, &expected_id);
+                assert!(
+                    result.is_ok(),
+                    "Vector {} should verify successfully",
+                    path.display()
+                );
+
+                let mut corrupted = vpack_bytes.clone();
+                if corrupted.len() > HEADER_SIZE + 50 {
+                    corrupted[HEADER_SIZE + 50] ^= 0x01;
+                    let corrupt_result = vpack::verify(&corrupted, &expected_id);
                     assert!(
-                        result.is_ok(),
-                        "Vector {} should verify successfully",
+                        corrupt_result.is_err(),
+                        "Corrupted vector {} should fail verification",
                         path.display()
                     );
-
-                    // Corrupt and verify failure
-                    // Flip a bit in the payload (after header)
-                    let mut corrupted = vpack_bytes.clone();
-                    if corrupted.len() > HEADER_SIZE + 50 {
-                        corrupted[HEADER_SIZE + 50] ^= 0x01; // Flip a bit
-                        
-                        let corrupt_result = vpack::verify(&corrupted, &expected_id);
-                        assert!(
-                            corrupt_result.is_err(),
-                            "Corrupted vector {} should fail verification",
-                            path.display()
-                        );
-                    }
                 }
             }
         }

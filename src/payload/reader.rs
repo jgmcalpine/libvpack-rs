@@ -146,7 +146,7 @@ impl BoundedReader {
 
         for item_idx in 0..path_len {
             debug_print!("DEBUG READER: Starting GenesisItem[{}] parse. Remaining bytes: {}", item_idx, data.len());
-            // C. Siblings length (Borsh u32 = 4 bytes LE)
+            // C. Siblings length (V-PACK standard: Borsh u32 = 4 bytes LE; do not use u16)
             if data.len() < 4 {
                 return Err(VPackError::IncompleteData);
             }
@@ -250,8 +250,7 @@ impl BoundedReader {
                         return Err(VPackError::IncompleteData);
                     }
                     let script_bytes = &cursor[..script_len_usize];
-                    cursor = &cursor[script_len_usize..];
-                    
+
                     // 4. Reconstruct TxOut and advance data slice
                     use bitcoin::Amount;
                     use bitcoin::ScriptBuf;

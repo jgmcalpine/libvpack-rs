@@ -6,6 +6,7 @@ extern crate std;
 // Needed for Vec
 extern crate alloc;
 
+pub mod adapters;
 pub mod compact_size;
 pub mod consensus;
 pub mod error;
@@ -76,7 +77,7 @@ pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPa
             e
         })?;
 
-    // Step 5: Dispatch by Variant and Verify
+    // Step 5: Dispatch by Variant and Verify (only 0x03 and 0x04 are valid per TxVariant::try_from)
     match header.tx_variant {
         crate::header::TxVariant::V3Anchored => {
             let engine = ArkLabsV3;
@@ -86,11 +87,20 @@ pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPa
             let engine = SecondTechV3;
             engine.verify(&tree, expected_id)?;
         }
-        _ => {
-            return Err(VPackError::InvalidTxVariant(header.tx_variant.as_u8()));
-        }
     }
 
     // Step 6: Return the parsed tree
     Ok(tree)
+}
+
+/// Test-only: compute the VTXO ID that would be verified for this V-PACK. Used to fill expected_vtxo_id in vectors.
+#[cfg(feature = "std")]
+pub fn compute_vtxo_id_from_bytes(vpack_bytes: &[u8]) -> Result<VtxoId, VPackError> {
+    let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])?;
+    header.verify_checksum(&vpack_bytes[HEADER_SIZE..])?;
+    let tree = BoundedReader::parse(&header, &vpack_bytes[HEADER_SIZE..])?;
+    match header.tx_variant {
+        crate::header::TxVariant::V3Anchored => ArkLabsV3.compute_vtxo_id(&tree),
+        crate::header::TxVariant::V3Plain => SecondTechV3.compute_vtxo_id(&tree),
+    }
 }

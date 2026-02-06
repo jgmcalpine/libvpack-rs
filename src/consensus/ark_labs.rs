@@ -313,23 +313,32 @@ mod tests {
             });
         }
 
+        let child_output = ri.get("child_output").and_then(|co| co.as_object());
+        let (child_amount, child_script_pubkey) = if let Some(co) = child_output {
+            let v = co["value"].as_u64().unwrap_or(0);
+            let s = co["script"].as_str().map(|h| hex::decode(h).unwrap_or_default()).unwrap_or_default();
+            (v, s)
+        } else {
+            (0, Vec::new())
+        };
+
         let path_item = GenesisItem {
             siblings,
             parent_index: 0,
             sequence,
-            child_amount: 0,
-            child_script_pubkey: Vec::new(),
+            child_amount,
+            child_script_pubkey: child_script_pubkey.clone(),
             signature: None,
         };
 
         let tree = VPackTree {
             leaf: VtxoLeaf {
-                amount: 0,
+                amount: child_amount,
                 vout: 0,
-                sequence: 0,
+                sequence,
                 expiry: 0,
                 exit_delta: 0,
-                script_pubkey: Vec::new(),
+                script_pubkey: child_script_pubkey,
             },
             path: vec![path_item],
             anchor,
