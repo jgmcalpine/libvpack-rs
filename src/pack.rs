@@ -8,6 +8,23 @@ use byteorder::LittleEndian;
 use borsh::BorshSerialize;
 use bitcoin::TxOut;
 
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        std::eprintln!($($arg)*);
+        // Force flush to ensure output is visible
+        let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
+    };
+}
+
+#[cfg(not(test))]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {};
+}
+
 use crate::compact_size::write_compact_size;
 use crate::error::VPackError;
 use crate::header::{Header, HEADER_SIZE, MAGIC_BYTES};
@@ -99,13 +116,17 @@ fn serialize_payload(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPack
     // Tree: path_len (Borsh u32)
     let path_len = tree.path.len() as u32;
     path_len.serialize(&mut out).map_err(|_| VPackError::EncodingError)?;
+    debug_print!("DEBUG WRITER: Wrote path_len={}. Output size: {}", path_len, out.len());
 
-    for item in &tree.path {
+    for (item_idx, item) in tree.path.iter().enumerate() {
+        debug_print!("DEBUG WRITER: Starting GenesisItem[{}] serialize. Output size: {}", item_idx, out.len());
         // siblings_len (Borsh u32)
         let siblings_len = item.siblings.len() as u32;
         siblings_len.serialize(&mut out).map_err(|_| VPackError::EncodingError)?;
+        debug_print!("DEBUG WRITER: Wrote siblings_len={}. Output size: {}", siblings_len, out.len());
 
-        for sibling in &item.siblings {
+        for (sibling_idx, sibling) in item.siblings.iter().enumerate() {
+            debug_print!("DEBUG WRITER: Serializing sibling[{}]. Output size: {}", sibling_idx, out.len());
             match sibling {
                 SiblingNode::Compact { hash, value, script } => {
                     out.extend_from_slice(hash);
@@ -115,6 +136,8 @@ fn serialize_payload(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPack
                     script
                         .serialize(&mut out)
                         .map_err(|_| VPackError::EncodingError)?;
+                    debug_print!("DEBUG WRITER: Wrote Compact sibling: hash[..4]={:?}, value={}, script_len={}. Output size: {}", 
+                        &hash[..4], value, script.len(), out.len());
                 }
                 SiblingNode::Full(txout) => {
                     encode_txout(txout, &mut out)?;
@@ -125,21 +148,35 @@ fn serialize_payload(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPack
         item.parent_index
             .serialize(&mut out)
             .map_err(|_| VPackError::EncodingError)?;
+        debug_print!("DEBUG WRITER: Wrote parent_index={}. Output size: {}", item.parent_index, out.len());
         item.sequence
             .serialize(&mut out)
             .map_err(|_| VPackError::EncodingError)?;
+        debug_print!("DEBUG WRITER: Wrote sequence={}. Output size: {}", item.sequence, out.len());
         item.child_amount
             .serialize(&mut out)
             .map_err(|_| VPackError::EncodingError)?;
+        debug_print!("DEBUG WRITER: Wrote child_amount={}. Output size: {}", item.child_amount, out.len());
         item.child_script_pubkey
             .serialize(&mut out)
             .map_err(|_| VPackError::EncodingError)?;
+        debug_print!("DEBUG WRITER: Wrote child_script_pubkey (len={}). Output size: {}", item.child_script_pubkey.len(), out.len());
+        item.signature
+            .serialize(&mut out)
+            .map_err(|_| VPackError::EncodingError)?;
+        debug_print!("DEBUG WRITER: Wrote signature. Output size: {}", out.len());
     }
 
     Ok(out)
 }
 
 /// Bitcoin consensus encoding for TxOut: value (8 LE) + compact size (script len) + script.
+/// 
+/// SYMMETRY NOTE: This uses `write_compact_size` for script length, which matches
+/// `TxOut::consensus_decode` in the reader. Both use Bitcoin VarInt format:
+/// - Writer: `write_compact_size(out, script.len())` → VarInt
+/// - Reader: `TxOut::consensus_decode(&mut data)` → reads VarInt script_len
+/// This ensures perfect symmetry for SiblingNode::Full.
 fn encode_txout(txout: &TxOut, out: &mut Vec<u8>) -> Result<(), VPackError> {
     let value = txout.value.to_sat();
     let mut val_buf = [0u8; 8];

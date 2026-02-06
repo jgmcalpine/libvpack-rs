@@ -53,6 +53,9 @@ pub enum VPackError {
 
     /// VTXO ID string could not be parsed (expected raw 64-char hex or "Hash:Index").
     InvalidVtxoIdFormat,
+
+    /// Payload had trailing bytes after full VPackTree parse (cursor desynchronization).
+    TrailingData(usize),
 }
 
 // Manual implementation of Display for no_std environments.
@@ -76,6 +79,7 @@ impl core::fmt::Display for VPackError {
             Self::InvalidVout(v) => write!(f, "Invalid vout: {}", v),
             Self::IdMismatch => write!(f, "VTXO ID mismatch: reconstructed ID does not match expected"),
             Self::InvalidVtxoIdFormat => write!(f, "Invalid VTXO ID format (expected 64-char hex or Hash:Index)"),
+            Self::TrailingData(n) => write!(f, "Trailing data: {} bytes left after parse", n),
         }
     }
 }
