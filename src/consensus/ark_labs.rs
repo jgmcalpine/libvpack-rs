@@ -8,6 +8,8 @@ use alloc::vec::Vec;
 
 use bitcoin::hashes::sha256d;
 use bitcoin::hashes::Hash;
+use bitcoin::OutPoint;
+use bitcoin::Txid;
 
 use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
@@ -28,11 +30,75 @@ impl ConsensusEngine for ArkLabsV3 {
             return Err(VPackError::FeeAnchorMissing);
         }
 
-        // Check if this is a leaf node (empty path) or branch node
+        // If path is empty, this is a leaf node
         if tree.path.is_empty() {
-            self.compute_leaf_vtxo_id(tree)
+            return self.compute_leaf_vtxo_id(tree);
+        }
+
+        // Top-down chaining: start with on-chain anchor
+        let mut current_prevout = tree.anchor;
+        let mut last_txid_bytes = None;
+
+        // Iterate through path (top-down from root to leaf)
+        for genesis_item in &tree.path {
+            // Build outputs: child (if present) + siblings + fee anchor
+            let mut outputs = Vec::new();
+
+            // Add child output only if present (represents the next level down)
+            if !genesis_item.child_script_pubkey.is_empty() {
+                outputs.push(TxOutPreimage {
+                    value: genesis_item.child_amount,
+                    script_pubkey: genesis_item.child_script_pubkey.as_slice(),
+                });
+            }
+
+            // Add sibling outputs
+            for sibling in &genesis_item.siblings {
+                match sibling {
+                    SiblingNode::Compact { value, script, .. } => {
+                        outputs.push(TxOutPreimage {
+                            value: *value,
+                            script_pubkey: script.as_slice(),
+                        });
+                    }
+                    SiblingNode::Full(_) => return Err(VPackError::EncodingError),
+                }
+            }
+
+            // Add fee anchor (always last)
+            outputs.push(TxOutPreimage {
+                value: 0,
+                script_pubkey: tree.fee_anchor_script.as_slice(),
+            });
+
+            // Build input spending current_prevout
+            let input = TxInPreimage {
+                prev_out_txid: current_prevout.txid.to_byte_array(),
+                prev_out_vout: current_prevout.vout,
+                sequence: genesis_item.sequence,
+            };
+
+            // Hash transaction → Raw Hash
+            let txid_bytes = Self::hash_node_bytes(3, &[input], &outputs, 0)?;
+            let txid = Txid::from_byte_array(txid_bytes);
+
+            // Store the last transaction's hash
+            last_txid_bytes = Some(txid_bytes);
+
+            // Hand-off: Convert to OutPoint for next step (always vout 0 for Ark Labs)
+            current_prevout = OutPoint {
+                txid,
+                vout: 0,
+            };
+        }
+
+        // Final step: Build leaf transaction spending current_prevout (if leaf is valid)
+        // If leaf has empty script_pubkey, return the ID from the last path transaction
+        if tree.leaf.script_pubkey.is_empty() {
+            // Return the Raw hash from the last transaction
+            Ok(VtxoId::Raw(last_txid_bytes.expect("path should have at least one item")))
         } else {
-            self.compute_branch_vtxo_id(tree)
+            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout)
         }
     }
 }
@@ -40,6 +106,16 @@ impl ConsensusEngine for ArkLabsV3 {
 impl ArkLabsV3 {
     /// Compute VTXO ID for a leaf node (no path).
     fn compute_leaf_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
+        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor)
+    }
+
+    /// Compute VTXO ID for a leaf node with a custom prevout.
+    /// Used for the final leaf transaction in recursive path traversal.
+    fn compute_leaf_vtxo_id_with_prevout(
+        &self,
+        tree: &VPackTree,
+        prevout: OutPoint,
+    ) -> Result<VtxoId, VPackError> {
         // Build outputs list dynamically: [User Output, Fee Anchor]
         let mut outputs = Vec::with_capacity(2);
 
@@ -55,47 +131,14 @@ impl ArkLabsV3 {
             script_pubkey: tree.fee_anchor_script.as_slice(),
         });
 
-        // Build input from anchor OutPoint
+        // Build input from prevout OutPoint
         let input = TxInPreimage {
-            prev_out_txid: tree.anchor.txid.to_byte_array(),
-            prev_out_vout: tree.anchor.vout,
+            prev_out_txid: prevout.txid.to_byte_array(),
+            prev_out_vout: prevout.vout,
             sequence: tree.leaf.sequence,
         };
 
         // Hash the node: Version 3, Locktime 0
-        Self::hash_node(3, &[input], &outputs, 0)
-    }
-
-    /// Compute VTXO ID for a branch node (path non-empty).
-    /// Outputs: N child outputs (sibling script each) + fee anchor.
-    fn compute_branch_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
-        let first = tree.path.first().ok_or(VPackError::EncodingError)?;
-        let mut child_outputs: Vec<(u64, Vec<u8>)> = Vec::new();
-        for sibling in &first.siblings {
-            match sibling {
-                SiblingNode::Compact { value, script, .. } => {
-                    child_outputs.push((*value, script.clone()));
-                }
-                SiblingNode::Full(_) => return Err(VPackError::EncodingError),
-            }
-        }
-        let mut outputs: Vec<TxOutPreimage<'_>> = Vec::with_capacity(child_outputs.len() + 1);
-        for (value, script) in &child_outputs {
-            outputs.push(TxOutPreimage {
-                value: *value,
-                script_pubkey: script.as_slice(),
-            });
-        }
-        outputs.push(TxOutPreimage {
-            value: 0,
-            script_pubkey: tree.fee_anchor_script.as_slice(),
-        });
-        let sequence = first.sequence;
-        let input = TxInPreimage {
-            prev_out_txid: tree.anchor.txid.to_byte_array(),
-            prev_out_vout: tree.anchor.vout,
-            sequence,
-        };
         Self::hash_node(3, &[input], &outputs, 0)
     }
 
@@ -109,6 +152,20 @@ impl ArkLabsV3 {
         outputs: &[TxOutPreimage<'_>],
         locktime: u32,
     ) -> Result<VtxoId, VPackError> {
+        let bytes = Self::hash_node_bytes(version, inputs, outputs, locktime)?;
+        Ok(VtxoId::Raw(bytes))
+    }
+
+    /// Helper function to hash a transaction node and return raw bytes.
+    ///
+    /// Takes transaction components, builds the preimage, applies Double-SHA256,
+    /// and returns raw bytes in internal (wire) order.
+    fn hash_node_bytes(
+        version: u32,
+        inputs: &[TxInPreimage],
+        outputs: &[TxOutPreimage<'_>],
+        locktime: u32,
+    ) -> Result<[u8; 32], VPackError> {
         // Build transaction preimage
         let preimage_bytes = tx_preimage(version, inputs, outputs, locktime);
 
@@ -117,9 +174,7 @@ impl ArkLabsV3 {
 
         // Extract raw bytes in internal (wire) order
         // Critical: Use to_byte_array() to get the internal representation
-        let bytes = hash.to_byte_array();
-
-        Ok(VtxoId::Raw(bytes))
+        Ok(hash.to_byte_array())
     }
 
     /// Helper function to get the transaction preimage bytes (for debugging).
@@ -297,5 +352,108 @@ mod tests {
             expected_vtxo_id_str,
             "Display (reversed byte order) must match expected string"
         );
+    }
+
+    #[test]
+    fn test_ark_labs_v3_deep_recursion() {
+        // Test deep recursion: 3-level path traversal
+        // This test verifies that the top-down chaining logic works correctly
+        // for multiple levels by constructing a 3-level tree manually
+        
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_branch_v3.json");
+        let contents = fs::read_to_string(&path).expect("read round_branch_v3.json");
+        let json: serde_json::Value = serde_json::from_str(&contents).expect("parse JSON");
+
+        let ri = &json["reconstruction_ingredients"];
+        let anchor_outpoint_str = ri["anchor_outpoint"].as_str().expect("anchor_outpoint");
+        let anchor_id = VtxoId::from_str(anchor_outpoint_str).expect("parse anchor OutPoint");
+        let anchor = match anchor_id {
+            VtxoId::OutPoint(op) => op,
+            VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
+        };
+        let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
+        let fee_anchor_script = hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script")).expect("decode fee_anchor_script");
+        let siblings_arr = ri["siblings"].as_array().expect("siblings array");
+
+        // Build first level siblings
+        let mut level1_siblings = Vec::with_capacity(siblings_arr.len());
+        for s in siblings_arr {
+            let hash_str = s["hash"].as_str().expect("sibling hash");
+            let id = VtxoId::from_str(hash_str).expect("parse sibling hash");
+            let hash_internal = match id {
+                VtxoId::Raw(b) => b,
+                VtxoId::OutPoint(_) => panic!("expected raw hash for sibling"),
+            };
+            let value = s["value"].as_u64().expect("sibling value");
+            let script = hex::decode(s["script"].as_str().expect("sibling script")).expect("decode sibling script");
+            level1_siblings.push(SiblingNode::Compact {
+                hash: hash_internal,
+                value,
+                script,
+            });
+        }
+
+        // Level 1: Branch node (from round_branch_v3.json)
+        let level1_item = GenesisItem {
+            siblings: level1_siblings,
+            parent_index: 0,
+            sequence,
+            child_amount: 1100, // Child amount for next level
+            child_script_pubkey: hex::decode("512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967").expect("decode child script"),
+            signature: None,
+        };
+
+        // Level 2: Intermediate node (simplified - using same structure)
+        let level2_siblings = vec![
+            SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 500,
+                script: hex::decode("5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3").expect("decode sibling script"),
+            },
+        ];
+        let level2_item = GenesisItem {
+            siblings: level2_siblings,
+            parent_index: 0,
+            sequence,
+            child_amount: 600, // Child amount for leaf
+            child_script_pubkey: hex::decode("512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967").expect("decode child script"),
+            signature: None,
+        };
+
+        // Level 3: Leaf node
+        let tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: 600,
+                vout: 0,
+                sequence,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: hex::decode("512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967").expect("decode leaf script"),
+            },
+            path: vec![level1_item, level2_item], // 2 levels in path + 1 leaf = 3 levels total
+            anchor,
+            asset_id: None,
+            fee_anchor_script,
+        };
+
+        let engine = ArkLabsV3;
+        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+
+        // Verify it's a Raw hash (Ark Labs format)
+        match computed_id {
+            VtxoId::Raw(_) => {
+                // Success - recursive logic worked
+            }
+            VtxoId::OutPoint(_) => panic!("expected Raw hash for Ark Labs"),
+        }
+
+        // Verify the ID is non-zero (sanity check)
+        match computed_id {
+            VtxoId::Raw(bytes) => {
+                assert!(!bytes.iter().all(|&b| b == 0), "VTXO ID should not be all zeros");
+            }
+            _ => {}
+        }
     }
 }

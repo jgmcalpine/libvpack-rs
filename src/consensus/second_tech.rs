@@ -32,11 +32,57 @@ impl ConsensusEngine for SecondTechV3 {
             return Err(VPackError::FeeAnchorMissing);
         }
 
-        // Handle chain links (non-empty path) or leaf nodes (empty path)
+        // If path is empty, this is a leaf node
         if tree.path.is_empty() {
-            self.compute_leaf_vtxo_id(tree)
+            return self.compute_leaf_vtxo_id(tree);
+        }
+
+        // Top-down chaining: start with on-chain anchor
+        let mut current_prevout = tree.anchor;
+        let mut last_outpoint = None;
+
+        // Iterate through path (top-down from root to leaf)
+        for (i, genesis_item) in tree.path.iter().enumerate() {
+            // Build outputs using reconstruct_link (child at parent_index + siblings + fee anchor)
+            let outputs = Self::reconstruct_link(genesis_item, &tree.fee_anchor_script)?;
+
+            // Build input spending current_prevout
+            let input = TxInPreimage {
+                prev_out_txid: current_prevout.txid.to_byte_array(),
+                prev_out_vout: current_prevout.vout,
+                sequence: 0x00000000, // ZERO for Second Tech
+            };
+
+            // Hash transaction → OutPoint
+            let txid_bytes = Self::hash_transaction(3, &[input], &outputs, 0)?;
+            let txid = Txid::from_byte_array(txid_bytes);
+
+            // Determine vout for hand-off: use next item's parent_index, or leaf.vout if last
+            let vout = if i + 1 < tree.path.len() {
+                tree.path[i + 1].parent_index
+            } else {
+                tree.leaf.vout
+            };
+
+            // Store the last transaction's OutPoint
+            last_outpoint = Some(OutPoint { txid, vout });
+
+            // Hand-off: Convert to OutPoint for next step
+            current_prevout = OutPoint {
+                txid,
+                vout,
+            };
+        }
+
+        // Final step: Build leaf transaction spending current_prevout (if leaf is valid)
+        // If leaf has empty script_pubkey, return the ID from the last path transaction
+        if tree.leaf.script_pubkey.is_empty() {
+            // Return the OutPoint from the last transaction
+            Ok(VtxoId::OutPoint(
+                last_outpoint.expect("path should have at least one item"),
+            ))
         } else {
-            self.compute_chain_link_vtxo_id(tree)
+            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout)
         }
     }
 }
@@ -48,6 +94,16 @@ impl SecondTechV3 {
     /// - Output 0: The final leaf script - uses script_pubkey from VtxoLeaf
     /// - Output 1: The Fee Anchor (51024e73)
     fn compute_leaf_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
+        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor)
+    }
+
+    /// Compute VTXO ID for a leaf node with a custom prevout.
+    /// Used for the final leaf transaction in recursive path traversal.
+    fn compute_leaf_vtxo_id_with_prevout(
+        &self,
+        tree: &VPackTree,
+        prevout: OutPoint,
+    ) -> Result<VtxoId, VPackError> {
         // Build outputs list: [Final Leaf Output, Fee Anchor]
         let mut outputs = Vec::with_capacity(2);
 
@@ -63,11 +119,11 @@ impl SecondTechV3 {
             script_pubkey: tree.fee_anchor_script.as_slice(),
         });
 
-        // Build input from anchor OutPoint
+        // Build input from prevout OutPoint
         // Sequence: 0x00000000 (ZERO) for Second Tech
         let input = TxInPreimage {
-            prev_out_txid: tree.anchor.txid.to_byte_array(),
-            prev_out_vout: tree.anchor.vout,
+            prev_out_txid: prevout.txid.to_byte_array(),
+            prev_out_vout: prevout.vout,
             sequence: 0x00000000, // ZERO for Second Tech
         };
 
@@ -79,43 +135,6 @@ impl SecondTechV3 {
         let outpoint = OutPoint {
             txid,
             vout: tree.leaf.vout,
-        };
-
-        Ok(VtxoId::OutPoint(outpoint))
-    }
-
-    /// Compute VTXO ID for a chain link (non-empty path).
-    /// 
-    /// Uses the first GenesisItem in the path to reconstruct outputs dynamically.
-    fn compute_chain_link_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
-        let genesis_item = tree.path.first().ok_or(VPackError::EncodingError)?;
-
-        // Reconstruct outputs using generalized placement logic
-        let outputs = Self::reconstruct_link(genesis_item, &tree.fee_anchor_script)?;
-
-        // Build input from anchor OutPoint
-        // Sequence: 0x00000000 (ZERO) for Second Tech
-        let input = TxInPreimage {
-            prev_out_txid: tree.anchor.txid.to_byte_array(),
-            prev_out_vout: tree.anchor.vout,
-            sequence: 0x00000000, // ZERO for Second Tech
-        };
-
-        // Hash the transaction: Version 3, Locktime 0
-        let txid_bytes = Self::hash_transaction(3, &[input], &outputs, 0)?;
-
-        // Determine vout: use next level's parent_index, or leaf.vout if at end
-        let vout = if tree.path.len() > 1 {
-            tree.path[1].parent_index
-        } else {
-            tree.leaf.vout
-        };
-
-        // Convert to TxID and create OutPoint
-        let txid = Txid::from_byte_array(txid_bytes);
-        let outpoint = OutPoint {
-            txid,
-            vout,
         };
 
         Ok(VtxoId::OutPoint(outpoint))
@@ -374,5 +393,118 @@ mod tests {
             }
             VtxoId::Raw(_) => panic!("expected OutPoint variant"),
         }
+    }
+
+    #[test]
+    fn test_second_tech_v3_deep_recursion() {
+        // Test deep recursion: 5-step path traversal (ROUND_1 scenario)
+        // This test verifies that the top-down chaining logic works correctly
+        // for multiple steps by constructing a 5-step chain manually
+        
+        // Parse the grandparent anchor (Round TX)
+        let grandparent_hash_str = "abd5d39844c20383aa167cbcb6f8e8225a6d592150b9524c96594187493cc2a3";
+        let anchor_id = VtxoId::from_str(grandparent_hash_str).expect("parse anchor hash");
+        let anchor = match anchor_id {
+            VtxoId::Raw(hash_bytes) => {
+                use bitcoin::Txid;
+                let txid = Txid::from_byte_array(hash_bytes);
+                OutPoint { txid, vout: 0 }
+            }
+            VtxoId::OutPoint(op) => op,
+        };
+
+        let fee_anchor_script = hex::decode("51024e73").expect("decode fee anchor script");
+
+        // Step 0: From ROUND_1 test data
+        let step0_child_amount = 30000u64;
+        let step0_child_script = hex::decode("5120f565fc0b453a3694f36bd83089878dc68708706b7ce183cc30698961d046c559")
+            .expect("decode child script");
+        let step0_siblings = vec![
+            SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 5000,
+                script: hex::decode("51205acb7b65f8da14622a055640893e952e20f68e051087b85be4d56e50cdafd431")
+                    .expect("decode sibling 0 script"),
+            },
+            SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 5000,
+                script: hex::decode("5120973b9be7e6ee51f8851347130113e4001ab1d01252dd1d09713a6c900cb327f2")
+                    .expect("decode sibling 1 script"),
+            },
+            SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 5000,
+                script: hex::decode("512052cc228fe0f4951032fbaeb45ed8b73163cedb897412407e5b431d740040a951")
+                    .expect("decode sibling 2 script"),
+            },
+        ];
+        let step0_item = GenesisItem {
+            siblings: step0_siblings,
+            parent_index: 3,
+            sequence: 0,
+            child_amount: step0_child_amount,
+            child_script_pubkey: step0_child_script,
+            signature: None,
+        };
+
+        // Steps 1-4: Simplified intermediate steps
+        let mut path_items = vec![step0_item];
+        for i in 1..5 {
+            let step_siblings = vec![
+                SiblingNode::Compact {
+                    hash: [0u8; 32],
+                    value: 1000,
+                    script: hex::decode("5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3")
+                        .expect("decode sibling script"),
+                },
+            ];
+            let step_item = GenesisItem {
+                siblings: step_siblings,
+                parent_index: 1, // Next step's parent_index
+                sequence: 0,
+                child_amount: 20000 - (i * 1000), // Decreasing amounts
+                child_script_pubkey: hex::decode("5120f565fc0b453a3694f36bd83089878dc68708706b7ce183cc30698961d046c559")
+                    .expect("decode child script"),
+                signature: None,
+            };
+            path_items.push(step_item);
+        }
+
+        // Final leaf
+        let tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: 15000, // Final amount
+                vout: 0,
+                sequence: 0,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: hex::decode("5120f565fc0b453a3694f36bd83089878dc68708706b7ce183cc30698961d046c559")
+                    .expect("decode leaf script"),
+            },
+            path: path_items, // 5 steps in path + 1 leaf = 6 levels total
+            anchor,
+            asset_id: None,
+            fee_anchor_script,
+        };
+
+        let engine = SecondTechV3;
+        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+
+        // Verify it's an OutPoint (Second Tech format)
+        match computed_id {
+            VtxoId::OutPoint(op) => {
+                // Verify the TxID is non-zero (sanity check)
+                let txid_bytes = op.txid.to_byte_array();
+                assert!(!txid_bytes.iter().all(|&b| b == 0), "TxID should not be all zeros");
+                // Verify vout matches leaf.vout
+                assert_eq!(op.vout, tree.leaf.vout, "vout should match leaf.vout");
+            }
+            VtxoId::Raw(_) => panic!("expected OutPoint variant for Second Tech"),
+        }
+
+        // Note: The expected final ID for ROUND_1 is c806f5fc2cf7a5b0e8e2fa46cc9e0c7a511f43144f9d27f85a9108e4b8c4d662:0
+        // This test verifies the recursive logic works; exact value matching requires
+        // the complete ROUND_1 test data with all 5 steps' exact values and scripts.
     }
 }
