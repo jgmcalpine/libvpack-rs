@@ -32,6 +32,11 @@
       "tx_version": 3,
       "nSequence": 4294967295,
       "fee_anchor_script": "51024e73",
-      "id_type": "Hash"
+      "id_type": "Hash",
+      "anchor_outpoint": "f60017a41c1fb808202c2781bfefc2d57b1aa85e6a473f2873d7c3b7cef2514e:0",
+      "siblings": [
+        { "hash": "25a89a946d6bf1b3d4c353bbcf0de80942cd00cab2bb2afd431f43a45bda2695", "value": 600, "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3" },
+        { "hash": "a531344d6f8f18d6ce6bff480149061c33792f4546d6414ea6fa0180aa132e06", "value": 500, "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3" }
+      ]
     }
   }

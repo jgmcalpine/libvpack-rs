@@ -52,9 +52,13 @@ pub struct GenesisItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SiblingNode {
     /// Used when `FLAG_PROOF_COMPACT` is set.
-    /// 32-byte SHA256 hash.
-    Compact([u8; 32]),
-    
+    /// 32-byte child VTXO hash (identity), satoshi value (value-checking), and script (transaction reconstruction).
+    Compact {
+        hash: [u8; 32],
+        value: u64,
+        script: Vec<u8>,
+    },
+
     /// Used when `FLAG_PROOF_COMPACT` is NOT set.
     /// Full Bitcoin TxOut.
     Full(TxOut),
@@ -64,6 +68,6 @@ pub enum SiblingNode {
 // usually handled by the custom reader/writer logic.
 impl SiblingNode {
     pub fn is_compact(&self) -> bool {
-        matches!(self, SiblingNode::Compact(_))
+        matches!(self, SiblingNode::Compact { .. })
     }
 }

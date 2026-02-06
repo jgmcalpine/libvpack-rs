@@ -107,7 +107,15 @@ fn serialize_payload(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPack
 
         for sibling in &item.siblings {
             match sibling {
-                SiblingNode::Compact(hash) => out.extend_from_slice(hash),
+                SiblingNode::Compact { hash, value, script } => {
+                    out.extend_from_slice(hash);
+                    let mut val_buf = [0u8; 8];
+                    LittleEndian::write_u64(&mut val_buf, *value);
+                    out.extend_from_slice(&val_buf);
+                    script
+                        .serialize(&mut out)
+                        .map_err(|_| VPackError::EncodingError)?;
+                }
                 SiblingNode::Full(txout) => {
                     encode_txout(txout, &mut out)?;
                 }

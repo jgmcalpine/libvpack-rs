@@ -6,6 +6,7 @@ use crate::payload::tree::{VPackTree, GenesisItem, SiblingNode, VtxoLeaf};
 use bitcoin::{OutPoint, TxOut};
 use bitcoin::consensus::Decodable;
 use borsh::BorshDeserialize;
+use byteorder::{ByteOrder, LittleEndian};
 use alloc::vec::Vec;
 
 /// The Bounded Reader.
@@ -75,12 +76,15 @@ impl BoundedReader {
 
             for _ in 0..siblings_len {
                 let sibling = if header.is_compact() {
-                    // COMPACT MODE: 32-byte Hash (Manual Read)
-                    if data.len() < 32 { return Err(VPackError::IncompleteData); }
+                    // COMPACT MODE: 32-byte hash + 8-byte value (u64 LE) + Borsh Vec<u8> script
+                    if data.len() < 40 { return Err(VPackError::IncompleteData); }
                     let mut hash = [0u8; 32];
                     hash.copy_from_slice(&data[0..32]);
-                    data = &data[32..];
-                    SiblingNode::Compact(hash)
+                    let value = LittleEndian::read_u64(&data[32..40]);
+                    data = &data[40..];
+                    let script = Vec::<u8>::deserialize(&mut data)
+                        .map_err(|_| VPackError::EncodingError)?;
+                    SiblingNode::Compact { hash, value, script }
                 } else {
                     // FULL MODE: Bitcoin TxOut (Consensus Decode)
                     // This reads [VarInt Value] [VarInt ScriptLen] [Script Bytes]

@@ -11,7 +11,7 @@ use bitcoin::hashes::Hash;
 
 use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
-use crate::payload::tree::VPackTree;
+use crate::payload::tree::{SiblingNode, VPackTree};
 
 /// Ark Labs V3-Anchored consensus engine (Variant 0x04).
 ///
@@ -32,8 +32,7 @@ impl ConsensusEngine for ArkLabsV3 {
         if tree.path.is_empty() {
             self.compute_leaf_vtxo_id(tree)
         } else {
-            // Branch nodes require Milestone 4.5 recursive implementation
-            Err(VPackError::EncodingError)
+            self.compute_branch_vtxo_id(tree)
         }
     }
 }
@@ -64,6 +63,39 @@ impl ArkLabsV3 {
         };
 
         // Hash the node: Version 3, Locktime 0
+        Self::hash_node(3, &[input], &outputs, 0)
+    }
+
+    /// Compute VTXO ID for a branch node (path non-empty).
+    /// Outputs: N child outputs (sibling script each) + fee anchor.
+    fn compute_branch_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
+        let first = tree.path.first().ok_or(VPackError::EncodingError)?;
+        let mut child_outputs: Vec<(u64, Vec<u8>)> = Vec::new();
+        for sibling in &first.siblings {
+            match sibling {
+                SiblingNode::Compact { value, script, .. } => {
+                    child_outputs.push((*value, script.clone()));
+                }
+                SiblingNode::Full(_) => return Err(VPackError::EncodingError),
+            }
+        }
+        let mut outputs: Vec<TxOutPreimage<'_>> = Vec::with_capacity(child_outputs.len() + 1);
+        for (value, script) in &child_outputs {
+            outputs.push(TxOutPreimage {
+                value: *value,
+                script_pubkey: script.as_slice(),
+            });
+        }
+        outputs.push(TxOutPreimage {
+            value: 0,
+            script_pubkey: tree.fee_anchor_script.as_slice(),
+        });
+        let sequence = first.sequence;
+        let input = TxInPreimage {
+            prev_out_txid: tree.anchor.txid.to_byte_array(),
+            prev_out_vout: tree.anchor.vout,
+            sequence,
+        };
         Self::hash_node(3, &[input], &outputs, 0)
     }
 
@@ -105,7 +137,9 @@ impl ArkLabsV3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::payload::tree::{VtxoLeaf, VPackTree};
+    use crate::payload::tree::{GenesisItem, SiblingNode, VtxoLeaf, VPackTree};
+    use alloc::format;
+    use alloc::vec;
     use core::str::FromStr;
     use std::fs;
     use std::path::PathBuf;
@@ -181,6 +215,87 @@ mod tests {
             "Reconstructed preimage must match gold transaction bytes byte-for-byte. RECONSTRUCTED_HEX: {} EXPECTED_HEX: {}",
             hex::encode(&preimage_bytes),
             GOLD_PREIMAGE_HEX
+        );
+    }
+
+    #[test]
+    fn test_ark_labs_v3_branch_verification() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_branch_v3.json");
+        let contents = fs::read_to_string(&path).expect("read round_branch_v3.json");
+        let json: serde_json::Value = serde_json::from_str(&contents).expect("parse JSON");
+
+        let expected_vtxo_id_str = json["raw_evidence"]["expected_vtxo_id"]
+            .as_str()
+            .expect("expected_vtxo_id present");
+        let expected_vtxo_id = VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
+
+        let ri = &json["reconstruction_ingredients"];
+        let anchor_outpoint_str = ri["anchor_outpoint"].as_str().expect("anchor_outpoint");
+        let anchor_id = VtxoId::from_str(anchor_outpoint_str).expect("parse anchor OutPoint");
+        let anchor = match anchor_id {
+            VtxoId::OutPoint(op) => op,
+            VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
+        };
+        let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
+        let fee_anchor_script = hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script")).expect("decode fee_anchor_script");
+        let siblings_arr = ri["siblings"].as_array().expect("siblings array");
+
+        let mut siblings = Vec::with_capacity(siblings_arr.len());
+        for s in siblings_arr {
+            let hash_str = s["hash"].as_str().expect("sibling hash");
+            let id = VtxoId::from_str(hash_str).expect("parse sibling hash");
+            let hash_internal = match id {
+                VtxoId::Raw(b) => b,
+                VtxoId::OutPoint(_) => panic!("expected raw hash for sibling"),
+            };
+            let value = s["value"].as_u64().expect("sibling value");
+            let script = hex::decode(s["script"].as_str().expect("sibling script")).expect("decode sibling script");
+            siblings.push(SiblingNode::Compact {
+                hash: hash_internal,
+                value,
+                script,
+            });
+        }
+
+        let path_item = GenesisItem {
+            siblings,
+            parent_index: 0,
+            sequence,
+            child_amount: 0,
+            child_script_pubkey: Vec::new(),
+            signature: None,
+        };
+
+        let tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: 0,
+                vout: 0,
+                sequence: 0,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: Vec::new(),
+            },
+            path: vec![path_item],
+            anchor,
+            asset_id: None,
+            fee_anchor_script,
+        };
+
+        let engine = ArkLabsV3;
+        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+
+        assert_eq!(
+            computed_id,
+            expected_vtxo_id,
+            "Branch VTXO ID mismatch: expected {} (display), got {}",
+            expected_vtxo_id_str,
+            computed_id
+        );
+        assert_eq!(
+            format!("{}", computed_id),
+            expected_vtxo_id_str,
+            "Display (reversed byte order) must match expected string"
         );
     }
 }
