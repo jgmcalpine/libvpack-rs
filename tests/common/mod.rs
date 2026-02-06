@@ -2,6 +2,7 @@
 
 mod logic_adapters;
 
+#[allow(unused_imports)]
 pub use logic_adapters::{
     second_path_from_tree, tree_from_ingredients, ArkLabsAdapter, LogicAdapter, SecondTechAdapter,
 };

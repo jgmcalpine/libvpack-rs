@@ -9,17 +9,6 @@ use bitcoin::consensus::Decodable;
 use bitcoin::OutPoint;
 use byteorder::{ByteOrder, LittleEndian};
 
-#[cfg(test)]
-macro_rules! cursor_trace {
-    ($label:literal, $rest:expr) => {
-        std::eprintln!("[bark_trace] {} remaining_bytes={}", $label, $rest.len());
-    };
-}
-#[cfg(not(test))]
-macro_rules! cursor_trace {
-    ($label:literal, $rest:expr) => {};
-}
-
 use crate::compact_size::read_compact_size;
 use crate::error::VPackError;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
@@ -34,7 +23,7 @@ enum BarkPolicyShadow {
     /// Variant 0x00: Pubkey (no payload for our use).
     Pubkey,
     /// Other variants (e.g. 0x05): consume tag only so cursor stays aligned for following point.
-    Unknown(u8),
+    Unknown(()),
 }
 
 fn parse_policy(data: &[u8]) -> Result<(BarkPolicyShadow, usize), VPackError> {
@@ -44,7 +33,7 @@ fn parse_policy(data: &[u8]) -> Result<(BarkPolicyShadow, usize), VPackError> {
     let tag = data[0];
     match tag {
         0x00 => Ok((BarkPolicyShadow::Pubkey, 1)),
-        other => Ok((BarkPolicyShadow::Unknown(other), 1)),
+        _ => Ok((BarkPolicyShadow::Unknown(()), 1)),
     }
 }
 
@@ -106,7 +95,11 @@ fn parse_sibling(data: &[u8]) -> Result<(SiblingNode, usize), VPackError> {
     let (script, script_consumed) = parse_borsh_vec_u8(&data[40..])?;
     let consumed = 40 + script_consumed;
     Ok((
-        SiblingNode::Compact { hash, value, script },
+        SiblingNode::Compact {
+            hash,
+            value,
+            script,
+        },
         consumed,
     ))
 }
@@ -191,21 +184,18 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
     }
     let _version = LittleEndian::read_u16(&rest[0..2]);
     rest = &rest[2..];
-    cursor_trace!("after version", rest);
 
     if rest.len() < 8 {
         return Err(VPackError::IncompleteData);
     }
     let amount = LittleEndian::read_u64(&rest[0..8]);
     rest = &rest[8..];
-    cursor_trace!("after amount", rest);
 
     if rest.len() < 4 {
         return Err(VPackError::IncompleteData);
     }
     let expiry_height = LittleEndian::read_u32(&rest[0..4]);
     rest = &rest[4..];
-    cursor_trace!("after expiry_height", rest);
 
     // Fixed-length Bitcoin compressed pubkey (33 bytes), not Borsh Vec<u8>.
     const PUBKEY_LEN: usize = 33;
@@ -215,23 +205,19 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
     let (pk_bytes, rest_after_pk) = rest.split_at(PUBKEY_LEN);
     let server_pubkey = pk_bytes.to_vec();
     rest = rest_after_pk;
-    cursor_trace!("after server_pubkey(33)", rest);
 
     if rest.len() < 2 {
         return Err(VPackError::IncompleteData);
     }
     let exit_delta = LittleEndian::read_u16(&rest[0..2]);
     rest = &rest[2..];
-    cursor_trace!("after exit_delta", rest);
 
     let (anchor_point, op_consumed) = parse_outpoint_consensus(rest)?;
     rest = &rest[op_consumed..];
-    cursor_trace!("after anchor_point", rest);
 
     let (genesis_count, compact_consumed) =
         read_compact_size(rest).ok_or(VPackError::IncompleteData)?;
     rest = &rest[compact_consumed..];
-    cursor_trace!("after genesis_count", rest);
 
     let mut path = Vec::with_capacity(genesis_count as usize);
     for _ in 0..genesis_count {
@@ -239,22 +225,16 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         path.push(item);
         rest = &rest[item_consumed..];
     }
-    cursor_trace!("after genesis path", rest);
 
     let (_, policy_consumed) = parse_policy(rest)?;
     rest = &rest[policy_consumed..];
-    cursor_trace!("after policy", rest);
 
     let (point, point_consumed) = parse_outpoint_consensus(rest)?;
     rest = &rest[point_consumed..];
-    cursor_trace!("after point", rest);
 
     if !rest.is_empty() {
         return Err(VPackError::TrailingData(rest.len()));
     }
-
-    #[cfg(test)]
-    std::eprintln!("[bark_trace] BarkVtxoShadow total_bytes={}", raw_bytes.len());
 
     let leaf = VtxoLeaf {
         amount,

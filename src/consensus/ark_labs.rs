@@ -86,17 +86,16 @@ impl ConsensusEngine for ArkLabsV3 {
             last_txid_bytes = Some(txid_bytes);
 
             // Hand-off: Convert to OutPoint for next step (always vout 0 for Ark Labs)
-            current_prevout = OutPoint {
-                txid,
-                vout: 0,
-            };
+            current_prevout = OutPoint { txid, vout: 0 };
         }
 
         // Final step: Build leaf transaction spending current_prevout (if leaf is valid)
         // If leaf has empty script_pubkey, return the ID from the last path transaction
         if tree.leaf.script_pubkey.is_empty() {
             // Return the Raw hash from the last transaction
-            Ok(VtxoId::Raw(last_txid_bytes.expect("path should have at least one item")))
+            Ok(VtxoId::Raw(
+                last_txid_bytes.expect("path should have at least one item"),
+            ))
         } else {
             self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout)
         }
@@ -192,7 +191,7 @@ impl ArkLabsV3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::payload::tree::{GenesisItem, SiblingNode, VtxoLeaf, VPackTree};
+    use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
     use alloc::format;
     use alloc::vec;
     use core::str::FromStr;
@@ -210,7 +209,8 @@ mod tests {
         let expected_vtxo_id_str = json["raw_evidence"]["expected_vtxo_id"]
             .as_str()
             .expect("expected_vtxo_id present");
-        let expected_vtxo_id = VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
+        let expected_vtxo_id =
+            VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
 
         let ri = &json["reconstruction_ingredients"];
         let anchor_outpoint_str = ri["parent_outpoint"].as_str().expect("parent_outpoint");
@@ -221,10 +221,13 @@ mod tests {
         };
 
         let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
-        let fee_anchor_script = hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script")).expect("decode fee_anchor_script");
+        let fee_anchor_script =
+            hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+                .expect("decode fee_anchor_script");
         let outputs = ri["outputs"].as_array().expect("outputs array");
         let user_value = outputs[0]["value"].as_u64().expect("user value");
-        let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script")).expect("decode user script");
+        let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
+            .expect("decode user script");
 
         let tree = VPackTree {
             leaf: VtxoLeaf {
@@ -245,31 +248,37 @@ mod tests {
         let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
 
         assert_eq!(
-            computed_id,
-            expected_vtxo_id,
+            computed_id, expected_vtxo_id,
             "VTXO ID mismatch: expected {} (display), got {}",
-            expected_vtxo_id_str,
-            computed_id
+            expected_vtxo_id_str, computed_id
         );
 
         // Verification gate: reconstructed preimage must match expected bytes (V3, strict endianness).
         let mut outputs_pre = Vec::with_capacity(2);
-        outputs_pre.push(TxOutPreimage { value: tree.leaf.amount, script_pubkey: tree.leaf.script_pubkey.as_slice() });
-        outputs_pre.push(TxOutPreimage { value: 0, script_pubkey: tree.fee_anchor_script.as_slice() });
+        outputs_pre.push(TxOutPreimage {
+            value: tree.leaf.amount,
+            script_pubkey: tree.leaf.script_pubkey.as_slice(),
+        });
+        outputs_pre.push(TxOutPreimage {
+            value: 0,
+            script_pubkey: tree.fee_anchor_script.as_slice(),
+        });
         let input = TxInPreimage {
             prev_out_txid: tree.anchor.txid.to_byte_array(),
             prev_out_vout: tree.anchor.vout,
             sequence: tree.leaf.sequence,
         };
         let preimage_bytes = ArkLabsV3::get_preimage_bytes(3, &[input], &outputs_pre, 0);
-        const GOLD_PREIMAGE_HEX: &str = "0300000001a4e3e646f30f8965a797d105751b4e9d11e8da56fd7711d9d707a7a56ab0deec0000000000ffffffff024c0400000000000022512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea996700000000000000000451024e7300000000";
-        let gold_bytes = hex::decode(GOLD_PREIMAGE_HEX).expect("gold preimage hex");
+        let fixture_path = manifest_dir.join("tests/fixtures/ark_labs_round_leaf_preimage_hex.txt");
+        let gold_hex = fs::read_to_string(&fixture_path).expect("read gold preimage fixture");
+        let gold_hex = gold_hex.trim();
+        let gold_bytes = hex::decode(gold_hex).expect("decode gold preimage hex");
         assert_eq!(
             preimage_bytes,
             gold_bytes,
-            "Reconstructed preimage must match gold transaction bytes byte-for-byte. RECONSTRUCTED_HEX: {} EXPECTED_HEX: {}",
+            "Reconstructed preimage must match gold transaction bytes byte-for-byte. RECONSTRUCTED_HEX: {} EXPECTED from fixture: {}",
             hex::encode(&preimage_bytes),
-            GOLD_PREIMAGE_HEX
+            gold_hex
         );
     }
 
@@ -283,7 +292,8 @@ mod tests {
         let expected_vtxo_id_str = json["raw_evidence"]["expected_vtxo_id"]
             .as_str()
             .expect("expected_vtxo_id present");
-        let expected_vtxo_id = VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
+        let expected_vtxo_id =
+            VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
 
         let ri = &json["reconstruction_ingredients"];
         let anchor_outpoint_str = ri["anchor_outpoint"].as_str().expect("anchor_outpoint");
@@ -293,7 +303,9 @@ mod tests {
             VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
         };
         let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
-        let fee_anchor_script = hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script")).expect("decode fee_anchor_script");
+        let fee_anchor_script =
+            hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+                .expect("decode fee_anchor_script");
         let siblings_arr = ri["siblings"].as_array().expect("siblings array");
 
         let mut siblings = Vec::with_capacity(siblings_arr.len());
@@ -305,7 +317,8 @@ mod tests {
                 VtxoId::OutPoint(_) => panic!("expected raw hash for sibling"),
             };
             let value = s["value"].as_u64().expect("sibling value");
-            let script = hex::decode(s["script"].as_str().expect("sibling script")).expect("decode sibling script");
+            let script = hex::decode(s["script"].as_str().expect("sibling script"))
+                .expect("decode sibling script");
             siblings.push(SiblingNode::Compact {
                 hash: hash_internal,
                 value,
@@ -316,7 +329,10 @@ mod tests {
         let child_output = ri.get("child_output").and_then(|co| co.as_object());
         let (child_amount, child_script_pubkey) = if let Some(co) = child_output {
             let v = co["value"].as_u64().unwrap_or(0);
-            let s = co["script"].as_str().map(|h| hex::decode(h).unwrap_or_default()).unwrap_or_default();
+            let s = co["script"]
+                .as_str()
+                .map(|h| hex::decode(h).unwrap_or_default())
+                .unwrap_or_default();
             (v, s)
         } else {
             (0, Vec::new())
@@ -350,11 +366,9 @@ mod tests {
         let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
 
         assert_eq!(
-            computed_id,
-            expected_vtxo_id,
+            computed_id, expected_vtxo_id,
             "Branch VTXO ID mismatch: expected {} (display), got {}",
-            expected_vtxo_id_str,
-            computed_id
+            expected_vtxo_id_str, computed_id
         );
         assert_eq!(
             format!("{}", computed_id),
@@ -368,7 +382,7 @@ mod tests {
         // Test deep recursion: 3-level path traversal
         // This test verifies that the top-down chaining logic works correctly
         // for multiple levels by constructing a 3-level tree manually
-        
+
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_branch_v3.json");
         let contents = fs::read_to_string(&path).expect("read round_branch_v3.json");
@@ -382,7 +396,9 @@ mod tests {
             VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
         };
         let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
-        let fee_anchor_script = hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script")).expect("decode fee_anchor_script");
+        let fee_anchor_script =
+            hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+                .expect("decode fee_anchor_script");
         let siblings_arr = ri["siblings"].as_array().expect("siblings array");
 
         // Build first level siblings
@@ -395,7 +411,8 @@ mod tests {
                 VtxoId::OutPoint(_) => panic!("expected raw hash for sibling"),
             };
             let value = s["value"].as_u64().expect("sibling value");
-            let script = hex::decode(s["script"].as_str().expect("sibling script")).expect("decode sibling script");
+            let script = hex::decode(s["script"].as_str().expect("sibling script"))
+                .expect("decode sibling script");
             level1_siblings.push(SiblingNode::Compact {
                 hash: hash_internal,
                 value,
@@ -403,30 +420,42 @@ mod tests {
             });
         }
 
+        // Child/leaf script from round_leaf_v3 (same as user output script)
+        let leaf_path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_leaf_v3.json");
+        let leaf_contents = fs::read_to_string(&leaf_path).expect("read round_leaf_v3.json");
+        let leaf_json: serde_json::Value =
+            serde_json::from_str(&leaf_contents).expect("parse round_leaf JSON");
+        let child_script_hex = leaf_json["reconstruction_ingredients"]["outputs"][0]["script"]
+            .as_str()
+            .expect("user script in round_leaf");
+        let child_script = hex::decode(child_script_hex).expect("decode child script");
+        let sibling_script_hex = ri["siblings"][0]["script"]
+            .as_str()
+            .expect("sibling script");
+        let sibling_script = hex::decode(sibling_script_hex).expect("decode sibling script");
+
         // Level 1: Branch node (from round_branch_v3.json)
         let level1_item = GenesisItem {
             siblings: level1_siblings,
             parent_index: 0,
             sequence,
             child_amount: 1100, // Child amount for next level
-            child_script_pubkey: hex::decode("512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967").expect("decode child script"),
+            child_script_pubkey: child_script.clone(),
             signature: None,
         };
 
         // Level 2: Intermediate node (simplified - using same structure)
-        let level2_siblings = vec![
-            SiblingNode::Compact {
-                hash: [0u8; 32],
-                value: 500,
-                script: hex::decode("5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3").expect("decode sibling script"),
-            },
-        ];
+        let level2_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 500,
+            script: sibling_script.clone(),
+        }];
         let level2_item = GenesisItem {
             siblings: level2_siblings,
             parent_index: 0,
             sequence,
             child_amount: 600, // Child amount for leaf
-            child_script_pubkey: hex::decode("512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967").expect("decode child script"),
+            child_script_pubkey: child_script.clone(),
             signature: None,
         };
 
@@ -438,7 +467,7 @@ mod tests {
                 sequence,
                 expiry: 0,
                 exit_delta: 0,
-                script_pubkey: hex::decode("512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967").expect("decode leaf script"),
+                script_pubkey: child_script,
             },
             path: vec![level1_item, level2_item], // 2 levels in path + 1 leaf = 3 levels total
             anchor,
@@ -460,7 +489,10 @@ mod tests {
         // Verify the ID is non-zero (sanity check)
         match computed_id {
             VtxoId::Raw(bytes) => {
-                assert!(!bytes.iter().all(|&b| b == 0), "VTXO ID should not be all zeros");
+                assert!(
+                    !bytes.iter().all(|&b| b == 0),
+                    "VTXO ID should not be all zeros"
+                );
             }
             _ => {}
         }

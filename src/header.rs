@@ -14,18 +14,18 @@ pub const CURRENT_VERSION: u8 = 1;
 
 /// Header Flags
 pub const FLAG_COMPRESSION_LZ4: u8 = 0x01;
-pub const FLAG_TESTNET: u8         = 0x02;
-pub const FLAG_PROOF_COMPACT: u8   = 0x04;
-pub const FLAG_HAS_ASSET_ID: u8    = 0x08;
+pub const FLAG_TESTNET: u8 = 0x02;
+pub const FLAG_PROOF_COMPACT: u8 = 0x04;
+pub const FLAG_HAS_ASSET_ID: u8 = 0x08;
 
 /// Tx Variant (V-BIP-01: 0x03 = V3-Plain, 0x04 = V3-Anchored).
 /// Wire format is u8; internal logic uses this enum for exhaustive matching.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TxVariant {
-    /// Second Tech: struct-hash / OutPoint-based ID.
+    /// Second Tech: Recursive Transaction Chain; OutPoint identity (Hash:Index). V3 tx chain, not struct-hash.
     V3Plain = 0x03,
-    /// Ark Labs: transaction-reconstruction with mandatory Fee Anchor.
+    /// Ark Labs: transaction tree with mandatory Fee Anchor; flat 32-byte hash identity.
     V3Anchored = 0x04,
 }
 
@@ -82,11 +82,11 @@ impl Header {
         let flags = bytes[3];
         let version = bytes[4];
         let tx_variant = TxVariant::try_from(bytes[5])?;
-        
+
         let tree_arity = LittleEndian::read_u16(&bytes[6..8]);
         let tree_depth = LittleEndian::read_u16(&bytes[8..10]);
         let node_count = LittleEndian::read_u16(&bytes[10..12]);
-        
+
         let asset_type = LittleEndian::read_u32(&bytes[12..16]);
         let payload_len = LittleEndian::read_u32(&bytes[16..20]);
         let checksum = LittleEndian::read_u32(&bytes[20..24]);
@@ -112,20 +112,20 @@ impl Header {
     /// Serializes the header to a 24-byte array.
     pub fn to_bytes(&self) -> [u8; HEADER_SIZE] {
         let mut buf = [0u8; HEADER_SIZE];
-        
+
         buf[0..3].copy_from_slice(&MAGIC_BYTES);
         buf[3] = self.flags;
         buf[4] = self.version;
         buf[5] = self.tx_variant.as_u8();
-        
+
         LittleEndian::write_u16(&mut buf[6..8], self.tree_arity);
         LittleEndian::write_u16(&mut buf[8..10], self.tree_depth);
         LittleEndian::write_u16(&mut buf[10..12], self.node_count);
-        
+
         LittleEndian::write_u32(&mut buf[12..16], self.asset_type);
         LittleEndian::write_u32(&mut buf[16..20], self.payload_len);
         LittleEndian::write_u32(&mut buf[20..24], self.checksum);
-        
+
         buf
     }
 
@@ -163,7 +163,10 @@ impl Header {
         // We use a looser bound (Depth * Arity) to prevent overflow edge cases.
         let theoretical_max_nodes = (self.tree_depth as u32) * (self.tree_arity as u32);
         if (self.node_count as u32) > theoretical_max_nodes {
-            return Err(VPackError::NodeCountMismatch(self.node_count, theoretical_max_nodes as u16));
+            return Err(VPackError::NodeCountMismatch(
+                self.node_count,
+                theoretical_max_nodes as u16,
+            ));
         }
 
         Ok(())
@@ -177,7 +180,7 @@ impl Header {
         }
 
         let mut hasher = crc32fast::Hasher::new();
-        
+
         // 1. Hash Header Fields directly (Matching wire order)
         hasher.update(&MAGIC_BYTES);
         hasher.update(&[self.flags, self.version, self.tx_variant.as_u8()]);
@@ -187,16 +190,16 @@ impl Header {
         hasher.update(&self.asset_type.to_le_bytes());
         hasher.update(&self.payload_len.to_le_bytes());
         // Checksum field (bytes 20-23) is explicitly EXCLUDED
-        
+
         // 2. Hash Payload
         hasher.update(payload);
-        
+
         let calculated = hasher.finalize();
-        
+
         if calculated != self.checksum {
-            return Err(VPackError::ChecksumMismatch { 
-                expected: self.checksum, 
-                found: calculated 
+            return Err(VPackError::ChecksumMismatch {
+                expected: self.checksum,
+                found: calculated,
             });
         }
 
@@ -212,7 +215,7 @@ impl Header {
     pub const fn is_compact(&self) -> bool {
         (self.flags & FLAG_PROOF_COMPACT) != 0
     }
-    
+
     pub const fn has_asset_id(&self) -> bool {
         (self.flags & FLAG_HAS_ASSET_ID) != 0
     }

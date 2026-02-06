@@ -1,15 +1,17 @@
 // Conformance tests: audit-format vectors. Every vector is verified via the Logic-Mapping
 // pipeline: load reconstruction_ingredients → LogicAdapter → vpack::pack → vpack::verify.
 
-use borsh::BorshDeserialize;
 use bitcoin::hashes::Hash;
+use borsh::BorshDeserialize;
+use core::str::FromStr;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use core::str::FromStr;
+use vpack::consensus::ConsensusEngine;
 use vpack::error::VPackError;
 use vpack::header::{Header, TxVariant, FLAG_PROOF_COMPACT};
 use vpack::pack::pack;
+use vpack::payload::tree::{VPackTree, VtxoLeaf};
 
 #[derive(Debug, Deserialize)]
 struct AuditVector {
@@ -99,10 +101,16 @@ fn run_audit_vector(path: &Path) {
     let tx_variant = variant_from_meta(&vector.meta.variant);
     let header = make_header(tx_variant);
 
-    let tree = match crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+    let tree = match crate::common::tree_from_ingredients(
+        tx_variant,
+        &vector.reconstruction_ingredients,
+    ) {
         Some(Ok(t)) => t,
         Some(Err(e)) => panic!("logic adapter failed for {}: {:?}", path.display(), e),
-        None => panic!("incomplete reconstruction_ingredients for {} (no byte fallback)", path.display()),
+        None => panic!(
+            "incomplete reconstruction_ingredients for {} (no byte fallback)",
+            path.display()
+        ),
     };
 
     let full_bytes = pack(&header, &tree).expect("pack");
@@ -125,17 +133,26 @@ fn run_integrity_sabotage(path: &Path) {
     let tx_variant = variant_from_meta(&vector.meta.variant);
     let header = make_header(tx_variant);
 
-    let _tree = match crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+    let _tree = match crate::common::tree_from_ingredients(
+        tx_variant,
+        &vector.reconstruction_ingredients,
+    ) {
         Some(Ok(t)) => t,
         _ => return,
     };
 
     // Sabotage 1: amount + 1 sat (only when amount is present and variant uses it)
-    if vector.reconstruction_ingredients.get("amount").and_then(|v| v.as_u64()).is_some() {
+    if vector
+        .reconstruction_ingredients
+        .get("amount")
+        .and_then(|v| v.as_u64())
+        .is_some()
+    {
         let mut ingredients = vector.reconstruction_ingredients.clone();
         if let Some(amt) = ingredients.get("amount").and_then(|v| v.as_u64()) {
             ingredients["amount"] = serde_json::json!(amt + 1);
-            let tree_corrupt = match crate::common::tree_from_ingredients(tx_variant, &ingredients) {
+            let tree_corrupt = match crate::common::tree_from_ingredients(tx_variant, &ingredients)
+            {
                 Some(Ok(t)) => t,
                 _ => return,
             };
@@ -150,10 +167,16 @@ fn run_integrity_sabotage(path: &Path) {
     }
 
     // Sabotage 2: sequence change (Ark Labs uses nSequence in the tree; Second Tech leaf.sequence is fixed 0)
-    if tx_variant == TxVariant::V3Anchored && vector.reconstruction_ingredients.get("nSequence").is_some() {
+    if tx_variant == TxVariant::V3Anchored
+        && vector.reconstruction_ingredients.get("nSequence").is_some()
+    {
         let mut ingredients = vector.reconstruction_ingredients.clone();
         let seq = ingredients["nSequence"].as_u64().unwrap_or(0);
-        ingredients["nSequence"] = serde_json::json!(if seq == 0xffff_ffff { 0xffff_fffeu32 } else { 0xffff_ffffu32 });
+        ingredients["nSequence"] = serde_json::json!(if seq == 0xffff_ffff {
+            0xffff_fffeu32
+        } else {
+            0xffff_ffffu32
+        });
         let tree_corrupt = match crate::common::tree_from_ingredients(tx_variant, &ingredients) {
             Some(Ok(t)) => t,
             _ => return,
@@ -161,7 +184,10 @@ fn run_integrity_sabotage(path: &Path) {
         let bytes = pack(&header, &tree_corrupt).expect("pack");
         let result = vpack::verify(&bytes, &expected_id);
         assert!(
-            matches!(result, Err(VPackError::IdMismatch) | Err(VPackError::SequenceMismatch(_))),
+            matches!(
+                result,
+                Err(VPackError::IdMismatch) | Err(VPackError::SequenceMismatch(_))
+            ),
             "corrupted sequence should yield IdMismatch or SequenceMismatch, got {:?}",
             result
         );
@@ -177,7 +203,10 @@ fn print_second_computed_ids() {
         let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
         let tx_variant = variant_from_meta(&vector.meta.variant);
         let header = make_header(tx_variant);
-        let tree = match crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+        let tree = match crate::common::tree_from_ingredients(
+            tx_variant,
+            &vector.reconstruction_ingredients,
+        ) {
             Some(Ok(t)) => t,
             _ => {
                 println!("{}: skip (incomplete ingredients)", name);
@@ -197,12 +226,20 @@ fn oor_ingredients_parse() {
     let contents = fs::read_to_string(&path).expect("read");
     let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
     let tx_variant = variant_from_meta(&vector.meta.variant);
-    let anchor_str = vector.reconstruction_ingredients["anchor_outpoint"].as_str().unwrap_or("");
+    let anchor_str = vector.reconstruction_ingredients["anchor_outpoint"]
+        .as_str()
+        .unwrap_or("");
     let id_result = vpack::VtxoId::from_str(anchor_str);
-    assert!(id_result.is_ok(), "anchor_outpoint parse failed: {:?} for {:?}", id_result, anchor_str);
-    let tree_result = crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients);
+    assert!(
+        id_result.is_ok(),
+        "anchor_outpoint parse failed: {:?} for {:?}",
+        id_result,
+        anchor_str
+    );
+    let tree_result =
+        crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients);
     match &tree_result {
-        Some(Ok(_)) => {},
+        Some(Ok(_)) => {}
         Some(Err(e)) => panic!("adapter failed: {:?}", e),
         None => panic!("adapter returned None"),
     }
@@ -217,7 +254,10 @@ fn print_computed_vtxo_id() {
     let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
     let tx_variant = variant_from_meta(&vector.meta.variant);
     let header = make_header(tx_variant);
-    let tree = match crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+    let tree = match crate::common::tree_from_ingredients(
+        tx_variant,
+        &vector.reconstruction_ingredients,
+    ) {
         Some(Ok(t)) => t,
         _ => panic!("vector must have full reconstruction_ingredients"),
     };
@@ -245,13 +285,16 @@ fn vpack_byte_size_summary() {
             let name = path.file_name().unwrap().to_string_lossy().into_owned();
             let contents = fs::read_to_string(&path).expect("read");
             let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
-            let expected_str = match &vector.raw_evidence.expected_vtxo_id {
+            let _expected_str = match &vector.raw_evidence.expected_vtxo_id {
                 Some(s) if s != "COMPUTE_FROM_HEX" && s != "PLACEHOLDER" => s.as_str(),
                 _ => continue,
             };
             let tx_variant = variant_from_meta(&vector.meta.variant);
             let header = make_header(tx_variant);
-            let tree = match crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+            let tree = match crate::common::tree_from_ingredients(
+                tx_variant,
+                &vector.reconstruction_ingredients,
+            ) {
                 Some(Ok(t)) => t,
                 _ => continue,
             };
@@ -273,10 +316,19 @@ fn vpack_byte_size_summary() {
         println!("  {}: {} bytes", name, size);
     }
     // Summary: round_branch_v3 is 1-level branch (3-level = root + branch + leaf); round_leaf is leaf-only.
-    let ark_3level = ark_sizes.iter().find(|(n, _)| n.contains("round_branch")).map(|(_, s)| *s);
-    let second_5step = second_sizes.iter().find(|(n, _)| n.contains("oor")).map(|(_, s)| *s);
+    let ark_3level = ark_sizes
+        .iter()
+        .find(|(n, _)| n.contains("round_branch"))
+        .map(|(_, s)| *s);
+    let second_5step = second_sizes
+        .iter()
+        .find(|(n, _)| n.contains("oor"))
+        .map(|(_, s)| *s);
     if let Some(s) = ark_3level {
-        println!("Ark Labs 1-level branch (round_branch_v3): {} bytes (reference for branch topology)", s);
+        println!(
+            "Ark Labs 1-level branch (round_branch_v3): {} bytes (reference for branch topology)",
+            s
+        );
     }
     if let Some(s) = second_5step {
         println!("Second Tech 0-step leaf (oor with path[]): {} bytes (reference; 5-step would be larger)", s);
@@ -292,7 +344,10 @@ fn print_oor_forfeit_expected_id() {
     let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
     let tx_variant = variant_from_meta(&vector.meta.variant);
     let header = make_header(tx_variant);
-    let tree = match crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients) {
+    let tree = match crate::common::tree_from_ingredients(
+        tx_variant,
+        &vector.reconstruction_ingredients,
+    ) {
         Some(Ok(t)) => t,
         _ => panic!("oor_forfeit_pset must have full reconstruction_ingredients"),
     };
@@ -318,7 +373,10 @@ fn export_second_path_ingredients() {
             .map(String::from)
             .or_else(|| {
                 let v: serde_json::Value = serde_json::from_str(&contents).ok()?;
-                v.get("raw_evidence")?.get("borsh_hex")?.as_str().map(String::from)
+                v.get("raw_evidence")?
+                    .get("borsh_hex")?
+                    .as_str()
+                    .map(String::from)
             });
         let borsh_hex = borsh_hex.expect("borsh_hex in legacy_evidence or raw_evidence");
         let tree = vpack::adapters::second_tech::bark_to_vpack(
@@ -327,7 +385,10 @@ fn export_second_path_ingredients() {
         )
         .expect("bark_to_vpack");
         let path_json = crate::common::second_path_from_tree(&tree);
-        println!("{} path (paste into reconstruction_ingredients): {}", name, path_json);
+        println!(
+            "{} path (paste into reconstruction_ingredients): {}",
+            name, path_json
+        );
     }
 }
 
@@ -359,8 +420,18 @@ fn second_round_v3_borsh_hash_single_vs_double_sha256() {
     let double = sha256d::Hash::hash(&tree_bytes);
 
     // Bitcoin TxID display: reverse byte order.
-    let single_display: String = single.to_byte_array().iter().rev().map(|b| format!("{:02x}", b)).collect();
-    let double_display: String = double.to_byte_array().iter().rev().map(|b| format!("{:02x}", b)).collect();
+    let single_display: String = single
+        .to_byte_array()
+        .iter()
+        .rev()
+        .map(|b| format!("{:02x}", b))
+        .collect();
+    let double_display: String = double
+        .to_byte_array()
+        .iter()
+        .rev()
+        .map(|b| format!("{:02x}", b))
+        .collect();
 
     let single_matches = single_display == expected_hash_hex;
     let double_matches = double_display == expected_hash_hex;
@@ -467,14 +538,13 @@ fn second_round_v3_reconstructed_tx_sha256d_matches_expected_vtxo_id() {
     let computed_display = format!("{}", virtual_tx.compute_txid());
 
     if computed_display == expected_hash_hex {
-        assert_eq!(expected_vout, 0, "expected_vtxo_id vout should be 0 for single-output virtual tx");
+        assert_eq!(
+            expected_vout, 0,
+            "expected_vtxo_id vout should be 0 for single-output virtual tx"
+        );
     }
 
-    fn build_virtual_tx(
-        anchor: bitcoin::OutPoint,
-        amount: u64,
-        script: &[u8],
-    ) -> Transaction {
+    fn build_virtual_tx(anchor: bitcoin::OutPoint, amount: u64, script: &[u8]) -> Transaction {
         Transaction {
             version: Version::non_standard(3),
             lock_time: LockTime::ZERO,
@@ -491,9 +561,7 @@ fn second_round_v3_reconstructed_tx_sha256d_matches_expected_vtxo_id() {
         }
     }
 
-    fn try_parse_leaf_then_anchor(
-        payload: &[u8],
-    ) -> Option<(ScriptBuf, bitcoin::OutPoint, u64)> {
+    fn try_parse_leaf_then_anchor(payload: &[u8]) -> Option<(ScriptBuf, bitcoin::OutPoint, u64)> {
         for skip in [40_usize, 4, 1, 0] {
             if payload.len() <= skip {
                 continue;
@@ -527,4 +595,268 @@ fn second_round_v3_reconstructed_tx_sha256d_matches_expected_vtxo_id() {
         }
         None
     }
+}
+
+/// Internal consistency: pack then verify round-trip for Ark Labs and Second Tech.
+#[test]
+fn test_vpack_internal_consistency_roundtrip() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    let ark_path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_leaf_v3.json");
+    let ark_contents = fs::read_to_string(&ark_path).expect("read Ark Labs vector");
+    let ark_json: serde_json::Value =
+        serde_json::from_str(&ark_contents).expect("parse Ark Labs JSON");
+
+    let ark_expected_id_str = ark_json["raw_evidence"]["expected_vtxo_id"]
+        .as_str()
+        .expect("expected_vtxo_id present");
+    let ark_expected_id =
+        vpack::VtxoId::from_str(ark_expected_id_str).expect("parse expected VTXO ID");
+
+    let ri = &ark_json["reconstruction_ingredients"];
+    let anchor_outpoint_str = ri["parent_outpoint"].as_str().expect("parent_outpoint");
+    let anchor_id = vpack::VtxoId::from_str(anchor_outpoint_str).expect("parse anchor OutPoint");
+    let anchor = match anchor_id {
+        vpack::VtxoId::OutPoint(op) => op,
+        vpack::VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
+    };
+
+    let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
+    let fee_anchor_script =
+        hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+            .expect("decode fee_anchor_script");
+    let outputs = ri["outputs"].as_array().expect("outputs array");
+    let user_value = outputs[0]["value"].as_u64().expect("user value");
+    let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
+        .expect("decode user script");
+
+    let ark_tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: user_value,
+            vout: 0,
+            sequence,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: user_script,
+        },
+        path: Vec::new(),
+        anchor,
+        asset_id: None,
+        fee_anchor_script,
+    };
+
+    let ark_header = Header {
+        flags: 0,
+        version: 1,
+        tx_variant: TxVariant::V3Anchored,
+        tree_arity: 16,
+        tree_depth: 32,
+        node_count: 0,
+        asset_type: 0,
+        payload_len: 0,
+        checksum: 0,
+    };
+
+    let ark_packed_bytes = pack(&ark_header, &ark_tree).expect("pack Ark Labs V-PACK");
+    let ark_verified_tree = vpack::verify(&ark_packed_bytes, &ark_expected_id)
+        .expect("Ark Labs round-trip verification should succeed");
+
+    assert_eq!(ark_verified_tree.leaf.amount, ark_tree.leaf.amount);
+    assert_eq!(
+        ark_verified_tree.leaf.script_pubkey,
+        ark_tree.leaf.script_pubkey
+    );
+    assert_eq!(ark_verified_tree.anchor, ark_tree.anchor);
+    assert_eq!(
+        ark_verified_tree.fee_anchor_script,
+        ark_tree.fee_anchor_script
+    );
+    assert_eq!(ark_verified_tree.path.len(), ark_tree.path.len());
+
+    let grandparent_hash_str = "abd5d39844c20383aa167cbcb6f8e8225a6d592150b9524c96594187493cc2a3";
+    let second_anchor_id =
+        vpack::VtxoId::from_str(grandparent_hash_str).expect("parse anchor hash");
+    let second_anchor = match second_anchor_id {
+        vpack::VtxoId::Raw(hash_bytes) => {
+            let txid = bitcoin::Txid::from_byte_array(hash_bytes);
+            bitcoin::OutPoint { txid, vout: 0 }
+        }
+        vpack::VtxoId::OutPoint(op) => op,
+    };
+
+    let second_fee_anchor_script = hex::decode("51024e73").expect("decode fee anchor script");
+    let step0_child_script =
+        hex::decode("5120f565fc0b453a3694f36bd83089878dc68708706b7ce183cc30698961d046c559")
+            .expect("decode child script");
+    let step0_siblings = vec![
+        vpack::payload::tree::SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 5000,
+            script: hex::decode(
+                "51205acb7b65f8da14622a055640893e952e20f68e051087b85be4d56e50cdafd431",
+            )
+            .expect("decode sibling 0 script"),
+        },
+        vpack::payload::tree::SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 5000,
+            script: hex::decode(
+                "5120973b9be7e6ee51f8851347130113e4001ab1d01252dd1d09713a6c900cb327f2",
+            )
+            .expect("decode sibling 1 script"),
+        },
+        vpack::payload::tree::SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 5000,
+            script: hex::decode(
+                "512052cc228fe0f4951032fbaeb45ed8b73163cedb897412407e5b431d740040a951",
+            )
+            .expect("decode sibling 2 script"),
+        },
+    ];
+    let step0_item = vpack::payload::tree::GenesisItem {
+        siblings: step0_siblings,
+        parent_index: 3,
+        sequence: 0,
+        child_amount: 30000u64,
+        child_script_pubkey: step0_child_script.clone(),
+        signature: None,
+    };
+
+    let mut second_path_items = vec![step0_item];
+    for i in 1..5 {
+        let step_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 1000,
+            script: hex::decode(
+                "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+            )
+            .expect("decode sibling script"),
+        }];
+        let step_item = vpack::payload::tree::GenesisItem {
+            siblings: step_siblings,
+            parent_index: 1,
+            sequence: 0,
+            child_amount: 20000 - (i * 1000),
+            child_script_pubkey: step0_child_script.clone(),
+            signature: None,
+        };
+        second_path_items.push(step_item);
+    }
+
+    let second_tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: 15000,
+            vout: 0,
+            sequence: 0,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: step0_child_script,
+        },
+        path: second_path_items,
+        anchor: second_anchor,
+        asset_id: None,
+        fee_anchor_script: second_fee_anchor_script,
+    };
+
+    let second_engine = vpack::consensus::SecondTechV3;
+    let second_expected_id = second_engine
+        .compute_vtxo_id(&second_tree)
+        .expect("compute Second Tech VTXO ID");
+
+    let second_header = Header {
+        flags: FLAG_PROOF_COMPACT,
+        version: 1,
+        tx_variant: TxVariant::V3Plain,
+        tree_arity: 16,
+        tree_depth: 32,
+        node_count: 0,
+        asset_type: 0,
+        payload_len: 0,
+        checksum: 0,
+    };
+
+    let second_packed_bytes = pack(&second_header, &second_tree).expect("pack Second Tech V-PACK");
+    let second_verified_tree = vpack::verify(&second_packed_bytes, &second_expected_id)
+        .expect("Second Tech round-trip verification should succeed");
+
+    assert_eq!(second_verified_tree.leaf.amount, second_tree.leaf.amount);
+    assert_eq!(
+        second_verified_tree.leaf.script_pubkey,
+        second_tree.leaf.script_pubkey
+    );
+    assert_eq!(second_verified_tree.anchor, second_tree.anchor);
+    assert_eq!(
+        second_verified_tree.fee_anchor_script,
+        second_tree.fee_anchor_script
+    );
+    assert_eq!(second_verified_tree.path.len(), second_tree.path.len());
+}
+
+/// Negative gate: reject invalid sequence values.
+#[test]
+fn test_reject_invalid_sequence() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ark_path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_leaf_v3.json");
+    let ark_contents = fs::read_to_string(&ark_path).expect("read Ark Labs vector");
+    let ark_json: serde_json::Value =
+        serde_json::from_str(&ark_contents).expect("parse Ark Labs JSON");
+
+    let ark_expected_id_str = ark_json["raw_evidence"]["expected_vtxo_id"]
+        .as_str()
+        .expect("expected_vtxo_id present");
+    let ark_expected_id =
+        vpack::VtxoId::from_str(ark_expected_id_str).expect("parse expected VTXO ID");
+
+    let ri = &ark_json["reconstruction_ingredients"];
+    let anchor_outpoint_str = ri["parent_outpoint"].as_str().expect("parent_outpoint");
+    let anchor_id = vpack::VtxoId::from_str(anchor_outpoint_str).expect("parse anchor OutPoint");
+    let anchor = match anchor_id {
+        vpack::VtxoId::OutPoint(op) => op,
+        vpack::VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
+    };
+
+    let fee_anchor_script =
+        hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+            .expect("decode fee_anchor_script");
+    let outputs = ri["outputs"].as_array().expect("outputs array");
+    let user_value = outputs[0]["value"].as_u64().expect("user value");
+    let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
+        .expect("decode user script");
+
+    let invalid_sequence = 0x0000_0005u32;
+
+    let tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: user_value,
+            vout: 0,
+            sequence: invalid_sequence,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: user_script,
+        },
+        path: Vec::new(),
+        anchor,
+        asset_id: None,
+        fee_anchor_script,
+    };
+
+    let header = Header {
+        flags: 0,
+        version: 1,
+        tx_variant: TxVariant::V3Anchored,
+        tree_arity: 16,
+        tree_depth: 32,
+        node_count: 0,
+        asset_type: 0,
+        payload_len: 0,
+        checksum: 0,
+    };
+
+    let packed_bytes = pack(&header, &tree).expect("pack invalid-sequence V-PACK");
+    let result = vpack::verify(&packed_bytes, &ark_expected_id);
+    assert!(
+        result.is_err(),
+        "V-PACK with invalid sequence should be rejected"
+    );
 }

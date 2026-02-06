@@ -116,24 +116,31 @@ fn estimate_capacity(inputs: &[TxInPreimage], outputs: &[TxOutPreimage<'_>]) -> 
 mod tests {
     use core::str::FromStr;
 
+    use std::path::PathBuf;
+
     use bitcoin::hashes::Hash;
 
-    use super::{TxInPreimage, TxOutPreimage, tx_preimage};
+    use super::{tx_preimage, TxInPreimage, TxOutPreimage};
     use crate::consensus::VtxoId;
-
-    /// From raw_evidence.unsigned_tx_hex in oor_forfeit_pset.json.
-    const UNSIGNED_TX_HEX: &str = "0300000001411d0d848ab79c0f7ae5a73742c4addd4e5b5646c2bc4bea854d287107825c750000000000feffffff02e803000000000000150014a1b2c3d4e5f6789012345678901234567890ab00000000000000000451024e7300000000";
-
-    /// Anchor in display order (reconstruction_ingredients); parse to get wire-order PrevOut.
-    const ANCHOR_STR: &str = "755c820771284d85ea4bbcc246565b4eddadc44237a7e57a0f9cb78a840d1d41:0";
 
     /// Fee anchor script hex from reconstruction_ingredients.
     const FEE_ANCHOR_SCRIPT_HEX: &str = "51024e73";
 
     #[test]
     fn test_factory_parity_v3_oor() {
-        let expected = hex::decode(UNSIGNED_TX_HEX).expect("decode unsigned_tx_hex");
-        let id = VtxoId::from_str(ANCHOR_STR).expect("parse anchor");
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("tests/conformance/vectors/ark_labs/oor_forfeit_pset.json");
+        let contents = std::fs::read_to_string(&path).expect("read oor_forfeit_pset.json");
+        let json: serde_json::Value = serde_json::from_str(&contents).expect("parse JSON");
+        let unsigned_tx_hex = json["raw_evidence"]["unsigned_tx_hex"]
+            .as_str()
+            .expect("unsigned_tx_hex present");
+        let anchor_str = json["reconstruction_ingredients"]["parent_outpoint"]
+            .as_str()
+            .expect("parent_outpoint present");
+
+        let expected = hex::decode(unsigned_tx_hex).expect("decode unsigned_tx_hex");
+        let id = VtxoId::from_str(anchor_str).expect("parse anchor");
         let (prev_out_txid, prev_out_vout) = match id {
             VtxoId::OutPoint(op) => (op.txid.to_byte_array(), op.vout),
             VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
@@ -146,7 +153,8 @@ mod tests {
         };
 
         let first_output_script = extract_first_output_script(&expected);
-        let fee_anchor_script = hex::decode(FEE_ANCHOR_SCRIPT_HEX).expect("decode fee_anchor_script");
+        let fee_anchor_script =
+            hex::decode(FEE_ANCHOR_SCRIPT_HEX).expect("decode fee_anchor_script");
 
         let out1 = TxOutPreimage {
             value: 1000,
@@ -158,7 +166,10 @@ mod tests {
         };
 
         let result = tx_preimage(3, &[input], &[out1, out2], 0);
-        assert_eq!(result, expected, "factory output must match unsigned_tx_hex byte-for-byte");
+        assert_eq!(
+            result, expected,
+            "factory output must match unsigned_tx_hex byte-for-byte"
+        );
     }
 
     /// Parses the preimage buffer to return the first output's scriptPubKey bytes.

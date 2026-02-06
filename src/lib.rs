@@ -33,49 +33,17 @@ use crate::payload::reader::BoundedReader;
 /// * `Ok(VPackTree)` - Verification succeeded, returns the parsed tree
 /// * `Err(VPackError)` - Verification failed (checksum, parsing, or ID mismatch)
 pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPackError> {
-    #[cfg(test)]
-    {
-        std::eprintln!("DEBUG VERIFY: Starting verify. Total bytes: {}", vpack_bytes.len());
-        let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
-    }
-    
     // Step 1: Parse Header (first 24 bytes)
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])?;
-    
-    #[cfg(test)]
-    {
-        std::eprintln!("DEBUG VERIFY: Parsed header. Variant: {:?}, Payload len: {}", header.tx_variant, header.payload_len);
-        let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
-    }
 
     // Step 2: Extract Payload
     let payload = &vpack_bytes[HEADER_SIZE..];
-    
-    #[cfg(test)]
-    {
-        std::eprintln!("DEBUG VERIFY: Extracted payload. Payload bytes: {}, Expected: {}", payload.len(), header.payload_len);
-        let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
-    }
 
     // Step 3: Verify Checksum
     header.verify_checksum(payload)?;
-    
-    #[cfg(test)]
-    {
-        std::eprintln!("DEBUG VERIFY: Checksum verified. Starting payload parse.");
-        let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
-    }
 
     // Step 4: Parse Payload
-    let tree = BoundedReader::parse(&header, payload)
-        .map_err(|e| {
-            #[cfg(test)]
-            {
-                std::eprintln!("DEBUG VERIFY: ERROR in BoundedReader::parse: {:?}", e);
-                let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
-            }
-            e
-        })?;
+    let tree = BoundedReader::parse(&header, payload)?;
 
     // Step 5: Dispatch by Variant and Verify (only 0x03 and 0x04 are valid per TxVariant::try_from)
     match header.tx_variant {

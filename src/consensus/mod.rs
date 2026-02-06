@@ -13,13 +13,13 @@ use bitcoin::Txid;
 use crate::error::VPackError;
 use crate::payload::tree::VPackTree;
 
-pub mod tx_factory;
 pub mod ark_labs;
 pub mod second_tech;
+pub mod tx_factory;
 
-pub use tx_factory::{tx_preimage, TxInPreimage, TxOutPreimage};
 pub use ark_labs::ArkLabsV3;
 pub use second_tech::SecondTechV3;
+pub use tx_factory::{tx_preimage, TxInPreimage, TxOutPreimage};
 
 // -----------------------------------------------------------------------------
 // VtxoId
@@ -86,8 +86,14 @@ fn decode_hex_32(s: &str) -> Result<[u8; 32], VPackError> {
     let mut out = [0u8; 32];
     let mut chars = s.chars();
     for byte in out.iter_mut() {
-        let hi = chars.next().and_then(hex_digit).ok_or(VPackError::InvalidVtxoIdFormat)?;
-        let lo = chars.next().and_then(hex_digit).ok_or(VPackError::InvalidVtxoIdFormat)?;
+        let hi = chars
+            .next()
+            .and_then(hex_digit)
+            .ok_or(VPackError::InvalidVtxoIdFormat)?;
+        let lo = chars
+            .next()
+            .and_then(hex_digit)
+            .ok_or(VPackError::InvalidVtxoIdFormat)?;
         *byte = (hi << 4) | lo;
     }
     Ok(out)
@@ -132,8 +138,8 @@ pub trait ConsensusEngine {
 
 #[cfg(test)]
 mod tests {
-    use alloc::format;
     use super::*;
+    use alloc::format;
 
     #[test]
     fn vtxo_id_parse_ark_labs_raw_hex() {
@@ -148,10 +154,17 @@ mod tests {
         let mut internal = display_order;
         internal.reverse();
         match &id {
-            VtxoId::Raw(b) => assert_eq!(b, &internal, "Raw stores internal (reversed) byte order to match Bitcoin TxID convention"),
+            VtxoId::Raw(b) => assert_eq!(
+                b, &internal,
+                "Raw stores internal (reversed) byte order to match Bitcoin TxID convention"
+            ),
             VtxoId::OutPoint(_) => panic!("expected Raw variant"),
         }
-        assert_eq!(format!("{}", id), s, "Display round-trip: internal bytes reversed for human-readable string");
+        assert_eq!(
+            format!("{}", id),
+            s,
+            "Display round-trip: internal bytes reversed for human-readable string"
+        );
     }
 
     #[test]

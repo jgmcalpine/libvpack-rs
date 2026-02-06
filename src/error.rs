@@ -4,35 +4,35 @@
 pub enum VPackError {
     /// The data stream ended before the header or payload could be fully read.
     IncompleteData,
-    
+
     /// The Magic Bytes were not 'VPK'.
     InvalidMagic,
-    
+
     /// The Header Version is not supported by this library (currently only V1).
     UnsupportedVersion(u8),
-    
+
     /// Tree Arity must be >= 2. (0 or 1 creates invalid/degenerate trees).
     InvalidArity(u16),
-    
+
     /// The Payload length was 0.
     EmptyPayload,
-    
+
     /// The Payload length exceeded the software limit (1MB).
     PayloadTooLarge(u32),
-    
+
     /// The Tree Depth exceeded the Header limit (32).
     ExceededMaxDepth(u16),
-    
+
     /// The Tree Arity exceeded the Header limit (16).
     ExceededMaxArity(u16),
-    
+
     /// The claimed Node Count is mathematically impossible for the given Depth/Arity.
     /// (Actual Count, Theoretical Max)
     NodeCountMismatch(u16, u16),
-    
+
     /// Checksum verification failed (CRC32 mismatch).
     ChecksumMismatch { expected: u32, found: u32 },
-    
+
     /// Generic encoding/decoding error (Borsh failure).
     EncodingError,
 
@@ -70,15 +70,35 @@ impl core::fmt::Display for VPackError {
             Self::PayloadTooLarge(s) => write!(f, "Payload too large: {} bytes", s),
             Self::ExceededMaxDepth(d) => write!(f, "Tree Depth {} exceeds limit", d),
             Self::ExceededMaxArity(a) => write!(f, "Tree Arity {} exceeds limit", a),
-            Self::NodeCountMismatch(count, limit) => write!(f, "Node count {} exceeds theoretical max {}", count, limit),
-            Self::ChecksumMismatch { expected, found } => write!(f, "Checksum mismatch: expected {:08x}, found {:08x}", expected, found),
+            Self::NodeCountMismatch(count, limit) => {
+                write!(f, "Node count {} exceeds theoretical max {}", count, limit)
+            }
+            Self::ChecksumMismatch { expected, found } => write!(
+                f,
+                "Checksum mismatch: expected {:08x}, found {:08x}",
+                expected, found
+            ),
             Self::EncodingError => write!(f, "Binary encoding/decoding error"),
-            Self::InvalidTxVariant(v) => write!(f, "Invalid Tx Variant: 0x{:02x} (expected 0x03 or 0x04)", v),
-            Self::SequenceMismatch(s) => write!(f, "Sequence mismatch: 0x{:08x} (expected 0xFFFFFFFF or 0xFFFFFFFE)", s),
-            Self::FeeAnchorMissing => write!(f, "Fee anchor script missing (required for V3-Anchored)"),
+            Self::InvalidTxVariant(v) => {
+                write!(f, "Invalid Tx Variant: 0x{:02x} (expected 0x03 or 0x04)", v)
+            }
+            Self::SequenceMismatch(s) => write!(
+                f,
+                "Sequence mismatch: 0x{:08x} (expected 0xFFFFFFFF or 0xFFFFFFFE)",
+                s
+            ),
+            Self::FeeAnchorMissing => {
+                write!(f, "Fee anchor script missing (required for V3-Anchored)")
+            }
             Self::InvalidVout(v) => write!(f, "Invalid vout: {}", v),
-            Self::IdMismatch => write!(f, "VTXO ID mismatch: reconstructed ID does not match expected"),
-            Self::InvalidVtxoIdFormat => write!(f, "Invalid VTXO ID format (expected 64-char hex or Hash:Index)"),
+            Self::IdMismatch => write!(
+                f,
+                "VTXO ID mismatch: reconstructed ID does not match expected"
+            ),
+            Self::InvalidVtxoIdFormat => write!(
+                f,
+                "Invalid VTXO ID format (expected 64-char hex or Hash:Index)"
+            ),
             Self::TrailingData(n) => write!(f, "Trailing data: {} bytes left after parse", n),
         }
     }

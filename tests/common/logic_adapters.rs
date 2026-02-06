@@ -2,11 +2,12 @@
 //! Dispatched by variant (0x03 Second Tech, 0x04 Ark Labs); fall back to byte transcoding when ingredients are incomplete.
 
 use core::str::FromStr;
-use vpack::header::TxVariant;
 use vpack::error::VPackError;
+use vpack::header::TxVariant;
 use vpack::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
 
 /// Converts 32-byte hash (internal/wire order) to 64-char hex in Bitcoin display order (reversed).
+#[allow(dead_code)]
 fn hash_to_display_hex(hash: &[u8; 32]) -> String {
     let mut rev = *hash;
     rev.reverse();
@@ -29,13 +30,16 @@ impl LogicAdapter for ArkLabsAdapter {
             .as_str()
             .or_else(|| json["anchor_outpoint"].as_str())
             .ok_or(VPackError::InvalidVtxoIdFormat)?;
-        let anchor_id = vpack::VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
+        let anchor_id =
+            vpack::VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
         let anchor = match anchor_id {
             vpack::VtxoId::OutPoint(op) => op,
             vpack::VtxoId::Raw(_) => return Err(VPackError::InvalidVtxoIdFormat),
         };
 
-        let fee_hex = json["fee_anchor_script"].as_str().unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
+        let fee_hex = json["fee_anchor_script"]
+            .as_str()
+            .unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
         let fee_anchor_script = hex::decode(fee_hex).map_err(|_| VPackError::EncodingError)?;
 
         let sequence = json["nSequence"]
@@ -55,11 +59,17 @@ impl LogicAdapter for ArkLabsAdapter {
         // Optional: one GenesisItem from "siblings" (branch case).
         let (path, leaf) = if let Some(siblings) = json["siblings"].as_array() {
             let child_output = json["child_output"].as_object().or_else(|| {
-                json["outputs"].as_array().and_then(|a| a.first()).and_then(|o| o.as_object())
+                json["outputs"]
+                    .as_array()
+                    .and_then(|a| a.first())
+                    .and_then(|o| o.as_object())
             });
             let (child_amount, child_script_pubkey) = if let Some(co) = child_output {
                 let v = co["value"].as_u64().unwrap_or(0);
-                let s = co["script"].as_str().map(|h| hex::decode(h).unwrap_or_default()).unwrap_or_default();
+                let s = co["script"]
+                    .as_str()
+                    .map(|h| hex::decode(h).unwrap_or_default())
+                    .unwrap_or_default();
                 (v, s)
             } else {
                 (value, script_pubkey.clone())
@@ -73,7 +83,11 @@ impl LogicAdapter for ArkLabsAdapter {
                     hash.copy_from_slice(hash_bytes.get(0..32)?);
                     let value = s["value"].as_u64()?;
                     let script = hex::decode(s["script"].as_str()?).ok()?;
-                    Some(SiblingNode::Compact { hash, value, script })
+                    Some(SiblingNode::Compact {
+                        hash,
+                        value,
+                        script,
+                    })
                 })
                 .collect();
             let path = if sibling_nodes.is_empty() {
@@ -127,7 +141,9 @@ pub struct SecondTechAdapter;
 
 impl LogicAdapter for SecondTechAdapter {
     fn map_ingredients(json: &serde_json::Value) -> Result<VPackTree, VPackError> {
-        let fee_hex = json["fee_anchor_script"].as_str().unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
+        let fee_hex = json["fee_anchor_script"]
+            .as_str()
+            .unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
         let fee_anchor_script = hex::decode(fee_hex).map_err(|_| VPackError::EncodingError)?;
 
         let amount = json["amount"].as_u64().ok_or(VPackError::EncodingError)?;
@@ -142,13 +158,16 @@ impl LogicAdapter for SecondTechAdapter {
             .as_str()
             .or_else(|| json["parent_outpoint"].as_str())
             .ok_or(VPackError::InvalidVtxoIdFormat)?;
-        let anchor_id = vpack::VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
+        let anchor_id =
+            vpack::VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
         let anchor = match anchor_id {
             vpack::VtxoId::OutPoint(op) => op,
             vpack::VtxoId::Raw(_) => return Err(VPackError::InvalidVtxoIdFormat),
         };
 
-        let path_array = json["path"].as_array().or_else(|| json["genesis"].as_array());
+        let path_array = json["path"]
+            .as_array()
+            .or_else(|| json["genesis"].as_array());
         let path = if let Some(steps) = path_array {
             steps
                 .iter()
@@ -163,13 +182,19 @@ impl LogicAdapter for SecondTechAdapter {
                             hash.copy_from_slice(hash_bytes.get(0..32)?);
                             let value = s["value"].as_u64()?;
                             let script = hex::decode(s["script"].as_str()?).ok()?;
-                            Some(SiblingNode::Compact { hash, value, script })
+                            Some(SiblingNode::Compact {
+                                hash,
+                                value,
+                                script,
+                            })
                         })
                         .collect();
                     let parent_index = step["parent_index"].as_u64().unwrap_or(0) as u32;
                     let sequence = step["sequence"].as_u64().unwrap_or(0) as u32;
                     let child_amount = step["child_amount"].as_u64()?;
-                    let child_script_hex = step["child_script_pubkey"].as_str().or_else(|| step["child_script"].as_str())?;
+                    let child_script_hex = step["child_script_pubkey"]
+                        .as_str()
+                        .or_else(|| step["child_script"].as_str())?;
                     let child_script_pubkey = hex::decode(child_script_hex).ok()?;
                     Some(GenesisItem {
                         siblings: sibling_nodes,
@@ -221,12 +246,16 @@ pub fn tree_from_ingredients(
         }
         TxVariant::V3Plain => {
             if reconstruction_ingredients.get("amount").is_some()
-                && (reconstruction_ingredients.get("script_pubkey_hex").is_some()
+                && (reconstruction_ingredients
+                    .get("script_pubkey_hex")
+                    .is_some()
                     || reconstruction_ingredients.get("script").is_some())
                 && (reconstruction_ingredients.get("anchor_outpoint").is_some()
                     || reconstruction_ingredients.get("parent_outpoint").is_some())
             {
-                Some(SecondTechAdapter::map_ingredients(reconstruction_ingredients))
+                Some(SecondTechAdapter::map_ingredients(
+                    reconstruction_ingredients,
+                ))
             } else {
                 None
             }
@@ -236,6 +265,7 @@ pub fn tree_from_ingredients(
 
 /// Exports the path of a VPackTree to the JSON path array format expected by SecondTechAdapter.
 /// Used to derive reconstruction_ingredients.path from borsh_hex (bark_to_vpack) for test vectors.
+#[allow(dead_code)]
 pub fn second_path_from_tree(tree: &VPackTree) -> serde_json::Value {
     let path: Vec<serde_json::Value> = tree
         .path
@@ -246,11 +276,11 @@ pub fn second_path_from_tree(tree: &VPackTree) -> serde_json::Value {
                 .iter()
                 .filter_map(|s| {
                     let (hash_hex, value, script_hex) = match s {
-                        SiblingNode::Compact { hash, value, script } => (
-                            hash_to_display_hex(hash),
-                            *value,
-                            hex::encode(script),
-                        ),
+                        SiblingNode::Compact {
+                            hash,
+                            value,
+                            script,
+                        } => (hash_to_display_hex(hash), *value, hex::encode(script)),
                         SiblingNode::Full(_) => return None,
                     };
                     Some(serde_json::json!({

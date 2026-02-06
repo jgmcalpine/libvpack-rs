@@ -5,29 +5,11 @@
 
 use crate::error::VPackError;
 use crate::header::{Header, TxVariant};
-use crate::payload::tree::{VPackTree, GenesisItem, SiblingNode, VtxoLeaf};
-use bitcoin::{OutPoint, TxOut};
-use bitcoin::consensus::Decodable;
-use byteorder::{ByteOrder, LittleEndian};
+use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
 use alloc::vec::Vec;
-
-#[cfg(test)]
-extern crate std;
-
-#[cfg(test)]
-macro_rules! debug_print {
-    ($($arg:tt)*) => {
-        // Use eprintln! directly - it's available in test mode
-        std::eprintln!($($arg)*);
-        // Force flush to ensure output is visible
-        let _ = <std::io::Stderr as std::io::Write>::flush(&mut std::io::stderr());
-    };
-}
-
-#[cfg(not(test))]
-macro_rules! debug_print {
-    ($($arg:tt)*) => {};
-}
+use bitcoin::consensus::Decodable;
+use bitcoin::{OutPoint, TxOut};
+use byteorder::{ByteOrder, LittleEndian};
 
 /// The Bounded Reader.
 /// Parses a byte slice into a VPackTree, enforcing Header limits and
@@ -36,45 +18,34 @@ pub struct BoundedReader;
 
 impl BoundedReader {
     pub fn parse(header: &Header, mut data: &[u8]) -> Result<VPackTree, VPackError> {
-        debug_print!("DEBUG READER: Starting parse. Total input bytes: {}", data.len());
-        debug_print!("DEBUG READER: Header variant: {:?}, has_asset_id: {}", header.tx_variant, header.has_asset_id());
-        
         // ---------------------------------------------------------
         // 1. Parse Prefix Section (Fail-Fast). All three before Tree.
         // Order: Asset ID (conditional) → Anchor OutPoint → fee_anchor_script.
         // ---------------------------------------------------------
-        
+
         // A. Asset ID (Optional, 32 bytes if Flags & 0x08)
         let asset_id = if header.has_asset_id() {
-            debug_print!("DEBUG READER: Parsing asset_id. Remaining bytes: {}", data.len());
-            if data.len() < 32 { return Err(VPackError::IncompleteData); }
+            if data.len() < 32 {
+                return Err(VPackError::IncompleteData);
+            }
             let mut buf = [0u8; 32];
             buf.copy_from_slice(&data[0..32]);
             data = &data[32..]; // Advance cursor manually
-            debug_print!("DEBUG READER: Parsed asset_id. Remaining bytes: {}", data.len());
             Some(buf)
         } else {
-            debug_print!("DEBUG READER: Skipping asset_id (not present). Remaining bytes: {}", data.len());
             None
         };
 
         // B. Anchor OutPoint (Fixed 36 bytes: 32 TxID + 4 vout)
-        debug_print!("DEBUG READER: Parsing anchor OutPoint. Remaining bytes: {}", data.len());
         if data.len() < 36 {
-            debug_print!("DEBUG READER: ERROR - Not enough bytes for anchor (need 36, have {})", data.len());
             return Err(VPackError::IncompleteData);
         }
         let (anchor_bytes, rest) = data.split_at(36);
         let anchor = OutPoint::consensus_decode(&mut &anchor_bytes[..])
-            .map_err(|e| {
-                debug_print!("DEBUG READER: ERROR - Failed to decode anchor OutPoint: {:?}", e);
-                VPackError::EncodingError
-            })?;
+            .map_err(|_e| VPackError::EncodingError)?;
         data = rest; // EXPLICITLY ADVANCE THE SLICE
-        debug_print!("DEBUG READER: Parsed anchor OutPoint. Remaining bytes: {}", data.len());
 
         // C. fee_anchor_script (Borsh Vec<u8>: u32 len LE + that many bytes)
-        debug_print!("DEBUG READER: Parsing fee_anchor_script. Remaining bytes: {}", data.len());
         if data.len() < 4 {
             return Err(VPackError::IncompleteData);
         }
@@ -87,7 +58,6 @@ impl BoundedReader {
         let (script_bytes, rest) = data.split_at(script_len);
         data = rest;
         let fee_anchor_script = script_bytes.to_vec();
-        debug_print!("DEBUG READER: Parsed fee_anchor_script (len={}). Remaining bytes: {}", fee_anchor_script.len(), data.len());
         if matches!(header.tx_variant, TxVariant::V3Anchored) && fee_anchor_script.is_empty() {
             return Err(VPackError::FeeAnchorMissing);
         }
@@ -97,7 +67,6 @@ impl BoundedReader {
         // ---------------------------------------------------------
 
         // A. Leaf: amount(8) + vout(4) + sequence(4) + expiry(4) + exit_delta(2) + Borsh Vec<u8>(4+len)
-        debug_print!("DEBUG READER: Parsing leaf. Remaining bytes: {}", data.len());
         const LEAF_FIXED: usize = 8 + 4 + 4 + 4 + 2; // 22
         if data.len() < LEAF_FIXED + 4 {
             return Err(VPackError::IncompleteData);
@@ -125,17 +94,14 @@ impl BoundedReader {
             exit_delta,
             script_pubkey: leaf_script_bytes.to_vec(),
         };
-        debug_print!("DEBUG READER: Parsed leaf (amount={}, script_len={}). Remaining bytes: {}", leaf.amount, leaf.script_pubkey.len(), data.len());
 
         // B. Path length (Borsh u32 = 4 bytes LE)
-        debug_print!("DEBUG READER: Parsing path_len. Remaining bytes: {}", data.len());
         if data.len() < 4 {
             return Err(VPackError::IncompleteData);
         }
         let path_len = LittleEndian::read_u32(&data[0..4]);
         let (_, rest) = data.split_at(4);
         data = rest;
-        debug_print!("DEBUG READER: Parsed path_len={}. Remaining bytes: {}", path_len, data.len());
 
         // Borsh Bomb DoS: reject path_len before any allocation (Landmine 2).
         if path_len > header.tree_depth as u32 {
@@ -144,8 +110,7 @@ impl BoundedReader {
 
         let mut path = Vec::with_capacity(path_len as usize);
 
-        for item_idx in 0..path_len {
-            debug_print!("DEBUG READER: Starting GenesisItem[{}] parse. Remaining bytes: {}", item_idx, data.len());
+        for _item_idx in 0..path_len {
             // C. Siblings length (V-PACK standard: Borsh u32 = 4 bytes LE; do not use u16)
             if data.len() < 4 {
                 return Err(VPackError::IncompleteData);
@@ -153,7 +118,6 @@ impl BoundedReader {
             let siblings_len = LittleEndian::read_u32(&data[0..4]);
             let (_, rest) = data.split_at(4);
             data = rest;
-            debug_print!("DEBUG READER: Parsed siblings_len={}. Remaining bytes: {}", siblings_len, data.len());
 
             // SECURITY CHECK: Tree Arity
             if siblings_len > header.tree_arity as u32 {
@@ -162,8 +126,7 @@ impl BoundedReader {
 
             let mut siblings = Vec::with_capacity(siblings_len as usize);
 
-            for sibling_idx in 0..siblings_len {
-                    debug_print!("DEBUG READER: Parsing sibling[{}]. Remaining bytes: {}", sibling_idx, data.len());
+            for _sibling_idx in 0..siblings_len {
                 let sibling = if header.is_compact() {
                     // COMPACT MODE:
                     // 1. 32-byte hash
@@ -198,22 +161,24 @@ impl BoundedReader {
                     let (script_slice, rest) = data.split_at(script_len);
                     data = rest;
                     let script = script_slice.to_vec();
-                    debug_print!("DEBUG READER: Parsed Compact sibling: hash[..4]={:?}, value={}, script_len={}. Remaining bytes: {}", 
-                        &hash[..4], value, script.len(), data.len());
 
-                    SiblingNode::Compact { hash, value, script }
+                    SiblingNode::Compact {
+                        hash,
+                        value,
+                        script,
+                    }
                 } else {
                     // FULL MODE: Bitcoin TxOut (Consensus Decode)
                     // Format: [8-byte Value LE] [VarInt ScriptLen] [Script Bytes]
                     // We must manually parse to explicitly advance the cursor
-                    
+
                     // 1. Read value (8 bytes)
                     if data.len() < 8 {
                         return Err(VPackError::IncompleteData);
                     }
                     let value = LittleEndian::read_u64(&data[..8]);
                     let mut cursor = &data[8..];
-                    
+
                     // 2. Read VarInt script length
                     let script_len = if cursor.is_empty() {
                         return Err(VPackError::IncompleteData);
@@ -243,7 +208,7 @@ impl BoundedReader {
                         cursor = &cursor[9..];
                         len
                     };
-                    
+
                     // 3. Read script bytes
                     let script_len_usize = script_len as usize;
                     if cursor.len() < script_len_usize {
@@ -258,17 +223,20 @@ impl BoundedReader {
                         value: Amount::from_sat(value),
                         script_pubkey: ScriptBuf::from_bytes(script_bytes.to_vec()),
                     };
-                    
+
                     // Calculate total consumed: 8 (value) + VarInt bytes + script bytes
-                    let varint_bytes = if script_len < 0xfd { 1 } 
-                        else if script_len < 0x1_0000 { 3 }
-                        else if script_len < 0x1_0000_0000 { 5 }
-                        else { 9 };
+                    let varint_bytes = if script_len < 0xfd {
+                        1
+                    } else if script_len < 0x1_0000 {
+                        3
+                    } else if script_len < 0x1_0000_0000 {
+                        5
+                    } else {
+                        9
+                    };
                     let total_consumed = 8 + varint_bytes + script_len_usize;
                     data = &data[total_consumed..]; // EXPLICITLY ADVANCE THE SLICE
-                    
-                    debug_print!("DEBUG READER: Parsed Full sibling (value={}, script_len={}, consumed {} bytes). Remaining bytes: {}", 
-                        value, script_len, total_consumed, data.len());
+
                     SiblingNode::Full(txout)
                 };
                 siblings.push(sibling);
@@ -281,21 +249,18 @@ impl BoundedReader {
             let parent_index = LittleEndian::read_u32(&data[0..4]);
             let (_, rest) = data.split_at(4);
             data = rest;
-            debug_print!("DEBUG READER: Parsed parent_index={}. Remaining bytes: {}", parent_index, data.len());
             if data.len() < 4 {
                 return Err(VPackError::IncompleteData);
             }
             let sequence = LittleEndian::read_u32(&data[0..4]);
             let (_, rest) = data.split_at(4);
             data = rest;
-            debug_print!("DEBUG READER: Parsed sequence={}. Remaining bytes: {}", sequence, data.len());
             if data.len() < 8 {
                 return Err(VPackError::IncompleteData);
             }
             let child_amount = LittleEndian::read_u64(&data[0..8]);
             let (_, rest) = data.split_at(8);
             data = rest;
-            debug_print!("DEBUG READER: Parsed child_amount={}. Remaining bytes: {}", child_amount, data.len());
             if data.len() < 4 {
                 return Err(VPackError::IncompleteData);
             }
@@ -308,7 +273,6 @@ impl BoundedReader {
             let (child_script_slice, rest) = data.split_at(child_script_len);
             data = rest;
             let child_script_pubkey = child_script_slice.to_vec();
-            debug_print!("DEBUG READER: Parsed child_script_pubkey (len={}). Remaining bytes: {}", child_script_pubkey.len(), data.len());
             if data.is_empty() {
                 return Err(VPackError::IncompleteData);
             }
@@ -329,7 +293,6 @@ impl BoundedReader {
             } else {
                 return Err(VPackError::EncodingError);
             };
-            debug_print!("DEBUG READER: Parsed signature. Remaining bytes: {}", data.len());
 
             path.push(GenesisItem {
                 siblings,
@@ -341,7 +304,6 @@ impl BoundedReader {
             });
         }
 
-        debug_print!("DEBUG READER: Finished parsing. Remaining bytes: {}", data.len());
         if !data.is_empty() {
             return Err(VPackError::TrailingData(data.len()));
         }

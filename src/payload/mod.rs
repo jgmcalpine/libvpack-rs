@@ -1,2 +1,2 @@
-pub mod tree;
 pub mod reader;
+pub mod tree;

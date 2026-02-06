@@ -1,6 +1,6 @@
-use bitcoin::{OutPoint, TxOut};
 use alloc::vec::Vec;
-use borsh::{BorshSerialize, BorshDeserialize};
+use bitcoin::{OutPoint, TxOut};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 /// The Fully Parsed V-PACK Tree.
 /// This struct is the result of the "Bounded Reader."
