@@ -15,9 +15,11 @@ use crate::payload::tree::VPackTree;
 
 pub mod tx_factory;
 pub mod ark_labs;
+pub mod second_tech;
 
 pub use tx_factory::{tx_preimage, TxInPreimage, TxOutPreimage};
 pub use ark_labs::ArkLabsV3;
+pub use second_tech::SecondTechV3;
 
 // -----------------------------------------------------------------------------
 // VtxoId
