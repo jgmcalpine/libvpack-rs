@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Universal Binary Container for Ark Protocol vUTXOs (V-BIP-01). Production-grade, audited, neutral Bitcoin infrastructure."
 license = "MIT"
-repository = "https://github.com/jgmcalpine/v-pack-standard"
+repository = "https://github.com/jgmcalpine/libvpack-rs"
 
 [dependencies]
 # We disable default features to avoid std/rand/recovery
