@@ -40,6 +40,11 @@ pub fn pack_from_payload(header: &Header, payload: &[u8]) -> Result<Vec<u8>, VPa
     Ok(out)
 }
 
+/// Serializes tree to payload bytes (no asset ID). Used by export to compute payload_len and checksum before building the header.
+pub(crate) fn serialize_payload_for_header(tree: &VPackTree) -> Result<Vec<u8>, VPackError> {
+    serialize_payload_inner(tree, false)
+}
+
 /// Packs a header and tree into a complete V-PACK byte buffer.
 /// Checksum is computed over bytes 0..20 of header + payload per V-BIP-01.
 pub fn pack(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPackError> {
@@ -74,10 +79,14 @@ pub fn pack(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPackError> {
 }
 
 fn serialize_payload(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPackError> {
+    serialize_payload_inner(tree, header.has_asset_id())
+}
+
+fn serialize_payload_inner(tree: &VPackTree, include_asset_id: bool) -> Result<Vec<u8>, VPackError> {
     let mut out = Vec::new();
 
     // Prefix: Asset ID (optional)
-    if header.has_asset_id() {
+    if include_asset_id {
         let id = tree.asset_id.unwrap_or([0u8; 32]);
         out.extend_from_slice(&id);
     }

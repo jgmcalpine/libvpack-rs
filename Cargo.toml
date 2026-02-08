@@ -7,12 +7,8 @@ license = "MIT"
 repository = "https://github.com/jgmcalpine/libvpack-rs"
 
 [dependencies]
-# We disable default features to avoid std/rand/recovery
-bitcoin = { version = "0.32", default-features = false, features = ["serde"] } 
-
-# We explicitly control the underlying crypto lib to ensure no-std compatibility
-# and avoid linking against heavy C-libraries if possible.
-secp256k1 = { version = "0.29", default-features = false, features = ["alloc"] }
+# We disable default features to avoid std/rand/secp256k1. Minimal deps for verification only.
+bitcoin = { version = "0.32", default-features = false }
 
 # Serialization
 borsh = { version = "1.3", default-features = false, features = ["derive"] }
@@ -31,13 +27,12 @@ hex = { version = "0.4", default-features = false, features = ["alloc"], optiona
 default = ["std"]
 std = [
     "bitcoin/std",
-    "secp256k1/std",
     "borsh/std",
     "byteorder/std",
     "crc32fast/std",
     "serde?/std",
 ]
-alloc = ["secp256k1/alloc"]
+alloc = []
 
 # Enable JSON adapters (useful for converting Arkd responses)
 adapter = ["dep:serde", "dep:hex", "std"]

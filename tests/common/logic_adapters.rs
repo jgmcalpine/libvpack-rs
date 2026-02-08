@@ -1,5 +1,8 @@
 //! Logic-mapping adapters: build VPackTree from reconstruction_ingredients JSON.
-//! Dispatched by variant (0x03 Second Tech, 0x04 Ark Labs); fall back to byte transcoding when ingredients are incomplete.
+//! Used by forensic_verification and by export_second_path_ingredients (second_path_from_tree).
+//! Conformance and export_tests use the public export API instead.
+
+#![allow(dead_code)]
 
 use core::str::FromStr;
 use vpack::error::VPackError;

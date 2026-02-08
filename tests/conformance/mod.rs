@@ -1,5 +1,5 @@
-// Conformance tests: audit-format vectors. Every vector is verified via the Logic-Mapping
-// pipeline: load reconstruction_ingredients → LogicAdapter → vpack::pack → vpack::verify.
+// Conformance tests: audit-format vectors. Every vector is verified via the public export API:
+// load reconstruction_ingredients → ingredients_from_json → create_vpack_* → vpack::verify.
 
 use bitcoin::hashes::Hash;
 use borsh::BorshDeserialize;
@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use vpack::consensus::ConsensusEngine;
 use vpack::error::VPackError;
+use vpack::export::{create_vpack_ark_labs, create_vpack_second_tech};
 use vpack::header::{Header, TxVariant, FLAG_PROOF_COMPACT};
 use vpack::pack::pack;
 use vpack::payload::tree::{VPackTree, VtxoLeaf};
@@ -48,7 +49,8 @@ fn variant_from_meta(s: &str) -> TxVariant {
     }
 }
 
-/// Builds header with FLAG_PROOF_COMPACT so reader/writer use Compact sibling format (Logic Adapters produce Compact).
+/// Builds header with FLAG_PROOF_COMPACT. Used by internal roundtrip tests (test_vpack_internal_consistency_roundtrip).
+#[allow(dead_code)]
 fn make_header(tx_variant: TxVariant) -> Header {
     Header {
         flags: FLAG_PROOF_COMPACT,
@@ -84,7 +86,7 @@ fn run_conformance_vectors() {
     }
 }
 
-/// Strict pipeline: load ingredients → LogicAdapter → pack → verify. No byte-transcoding fallback.
+/// Strict pipeline: load ingredients → create_vpack_* (public API) → verify.
 fn run_audit_vector(path: &Path) {
     println!("CHECKING: {:?}", path.file_name().unwrap());
     let contents = fs::read_to_string(path).expect("read JSON");
@@ -99,25 +101,22 @@ fn run_audit_vector(path: &Path) {
     let expected_id = vpack::VtxoId::from_str(expected_id_str).expect("parse expected_vtxo_id");
 
     let tx_variant = variant_from_meta(&vector.meta.variant);
-    let header = make_header(tx_variant);
-
-    let tree = match crate::common::tree_from_ingredients(
-        tx_variant,
-        &vector.reconstruction_ingredients,
-    ) {
-        Some(Ok(t)) => t,
-        Some(Err(e)) => panic!("logic adapter failed for {}: {:?}", path.display(), e),
-        None => panic!(
-            "incomplete reconstruction_ingredients for {} (no byte fallback)",
-            path.display()
-        ),
+    let full_bytes = match tx_variant {
+        TxVariant::V3Anchored => {
+            let ingredients = crate::common::ark_labs_ingredients_from_json(
+                &vector.reconstruction_ingredients,
+            )
+            .unwrap_or_else(|e| panic!("ingredients_from_json failed for {}: {}", path.display(), e));
+            create_vpack_ark_labs(ingredients).expect("create_vpack_ark_labs")
+        }
+        TxVariant::V3Plain => {
+            let ingredients = crate::common::second_tech_ingredients_from_json(
+                &vector.reconstruction_ingredients,
+            )
+            .unwrap_or_else(|e| panic!("ingredients_from_json failed for {}: {}", path.display(), e));
+            create_vpack_second_tech(ingredients).expect("create_vpack_second_tech")
+        }
     };
-
-    let full_bytes = pack(&header, &tree).expect("pack");
-    assert!(
-        !tree.leaf.script_pubkey.is_empty() || tree.leaf.amount > 0,
-        "leaf should have script_pubkey or amount"
-    );
     vpack::verify(&full_bytes, &expected_id).expect("verify");
 }
 
@@ -131,32 +130,21 @@ fn run_integrity_sabotage(path: &Path) {
     };
     let expected_id = vpack::VtxoId::from_str(&expected_id_str).expect("parse expected_vtxo_id");
     let tx_variant = variant_from_meta(&vector.meta.variant);
-    let header = make_header(tx_variant);
 
-    let _tree = match crate::common::tree_from_ingredients(
-        tx_variant,
-        &vector.reconstruction_ingredients,
-    ) {
-        Some(Ok(t)) => t,
-        _ => return,
-    };
-
-    // Sabotage 1: amount + 1 sat (only when amount is present and variant uses it)
+    // Sabotage 1: amount + 1 sat (Second Tech)
     if vector
         .reconstruction_ingredients
         .get("amount")
         .and_then(|v| v.as_u64())
         .is_some()
+        && tx_variant == TxVariant::V3Plain
     {
-        let mut ingredients = vector.reconstruction_ingredients.clone();
-        if let Some(amt) = ingredients.get("amount").and_then(|v| v.as_u64()) {
-            ingredients["amount"] = serde_json::json!(amt + 1);
-            let tree_corrupt = match crate::common::tree_from_ingredients(tx_variant, &ingredients)
-            {
-                Some(Ok(t)) => t,
-                _ => return,
-            };
-            let bytes = pack(&header, &tree_corrupt).expect("pack");
+        let mut ingredients_json = vector.reconstruction_ingredients.clone();
+        if let Some(amt) = ingredients_json.get("amount").and_then(|v| v.as_u64()) {
+            ingredients_json["amount"] = serde_json::json!(amt + 1);
+            let ingredients =
+                crate::common::second_tech_ingredients_from_json(&ingredients_json).unwrap();
+            let bytes = create_vpack_second_tech(ingredients).expect("pack");
             let result = vpack::verify(&bytes, &expected_id);
             assert!(
                 matches!(result, Err(VPackError::IdMismatch)),
@@ -166,22 +154,20 @@ fn run_integrity_sabotage(path: &Path) {
         }
     }
 
-    // Sabotage 2: sequence change (Ark Labs uses nSequence in the tree; Second Tech leaf.sequence is fixed 0)
+    // Sabotage 2: sequence change (Ark Labs)
     if tx_variant == TxVariant::V3Anchored
         && vector.reconstruction_ingredients.get("nSequence").is_some()
     {
-        let mut ingredients = vector.reconstruction_ingredients.clone();
-        let seq = ingredients["nSequence"].as_u64().unwrap_or(0);
-        ingredients["nSequence"] = serde_json::json!(if seq == 0xffff_ffff {
+        let mut ingredients_json = vector.reconstruction_ingredients.clone();
+        let seq = ingredients_json["nSequence"].as_u64().unwrap_or(0);
+        ingredients_json["nSequence"] = serde_json::json!(if seq == 0xffff_ffff {
             0xffff_fffeu32
         } else {
             0xffff_ffffu32
         });
-        let tree_corrupt = match crate::common::tree_from_ingredients(tx_variant, &ingredients) {
-            Some(Ok(t)) => t,
-            _ => return,
-        };
-        let bytes = pack(&header, &tree_corrupt).expect("pack");
+        let ingredients =
+            crate::common::ark_labs_ingredients_from_json(&ingredients_json).unwrap();
+        let bytes = create_vpack_ark_labs(ingredients).expect("pack");
         let result = vpack::verify(&bytes, &expected_id);
         assert!(
             matches!(
@@ -201,19 +187,16 @@ fn print_second_computed_ids() {
         let path = manifest_dir.join(format!("tests/conformance/vectors/second/{}.json", name));
         let contents = fs::read_to_string(&path).expect("read");
         let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
-        let tx_variant = variant_from_meta(&vector.meta.variant);
-        let header = make_header(tx_variant);
-        let tree = match crate::common::tree_from_ingredients(
-            tx_variant,
+        let ingredients = match crate::common::second_tech_ingredients_from_json(
             &vector.reconstruction_ingredients,
         ) {
-            Some(Ok(t)) => t,
-            _ => {
+            Ok(i) => i,
+            Err(_) => {
                 println!("{}: skip (incomplete ingredients)", name);
                 continue;
             }
         };
-        let bytes = pack(&header, &tree).expect("pack");
+        let bytes = create_vpack_second_tech(ingredients).expect("pack");
         let id = vpack::compute_vtxo_id_from_bytes(&bytes).expect("compute id");
         println!("{} expected_vtxo_id: {}", name, id);
     }
@@ -225,7 +208,6 @@ fn oor_ingredients_parse() {
     let path = manifest_dir.join("tests/conformance/vectors/second/oor_v3_borsh.json");
     let contents = fs::read_to_string(&path).expect("read");
     let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
-    let tx_variant = variant_from_meta(&vector.meta.variant);
     let anchor_str = vector.reconstruction_ingredients["anchor_outpoint"]
         .as_str()
         .unwrap_or("");
@@ -236,12 +218,11 @@ fn oor_ingredients_parse() {
         id_result,
         anchor_str
     );
-    let tree_result =
-        crate::common::tree_from_ingredients(tx_variant, &vector.reconstruction_ingredients);
-    match &tree_result {
-        Some(Ok(_)) => {}
-        Some(Err(e)) => panic!("adapter failed: {:?}", e),
-        None => panic!("adapter returned None"),
+    let ingredients_result =
+        crate::common::second_tech_ingredients_from_json(&vector.reconstruction_ingredients);
+    match &ingredients_result {
+        Ok(_) => {}
+        Err(e) => panic!("ingredients_from_json failed: {:?}", e),
     }
 }
 
@@ -252,16 +233,10 @@ fn print_computed_vtxo_id() {
     let path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_branch_v3.json");
     let contents = fs::read_to_string(&path).expect("read");
     let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
-    let tx_variant = variant_from_meta(&vector.meta.variant);
-    let header = make_header(tx_variant);
-    let tree = match crate::common::tree_from_ingredients(
-        tx_variant,
-        &vector.reconstruction_ingredients,
-    ) {
-        Some(Ok(t)) => t,
-        _ => panic!("vector must have full reconstruction_ingredients"),
-    };
-    let bytes = pack(&header, &tree).expect("pack");
+    let ingredients =
+        crate::common::ark_labs_ingredients_from_json(&vector.reconstruction_ingredients)
+            .expect("full reconstruction_ingredients");
+    let bytes = create_vpack_ark_labs(ingredients).expect("pack");
     let id = vpack::compute_vtxo_id_from_bytes(&bytes).expect("compute id");
     println!("expected_vtxo_id for round_branch_v3.json: {}", id);
 }
@@ -290,15 +265,32 @@ fn vpack_byte_size_summary() {
                 _ => continue,
             };
             let tx_variant = variant_from_meta(&vector.meta.variant);
-            let header = make_header(tx_variant);
-            let tree = match crate::common::tree_from_ingredients(
-                tx_variant,
-                &vector.reconstruction_ingredients,
-            ) {
-                Some(Ok(t)) => t,
-                _ => continue,
+            let bytes = match tx_variant {
+                TxVariant::V3Anchored => {
+                    let ingredients = match crate::common::ark_labs_ingredients_from_json(
+                        &vector.reconstruction_ingredients,
+                    ) {
+                        Ok(i) => i,
+                        Err(_) => continue,
+                    };
+                    match create_vpack_ark_labs(ingredients) {
+                        Ok(b) => b,
+                        Err(_) => continue,
+                    }
+                }
+                TxVariant::V3Plain => {
+                    let ingredients = match crate::common::second_tech_ingredients_from_json(
+                        &vector.reconstruction_ingredients,
+                    ) {
+                        Ok(i) => i,
+                        Err(_) => continue,
+                    };
+                    match create_vpack_second_tech(ingredients) {
+                        Ok(b) => b,
+                        Err(_) => continue,
+                    }
+                }
             };
-            let bytes = pack(&header, &tree).expect("pack");
             let size = bytes.len();
             if subdir == "ark_labs" {
                 ark_sizes.push((name, size));
@@ -342,16 +334,10 @@ fn print_oor_forfeit_expected_id() {
     let path = manifest_dir.join("tests/conformance/vectors/ark_labs/oor_forfeit_pset.json");
     let contents = fs::read_to_string(&path).expect("read");
     let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
-    let tx_variant = variant_from_meta(&vector.meta.variant);
-    let header = make_header(tx_variant);
-    let tree = match crate::common::tree_from_ingredients(
-        tx_variant,
-        &vector.reconstruction_ingredients,
-    ) {
-        Some(Ok(t)) => t,
-        _ => panic!("oor_forfeit_pset must have full reconstruction_ingredients"),
-    };
-    let bytes = pack(&header, &tree).expect("pack");
+    let ingredients =
+        crate::common::ark_labs_ingredients_from_json(&vector.reconstruction_ingredients)
+            .expect("oor_forfeit_pset must have full reconstruction_ingredients");
+    let bytes = create_vpack_ark_labs(ingredients).expect("pack");
     let id = vpack::compute_vtxo_id_from_bytes(&bytes).expect("compute id");
     println!("expected_vtxo_id for oor_forfeit_pset.json: {}", id);
 }
@@ -808,52 +794,13 @@ fn test_reject_invalid_sequence() {
     let ark_expected_id =
         vpack::VtxoId::from_str(ark_expected_id_str).expect("parse expected VTXO ID");
 
-    let ri = &ark_json["reconstruction_ingredients"];
-    let anchor_outpoint_str = ri["parent_outpoint"].as_str().expect("parent_outpoint");
-    let anchor_id = vpack::VtxoId::from_str(anchor_outpoint_str).expect("parse anchor OutPoint");
-    let anchor = match anchor_id {
-        vpack::VtxoId::OutPoint(op) => op,
-        vpack::VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
-    };
+    let mut ingredients = crate::common::ark_labs_ingredients_from_json(
+        &ark_json["reconstruction_ingredients"],
+    )
+    .expect("valid ingredients");
+    ingredients.n_sequence = 0x0000_0005u32;
 
-    let fee_anchor_script =
-        hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
-            .expect("decode fee_anchor_script");
-    let outputs = ri["outputs"].as_array().expect("outputs array");
-    let user_value = outputs[0]["value"].as_u64().expect("user value");
-    let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
-        .expect("decode user script");
-
-    let invalid_sequence = 0x0000_0005u32;
-
-    let tree = VPackTree {
-        leaf: VtxoLeaf {
-            amount: user_value,
-            vout: 0,
-            sequence: invalid_sequence,
-            expiry: 0,
-            exit_delta: 0,
-            script_pubkey: user_script,
-        },
-        path: Vec::new(),
-        anchor,
-        asset_id: None,
-        fee_anchor_script,
-    };
-
-    let header = Header {
-        flags: 0,
-        version: 1,
-        tx_variant: TxVariant::V3Anchored,
-        tree_arity: 16,
-        tree_depth: 32,
-        node_count: 0,
-        asset_type: 0,
-        payload_len: 0,
-        checksum: 0,
-    };
-
-    let packed_bytes = pack(&header, &tree).expect("pack invalid-sequence V-PACK");
+    let packed_bytes = create_vpack_ark_labs(ingredients).expect("pack invalid-sequence V-PACK");
     let result = vpack::verify(&packed_bytes, &ark_expected_id);
     assert!(
         result.is_err(),

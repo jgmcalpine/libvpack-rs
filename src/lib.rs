@@ -10,11 +10,16 @@ pub mod adapters;
 pub mod compact_size;
 pub mod consensus;
 pub mod error;
+pub mod export;
 pub mod header;
 pub mod pack;
 pub mod payload;
 
 pub use consensus::{ConsensusEngine, VtxoId};
+pub use export::{
+    create_vpack_ark_labs, create_vpack_second_tech, ArkLabsIngredients, ArkLabsOutput,
+    ArkLabsSibling, SecondTechGenesisStep, SecondTechIngredients, SecondTechSibling,
+};
 pub use header::TxVariant;
 pub use payload::tree::VPackTree;
 
