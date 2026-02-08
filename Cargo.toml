@@ -7,7 +7,7 @@ description = "A no_std Rust library for the universal serialization and verific
 license = "MIT"
 repository = "https://github.com/jgmcalpine/libvpack-rs"
 readme = "README.md"
-keywords = ["bitcoin", "vtxo", "verification", "sovereignty", "layer2", "ark"]
+keywords = ["bitcoin", "vtxo", "verification", "layer2", "ark"]
 categories = ["cryptography", "no-std", "embedded"]
 
 [dependencies]
