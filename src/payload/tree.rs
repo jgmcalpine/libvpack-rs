@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use bitcoin::{OutPoint, TxOut};
+use crate::types::{OutPoint, TxOut};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 /// The Fully Parsed V-PACK Tree.

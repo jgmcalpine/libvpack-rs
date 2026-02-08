@@ -6,10 +6,7 @@
 
 use alloc::vec::Vec;
 
-use bitcoin::hashes::sha256d;
-use bitcoin::hashes::Hash;
-use bitcoin::OutPoint;
-use bitcoin::Txid;
+use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
 use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;

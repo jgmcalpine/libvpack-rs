@@ -7,10 +7,7 @@
 
 use alloc::vec::Vec;
 
-use bitcoin::hashes::sha256d;
-use bitcoin::hashes::Hash;
-use bitcoin::OutPoint;
-use bitcoin::Txid;
+use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
 use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
@@ -263,7 +260,7 @@ mod tests {
         let anchor_id = VtxoId::from_str(grandparent_hash_str).expect("parse anchor hash");
         let anchor = match anchor_id {
             VtxoId::Raw(hash_bytes) => {
-                use bitcoin::Txid;
+                use crate::types::Txid;
                 let txid = Txid::from_byte_array(hash_bytes);
                 OutPoint { txid, vout: 0 }
             }
@@ -354,7 +351,7 @@ mod tests {
         let anchor_id = VtxoId::from_str(grandparent_hash_str).expect("parse anchor hash");
         let anchor = match anchor_id {
             VtxoId::Raw(hash_bytes) => {
-                use bitcoin::Txid;
+                use crate::types::Txid;
                 let txid = Txid::from_byte_array(hash_bytes);
                 OutPoint { txid, vout: 0 }
             }

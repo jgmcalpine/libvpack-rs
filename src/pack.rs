@@ -3,7 +3,7 @@
 
 use alloc::vec::Vec;
 
-use bitcoin::TxOut;
+use crate::types::TxOut;
 use borsh::BorshSerialize;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
@@ -12,6 +12,7 @@ use crate::compact_size::write_compact_size;
 use crate::error::VPackError;
 use crate::header::{Header, HEADER_SIZE, MAGIC_BYTES};
 use crate::payload::tree::{SiblingNode, VPackTree};
+use crate::types::hashes::Hash;
 
 /// Packs a pre-built payload (prefix + tree section) with the given header into a complete V-PACK.
 /// Used by conformance tests that supply raw tree bytes (e.g. from audit borsh_hex).
@@ -92,7 +93,7 @@ fn serialize_payload_inner(tree: &VPackTree, include_asset_id: bool) -> Result<V
     }
 
     // Prefix: Anchor OutPoint (36 bytes: 32 txid + 4 vout LE)
-    out.extend_from_slice(tree.anchor.txid.as_ref());
+    out.extend_from_slice(&tree.anchor.txid.to_byte_array());
     let mut vout_buf = [0u8; 4];
     LittleEndian::write_u32(&mut vout_buf, tree.anchor.vout);
     out.extend_from_slice(&vout_buf);

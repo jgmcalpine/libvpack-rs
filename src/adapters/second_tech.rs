@@ -5,8 +5,7 @@
 //! shadow layout and maps to VPackTree.
 
 use alloc::vec::Vec;
-use bitcoin::consensus::Decodable;
-use bitcoin::OutPoint;
+use crate::types::{decode_outpoint, OutPoint};
 use byteorder::{ByteOrder, LittleEndian};
 
 use crate::compact_size::read_compact_size;
@@ -47,7 +46,7 @@ fn parse_outpoint_consensus(data: &[u8]) -> Result<(OutPoint, usize), VPackError
         return Err(VPackError::IncompleteData);
     }
     let mut slice = &data[..OUTPOINT_LEN];
-    let op = OutPoint::consensus_decode(&mut slice).map_err(|_| VPackError::EncodingError)?;
+    let op = decode_outpoint(&mut slice)?;
     Ok((op, OUTPOINT_LEN))
 }
 

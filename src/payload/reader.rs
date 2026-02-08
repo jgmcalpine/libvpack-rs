@@ -7,8 +7,7 @@ use crate::error::VPackError;
 use crate::header::{Header, TxVariant};
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
 use alloc::vec::Vec;
-use bitcoin::consensus::Decodable;
-use bitcoin::{OutPoint, TxOut};
+use crate::types::{decode_outpoint, Amount, ScriptBuf, TxOut};
 use byteorder::{ByteOrder, LittleEndian};
 
 /// The Bounded Reader.
@@ -41,8 +40,8 @@ impl BoundedReader {
             return Err(VPackError::IncompleteData);
         }
         let (anchor_bytes, rest) = data.split_at(36);
-        let anchor = OutPoint::consensus_decode(&mut &anchor_bytes[..])
-            .map_err(|_e| VPackError::EncodingError)?;
+        let mut anchor_slice = anchor_bytes;
+        let anchor = decode_outpoint(&mut anchor_slice)?;
         data = rest; // EXPLICITLY ADVANCE THE SLICE
 
         // C. fee_anchor_script (Borsh Vec<u8>: u32 len LE + that many bytes)
@@ -217,8 +216,6 @@ impl BoundedReader {
                     let script_bytes = &cursor[..script_len_usize];
 
                     // 4. Reconstruct TxOut and advance data slice
-                    use bitcoin::Amount;
-                    use bitcoin::ScriptBuf;
                     let txout = TxOut {
                         value: Amount::from_sat(value),
                         script_pubkey: ScriptBuf::from_bytes(script_bytes.to_vec()),

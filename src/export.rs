@@ -313,3 +313,13 @@ pub fn create_vpack_second_tech(ingredients: SecondTechIngredients) -> Result<Ve
     let header = header_from_tree(TxVariant::V3Plain, &tree)?;
     pack::pack(&header, &tree)
 }
+
+/// Builds a full V-PACK from an existing tree and tx variant (e.g. from LogicAdapter).
+/// Used by wasm-vpack for auto-inference: adapter yields tree + variant, then pack and verify.
+pub fn create_vpack_from_tree(
+    tree: &VPackTree,
+    tx_variant: TxVariant,
+) -> Result<Vec<u8>, VPackError> {
+    let header = header_from_tree(tx_variant, tree)?;
+    pack::pack(&header, tree)
+}

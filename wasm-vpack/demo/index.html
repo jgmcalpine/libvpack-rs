@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>wasm-vpack verification demo</title>
+</head>
+<body>
+  <h1>wasm-vpack verification gate</h1>
+  <pre id="out">Loading…</pre>
+  <script type="module">
+    const out = document.getElementById('out');
+
+    // Resolve demo base from document URL so /demo and /demo/ both load vectors from /demo/vectors/
+    const pathname = document.location.pathname;
+    const demoPath = pathname.endsWith('/')
+      ? pathname
+      : pathname.includes('/', 1)
+        ? pathname.slice(0, pathname.lastIndexOf('/') + 1)
+        : pathname + '/';
+    const demoBase = document.location.origin + demoPath;
+
+    async function run() {
+      try {
+        const { default: init, init: setPanicHook, wasm_verify } = await import(new URL('../pkg/wasm_vpack.js', demoBase));
+        await init();
+        setPanicHook();
+
+        const arkUrl = new URL('vectors/ark_labs/round_leaf_v3.json', demoBase);
+        const arkRes = await fetch(arkUrl);
+        if (!arkRes.ok) throw new Error('Failed to load ark_labs vector: ' + arkRes.status + ' ' + arkUrl.href);
+        const arkJson = await arkRes.text();
+        if (!arkJson.trim().startsWith('{')) throw new Error('ark_labs vector is not JSON (got ' + arkJson.length + ' chars, starts with: ' + JSON.stringify(arkJson.slice(0, 80)) + ')');
+
+        const secondUrl = new URL('vectors/second/round_v3_borsh.json', demoBase);
+        const secondRes = await fetch(secondUrl);
+        if (!secondRes.ok) throw new Error('Failed to load second vector: ' + secondRes.status + ' ' + secondUrl.href);
+        const secondJson = await secondRes.text();
+        if (!secondJson.trim().startsWith('{')) throw new Error('second vector is not JSON (got ' + secondJson.length + ' chars, starts with: ' + JSON.stringify(secondJson.slice(0, 80)) + ')');
+
+        let r1, r2;
+        try {
+          r1 = wasm_verify(arkJson);
+        } catch (e) {
+          r1 = null;
+          console.error('ark_labs verify error', e);
+        }
+        try {
+          r2 = wasm_verify(secondJson);
+        } catch (e) {
+          r2 = null;
+          console.error('second verify error', e);
+        }
+
+        const ok1 = r1 && r1.status === 'Success' && r1.variant === '0x04';
+        const ok2 = r2 && r2.status === 'Success' && r2.variant === '0x03';
+
+        out.textContent = [
+          'ark_labs/round_leaf_v3.json: ' + (ok1 ? 'OK' : 'FAIL') + (r1 ? ' ' + JSON.stringify(r1, null, 2) : ''),
+          'second/round_v3_borsh.json: ' + (ok2 ? 'OK' : 'FAIL') + (r2 ? ' ' + JSON.stringify(r2, null, 2) : ''),
+          '',
+          ok1 && ok2 ? 'Verification gate passed.' : 'Verification gate failed.'
+        ].join('\n');
+
+        if (!ok1 || !ok2) {
+          console.error('Verification gate failed', { r1, r2 });
+        }
+      } catch (e) {
+        out.textContent = 'Error: ' + e.message;
+        console.error(e);
+      }
+    }
+
+    run();
+  </script>
+</body>
+</html>

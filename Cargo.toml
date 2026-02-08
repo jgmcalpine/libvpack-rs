@@ -1,3 +1,6 @@
+[workspace]
+members = ["wasm-vpack"]
+
 [package]
 name = "vpack"
 version = "1.0.0-rc.1"
@@ -11,8 +14,10 @@ keywords = ["bitcoin", "vtxo", "verification", "layer2", "ark"]
 categories = ["cryptography", "no-std", "embedded"]
 
 [dependencies]
-# We disable default features to avoid std/rand/secp256k1. Minimal deps for verification only.
-bitcoin = { version = "0.32", default-features = false }
+# Optional: full bitcoin (pulls secp256k1 C lib; not used for wasm32).
+bitcoin = { version = "0.32", default-features = false, optional = true }
+# Optional: hashes only for wasm (no secp256k1).
+bitcoin_hashes = { version = "0.14", default-features = false, optional = true }
 
 # Serialization
 borsh = { version = "1.3", default-features = false, features = ["derive"] }
@@ -25,12 +30,13 @@ crc32fast = { version = "1.4", default-features = false }
 
 # Optional features
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"], optional = true }
+serde_json = { version = "1.0", optional = true }
 hex = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
 
 [features]
-default = ["std"]
+default = ["std", "bitcoin"]
 std = [
-    "bitcoin/std",
+    "bitcoin?/std",
     "borsh/std",
     "byteorder/std",
     "crc32fast/std",
@@ -38,8 +44,23 @@ std = [
 ]
 alloc = []
 
-# Enable JSON adapters (useful for converting Arkd responses)
-adapter = ["dep:serde", "dep:hex", "std"]
+# Use full bitcoin crate (native builds only; pulls secp256k1).
+bitcoin = ["dep:bitcoin"]
+
+# Enable JSON adapters (reconstruction_ingredients -> VPackTree; used by wasm-vpack)
+adapter = ["dep:serde", "dep:hex", "dep:serde_json", "std"]
+
+# For wasm32: no bitcoin (no secp256k1); use bitcoin_hashes + minimal types.
+wasm = [
+    "dep:serde",
+    "dep:hex",
+    "dep:serde_json",
+    "dep:bitcoin_hashes",
+    "borsh/std",
+    "byteorder/std",
+    "crc32fast/std",
+    "serde?/std",
+]
 
 [dev-dependencies]
 borsh = { version = "1.3", features = ["derive"] }

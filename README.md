@@ -72,6 +72,13 @@ match vpack::verify(raw_vpack, &expected_id) {
 
 ---
 
+## WASM (Milestone 6.1)
+The **wasm-vpack** workspace crate exposes headless verification with auto-inference (Ark Labs vs Second Tech). Install [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) and the target (`cargo install wasm-pack` and `rustup target add wasm32-unknown-unknown`), then build and run the demo:
+```bash
+cd wasm-vpack && wasm-pack build --target web && npx serve .
+```
+Then open the printed URL and go to `/demo/`. See [wasm-vpack/README.md](wasm-vpack/README.md).
+
 ## Project Roadmap
 - [x] **Phase 1-5:** Forensic Audit & Core VTXO Logic Implementation.
 - [ ] **Phase 6 (Current):** **The VTXO-Inspector** — A WASM web tool for browser-side auditing and visualization.

@@ -97,7 +97,7 @@ fn estimate_capacity(inputs: &[TxInPreimage], outputs: &[TxOutPreimage<'_>]) -> 
             1
         } else if script_len < 0x1_0000 {
             3
-        } else if script_len < 0x1_0000_0000 {
+        } else if (script_len as u64) < 0x1_0000_0000 {
             5
         } else {
             9
@@ -118,7 +118,7 @@ mod tests {
 
     use std::path::PathBuf;
 
-    use bitcoin::hashes::Hash;
+    use crate::types::hashes::Hash;
 
     use super::{tx_preimage, TxInPreimage, TxOutPreimage};
     use crate::consensus::VtxoId;

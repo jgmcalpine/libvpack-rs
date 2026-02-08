@@ -6,9 +6,7 @@
 use core::fmt;
 use core::str::FromStr;
 
-use bitcoin::hashes::Hash;
-use bitcoin::OutPoint;
-use bitcoin::Txid;
+use crate::types::{hashes::Hash, OutPoint, Txid};
 
 use crate::error::VPackError;
 use crate::payload::tree::VPackTree;

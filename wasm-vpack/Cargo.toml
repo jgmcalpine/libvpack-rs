@@ -1,0 +1,16 @@
+[package]
+name = "wasm-vpack"
+version = "0.1.0"
+edition = "2021"
+description = "WASM wrapper for libvpack-rs verification with auto-inference"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+vpack = { path = "..", default-features = false, features = ["wasm"] }
+wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+console_error_panic_hook = "0.1"
