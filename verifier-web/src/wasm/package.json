@@ -1,0 +1,16 @@
+{
+  "name": "wasm-vpack",
+  "type": "module",
+  "description": "WASM wrapper for libvpack-rs verification with auto-inference",
+  "version": "0.1.0",
+  "files": [
+    "wasm_vpack_bg.wasm",
+    "wasm_vpack.js",
+    "wasm_vpack.d.ts"
+  ],
+  "main": "wasm_vpack.js",
+  "types": "wasm_vpack.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
