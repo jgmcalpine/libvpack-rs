@@ -58,7 +58,10 @@ pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPa
     // Step 4: Parse Payload
     let tree = BoundedReader::parse(&header, payload)?;
 
-    // Step 5: Dispatch by Variant and Verify (only 0x03 and 0x04 are valid per TxVariant::try_from)
+    // Step 5: Validate global policy invariants (fee_anchor, sequence consistency)
+    crate::payload::validate_invariants(&header, &tree)?;
+
+    // Step 6: Dispatch by Variant and Verify (only 0x03 and 0x04 are valid per TxVariant::try_from)
     match header.tx_variant {
         crate::header::TxVariant::V3Anchored => {
             let engine = crate::consensus::ArkLabsV3;
@@ -70,7 +73,7 @@ pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPa
         }
     }
 
-    // Step 6: Return the parsed tree
+    // Step 7: Return the parsed tree
     Ok(tree)
 }
 

@@ -48,6 +48,12 @@ pub enum VPackError {
     /// Invalid or out-of-range vout (e.g. for OutPoint-based IDs).
     InvalidVout(u32),
 
+    /// Sibling Compact hash (Birth TxID) does not match reconstructed canonical Birth transaction TxID.
+    SiblingHashMismatch,
+
+    /// Policy invariant violated (fee_anchor, sequence, or exit_delta inconsistency).
+    PolicyMismatch,
+
     /// Reconstructed VTXO ID did not match the expected ID (verification gate).
     IdMismatch,
 
@@ -91,6 +97,14 @@ impl core::fmt::Display for VPackError {
                 write!(f, "Fee anchor script missing (required for V3-Anchored)")
             }
             Self::InvalidVout(v) => write!(f, "Invalid vout: {}", v),
+            Self::SiblingHashMismatch => write!(
+                f,
+                "Sibling Compact hash (Birth TxID) does not match reconstructed canonical Birth transaction TxID"
+            ),
+            Self::PolicyMismatch => write!(
+                f,
+                "Policy invariant violated (fee_anchor, sequence, or exit_delta inconsistency)"
+            ),
             Self::IdMismatch => write!(
                 f,
                 "VTXO ID mismatch: reconstructed ID does not match expected"

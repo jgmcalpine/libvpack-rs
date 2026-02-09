@@ -97,7 +97,7 @@ impl LogicAdapter for ArkLabsAdapter {
                 vec![]
             } else {
                 sibling_nodes.push(SiblingNode::Compact {
-                    hash: [0u8; 32],
+                    hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
                     value: 0,
                     script: fee_anchor_script.clone(),
                 });
@@ -119,7 +119,7 @@ impl LogicAdapter for ArkLabsAdapter {
                 script_pubkey: child_script_pubkey,
             };
             let leaf_siblings = vec![SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
                 value: 0,
                 script: fee_anchor_script.clone(),
             }];
@@ -144,7 +144,7 @@ impl LogicAdapter for ArkLabsAdapter {
                             let val = o["value"].as_u64()?;
                             let script = hex::decode(o["script"].as_str()?).ok()?;
                             Some(SiblingNode::Compact {
-                                hash: [0u8; 32],
+                                hash: vpack::consensus::hash_sibling_birth_tx(val, &script),
                                 value: val,
                                 script,
                             })
@@ -206,12 +206,9 @@ impl LogicAdapter for SecondTechAdapter {
                     let mut sibling_nodes: Vec<SiblingNode> = siblings
                         .iter()
                         .filter_map(|s| {
-                            let hash_hex = s["hash"].as_str()?;
-                            let hash_bytes = hex::decode(hash_hex).ok()?;
-                            let mut hash = [0u8; 32];
-                            hash.copy_from_slice(hash_bytes.get(0..32)?);
                             let value = s["value"].as_u64()?;
                             let script = hex::decode(s["script"].as_str()?).ok()?;
+                            let hash = vpack::consensus::hash_sibling_birth_tx(value, &script);
                             Some(SiblingNode::Compact {
                                 hash,
                                 value,
@@ -220,7 +217,7 @@ impl LogicAdapter for SecondTechAdapter {
                         })
                         .collect();
                     sibling_nodes.push(SiblingNode::Compact {
-                        hash: [0u8; 32],
+                        hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
                         value: 0,
                         script: fee_anchor_script.clone(),
                     });
@@ -255,7 +252,7 @@ impl LogicAdapter for SecondTechAdapter {
         };
 
         let leaf_siblings = vec![SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         }];

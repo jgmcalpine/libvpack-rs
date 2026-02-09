@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use vpack::consensus::ConsensusEngine;
 use vpack::error::VPackError;
-use vpack::export::{create_vpack_ark_labs, create_vpack_second_tech};
+use vpack::export::{create_vpack_ark_labs, create_vpack_from_tree, create_vpack_second_tech};
 use vpack::header::{Header, TxVariant, FLAG_PROOF_COMPACT};
 use vpack::pack::pack;
 use vpack::payload::tree::{VPackTree, VtxoLeaf};
@@ -175,6 +175,71 @@ fn run_integrity_sabotage(path: &Path) {
                 Err(VPackError::IdMismatch) | Err(VPackError::SequenceMismatch(_))
             ),
             "corrupted sequence should yield IdMismatch or SequenceMismatch, got {:?}",
+            result
+        );
+    }
+
+    // Sabotage: sibling hash wrong (Ark Labs with siblings) -> SiblingHashMismatch
+    if tx_variant == TxVariant::V3Anchored
+        && vector.reconstruction_ingredients.get("siblings").and_then(|s| s.as_array()).map(|a| !a.is_empty()).unwrap_or(false)
+    {
+        let ingredients =
+            crate::common::ark_labs_ingredients_from_json(&vector.reconstruction_ingredients)
+                .unwrap();
+        let good_bytes = create_vpack_ark_labs(ingredients).expect("pack");
+        let mut tree = vpack::verify(&good_bytes, &expected_id).expect("verify good bytes");
+        if let Some(sibling) = tree.path.first_mut().and_then(|p| p.siblings.first_mut()) {
+            if let vpack::payload::tree::SiblingNode::Compact { ref mut hash, .. } = sibling {
+                *hash = [0u8; 32];
+            }
+        }
+        let bad_bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored).expect("pack mutated tree");
+        let result = vpack::verify(&bad_bytes, &expected_id);
+        assert!(
+            matches!(result, Err(VPackError::SiblingHashMismatch)),
+            "sabotaged sibling hash should yield SiblingHashMismatch, got {:?}",
+            result
+        );
+    }
+
+    // Sabotage: vout 99 (Second Tech, leaf has 2 outputs) -> InvalidVout(99)
+    if tx_variant == TxVariant::V3Plain {
+        let mut ingredients_json = vector.reconstruction_ingredients.clone();
+        ingredients_json["vout"] = serde_json::json!(99u32);
+        if let Ok(ingredients) =
+            crate::common::second_tech_ingredients_from_json(&ingredients_json)
+        {
+            let bytes = create_vpack_second_tech(ingredients).expect("pack");
+            let result = vpack::verify(&bytes, &expected_id);
+            assert!(
+                matches!(result, Err(VPackError::InvalidVout(99))),
+                "vout 99 should yield InvalidVout(99), got {:?}",
+                result
+            );
+        }
+    }
+
+    // Sabotage: sequence in path step differs from leaf -> PolicyMismatch (Ark Labs with path)
+    if tx_variant == TxVariant::V3Anchored
+        && vector.reconstruction_ingredients.get("siblings").and_then(|s| s.as_array()).map(|a| !a.is_empty()).unwrap_or(false)
+    {
+        let ingredients =
+            crate::common::ark_labs_ingredients_from_json(&vector.reconstruction_ingredients)
+                .unwrap();
+        let good_bytes = create_vpack_ark_labs(ingredients).expect("pack");
+        let mut tree = vpack::verify(&good_bytes, &expected_id).expect("verify good bytes");
+        if let Some(item) = tree.path.first_mut() {
+            item.sequence = if tree.leaf.sequence == 0xffff_ffff {
+                0xffff_fffe
+            } else {
+                0xffff_ffff
+            };
+        }
+        let bad_bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored).expect("pack mutated tree");
+        let result = vpack::verify(&bad_bytes, &expected_id);
+        assert!(
+            matches!(result, Err(VPackError::PolicyMismatch)),
+            "sequence mismatch in path should yield PolicyMismatch, got {:?}",
             result
         );
     }
@@ -617,7 +682,7 @@ fn test_vpack_internal_consistency_roundtrip() {
         .expect("decode user script");
 
     let ark_leaf_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
-        hash: [0u8; 32],
+        hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
         value: 0,
         script: fee_anchor_script.clone(),
     }];
@@ -680,33 +745,36 @@ fn test_vpack_internal_consistency_roundtrip() {
     let step0_child_script =
         hex::decode("5120f565fc0b453a3694f36bd83089878dc68708706b7ce183cc30698961d046c559")
             .expect("decode child script");
+    let step0_s0 = hex::decode(
+        "51205acb7b65f8da14622a055640893e952e20f68e051087b85be4d56e50cdafd431",
+    )
+    .expect("decode sibling 0 script");
+    let step0_s1 = hex::decode(
+        "5120973b9be7e6ee51f8851347130113e4001ab1d01252dd1d09713a6c900cb327f2",
+    )
+    .expect("decode sibling 1 script");
+    let step0_s2 = hex::decode(
+        "512052cc228fe0f4951032fbaeb45ed8b73163cedb897412407e5b431d740040a951",
+    )
+    .expect("decode sibling 2 script");
     let step0_siblings = vec![
         vpack::payload::tree::SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: vpack::consensus::hash_sibling_birth_tx(5000, &step0_s0),
             value: 5000,
-            script: hex::decode(
-                "51205acb7b65f8da14622a055640893e952e20f68e051087b85be4d56e50cdafd431",
-            )
-            .expect("decode sibling 0 script"),
+            script: step0_s0,
         },
         vpack::payload::tree::SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: vpack::consensus::hash_sibling_birth_tx(5000, &step0_s1),
             value: 5000,
-            script: hex::decode(
-                "5120973b9be7e6ee51f8851347130113e4001ab1d01252dd1d09713a6c900cb327f2",
-            )
-            .expect("decode sibling 1 script"),
+            script: step0_s1,
         },
         vpack::payload::tree::SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: vpack::consensus::hash_sibling_birth_tx(5000, &step0_s2),
             value: 5000,
-            script: hex::decode(
-                "512052cc228fe0f4951032fbaeb45ed8b73163cedb897412407e5b431d740040a951",
-            )
-            .expect("decode sibling 2 script"),
+            script: step0_s2,
         },
         vpack::payload::tree::SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: vpack::consensus::hash_sibling_birth_tx(0, &second_fee_anchor_script),
             value: 0,
             script: second_fee_anchor_script.clone(),
         },
@@ -720,19 +788,20 @@ fn test_vpack_internal_consistency_roundtrip() {
         signature: None,
     };
 
+    let intermediate_script = hex::decode(
+        "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+    )
+    .expect("decode sibling script");
     let mut second_path_items = vec![step0_item];
     for i in 1..5 {
         let step_siblings = vec![
             vpack::payload::tree::SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: vpack::consensus::hash_sibling_birth_tx(1000, &intermediate_script),
                 value: 1000,
-                script: hex::decode(
-                    "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
-                )
-                .expect("decode sibling script"),
+                script: intermediate_script.clone(),
             },
             vpack::payload::tree::SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: vpack::consensus::hash_sibling_birth_tx(0, &second_fee_anchor_script),
                 value: 0,
                 script: second_fee_anchor_script.clone(),
             },
@@ -749,7 +818,7 @@ fn test_vpack_internal_consistency_roundtrip() {
     }
 
     let second_leaf_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
-        hash: [0u8; 32],
+        hash: vpack::consensus::hash_sibling_birth_tx(0, &second_fee_anchor_script),
         value: 0,
         script: second_fee_anchor_script.clone(),
     }];

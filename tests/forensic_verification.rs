@@ -160,7 +160,7 @@ fn master_universal_verification() {
         .expect("decode user script");
 
     let ark_leaf_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
-        hash: [0u8; 32],
+        hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
         value: 0,
         script: fee_anchor_script.clone(),
     }];

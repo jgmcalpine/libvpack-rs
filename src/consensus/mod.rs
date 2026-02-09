@@ -6,7 +6,7 @@
 use core::fmt;
 use core::str::FromStr;
 
-use crate::types::{hashes::Hash, OutPoint, Txid};
+use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
 use crate::error::VPackError;
 use crate::payload::tree::VPackTree;
@@ -104,6 +104,28 @@ fn hex_digit(c: char) -> Option<u8> {
         'A'..='F' => Some(c as u8 - b'A' + 10),
         _ => None,
     }
+}
+
+// -----------------------------------------------------------------------------
+// Canonical Sibling Identity (Birth tx TxID)
+// -----------------------------------------------------------------------------
+
+/// Computes the TxID of the canonical 1-in-1-out "Birth" transaction for a sibling.
+/// Used to verify the `hash` field in `SiblingNode::Compact` per V-BIP-01.
+/// Canonical input: prev_out_txid = [0u8; 32], prev_out_vout = 0, sequence = 0.
+pub fn hash_sibling_birth_tx(value: u64, script: &[u8]) -> [u8; 32] {
+    let input = TxInPreimage {
+        prev_out_txid: [0u8; 32],
+        prev_out_vout: 0,
+        sequence: 0,
+    };
+    let output = TxOutPreimage {
+        value,
+        script_pubkey: script,
+    };
+    let preimage = tx_preimage(3, &[input], &[output], 0);
+    let hash = sha256d::Hash::hash(&preimage);
+    hash.to_byte_array()
 }
 
 // -----------------------------------------------------------------------------

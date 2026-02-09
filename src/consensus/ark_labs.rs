@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
-use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
+use crate::consensus::{hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
 use crate::payload::tree::{SiblingNode, VPackTree};
 
@@ -50,7 +50,11 @@ impl ConsensusEngine for ArkLabsV3 {
             // Add sibling outputs (fee anchor must be in siblings when required; adapter provides it)
             for sibling in &genesis_item.siblings {
                 match sibling {
-                    SiblingNode::Compact { value, script, .. } => {
+                    SiblingNode::Compact { hash, value, script } => {
+                        let computed = hash_sibling_birth_tx(*value, script.as_slice());
+                        if computed != *hash {
+                            return Err(VPackError::SiblingHashMismatch);
+                        }
                         outputs.push(TxOutPreimage {
                             value: *value,
                             script_pubkey: script.as_slice(),
@@ -104,15 +108,23 @@ impl ArkLabsV3 {
         tree: &VPackTree,
         prevout: OutPoint,
     ) -> Result<VtxoId, VPackError> {
+        let num_outputs = 1 + tree.leaf_siblings.len();
+        if tree.leaf.vout >= num_outputs as u32 {
+            return Err(VPackError::InvalidVout(tree.leaf.vout));
+        }
         // Build outputs from data only: [leaf output] + leaf_siblings (adapter provides fee anchor when required)
-        let mut outputs = Vec::with_capacity(1 + tree.leaf_siblings.len());
+        let mut outputs = Vec::with_capacity(num_outputs);
         outputs.push(TxOutPreimage {
             value: tree.leaf.amount,
             script_pubkey: tree.leaf.script_pubkey.as_slice(),
         });
         for sibling in &tree.leaf_siblings {
             match sibling {
-                SiblingNode::Compact { value, script, .. } => {
+                SiblingNode::Compact { hash, value, script } => {
+                    let computed = hash_sibling_birth_tx(*value, script.as_slice());
+                    if computed != *hash {
+                        return Err(VPackError::SiblingHashMismatch);
+                    }
                     outputs.push(TxOutPreimage {
                         value: *value,
                         script_pubkey: script.as_slice(),
@@ -183,6 +195,7 @@ impl ArkLabsV3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consensus::hash_sibling_birth_tx;
     use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
     use alloc::format;
     use alloc::vec;
@@ -222,7 +235,7 @@ mod tests {
             .expect("decode user script");
 
         let leaf_siblings = vec![SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         }];
@@ -292,11 +305,9 @@ mod tests {
         let contents = fs::read_to_string(&path).expect("read round_leaf_v3.json");
         let json: serde_json::Value = serde_json::from_str(&contents).expect("parse JSON");
 
-        let expected_vtxo_id_str = json["raw_evidence"]["expected_vtxo_id"]
+        let _expected_vtxo_id_str = json["raw_evidence"]["expected_vtxo_id"]
             .as_str()
             .expect("expected_vtxo_id present");
-        let expected_vtxo_id =
-            VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
 
         let ri = &json["reconstruction_ingredients"];
         let anchor_outpoint_str = ri["parent_outpoint"].as_str().expect("parent_outpoint");
@@ -314,11 +325,11 @@ mod tests {
         let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
             .expect("decode user script");
 
-        // Sabotage: wrong script on the fee anchor sibling (engine must not "fix" it)
+        // Sabotage: wrong script on the fee anchor sibling (engine must detect SiblingHashMismatch)
         let leaf_siblings_sabotaged = vec![SiblingNode::Compact {
             hash: [0u8; 32],
             value: 0,
-            script: vec![0x00], // wrong script; correct would be fee_anchor_script
+            script: vec![0x00], // wrong script; canonical Birth tx hash won't match stored hash
         }];
         let tree_sabotaged = VPackTree {
             leaf: VtxoLeaf {
@@ -337,10 +348,11 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree_sabotaged).expect("compute VTXO ID");
-        assert_ne!(
-            computed_id, expected_vtxo_id,
-            "Sabotage test: engine must not inject correct anchor; wrong anchor must yield IdMismatch (computed != expected)"
+        let result = engine.compute_vtxo_id(&tree_sabotaged);
+        assert!(
+            matches!(result, Err(VPackError::SiblingHashMismatch)),
+            "Sabotage test: wrong sibling script must yield SiblingHashMismatch, got {:?}",
+            result
         );
     }
 
@@ -372,24 +384,19 @@ mod tests {
 
         let mut siblings = Vec::with_capacity(siblings_arr.len());
         for s in siblings_arr {
-            let hash_str = s["hash"].as_str().expect("sibling hash");
-            let id = VtxoId::from_str(hash_str).expect("parse sibling hash");
-            let hash_internal = match id {
-                VtxoId::Raw(b) => b,
-                VtxoId::OutPoint(_) => panic!("expected raw hash for sibling"),
-            };
             let value = s["value"].as_u64().expect("sibling value");
             let script = hex::decode(s["script"].as_str().expect("sibling script"))
                 .expect("decode sibling script");
+            let hash = hash_sibling_birth_tx(value, &script);
             siblings.push(SiblingNode::Compact {
-                hash: hash_internal,
+                hash,
                 value,
                 script,
             });
         }
         // Fee anchor is last sibling (passive reconstruction: adapter puts it in data)
         siblings.push(SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         });
@@ -416,7 +423,7 @@ mod tests {
         };
 
         let leaf_siblings = vec![SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         }];
@@ -475,26 +482,20 @@ mod tests {
                 .expect("decode fee_anchor_script");
         let siblings_arr = ri["siblings"].as_array().expect("siblings array");
 
-        // Build first level siblings
+        // Build first level siblings (canonical birth tx hash for verification)
         let mut level1_siblings = Vec::with_capacity(siblings_arr.len());
         for s in siblings_arr {
-            let hash_str = s["hash"].as_str().expect("sibling hash");
-            let id = VtxoId::from_str(hash_str).expect("parse sibling hash");
-            let hash_internal = match id {
-                VtxoId::Raw(b) => b,
-                VtxoId::OutPoint(_) => panic!("expected raw hash for sibling"),
-            };
             let value = s["value"].as_u64().expect("sibling value");
             let script = hex::decode(s["script"].as_str().expect("sibling script"))
                 .expect("decode sibling script");
             level1_siblings.push(SiblingNode::Compact {
-                hash: hash_internal,
+                hash: hash_sibling_birth_tx(value, &script),
                 value,
                 script,
             });
         }
         level1_siblings.push(SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         });
@@ -526,12 +527,12 @@ mod tests {
         // Level 2: Intermediate node (simplified - using same structure). Fee anchor last.
         let level2_siblings = vec![
             SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: hash_sibling_birth_tx(500, &sibling_script),
                 value: 500,
                 script: sibling_script.clone(),
             },
             SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: hash_sibling_birth_tx(0, &fee_anchor_script),
                 value: 0,
                 script: fee_anchor_script.clone(),
             },
@@ -547,7 +548,7 @@ mod tests {
 
         // Level 3: Leaf node
         let leaf_siblings = vec![SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         }];

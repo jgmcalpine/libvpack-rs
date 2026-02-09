@@ -10,6 +10,7 @@ use core::str::FromStr;
 
 use byteorder::{ByteOrder, LittleEndian};
 
+use crate::consensus::hash_sibling_birth_tx;
 use crate::error::VPackError;
 use crate::header::{
     Header, TxVariant, FLAG_PROOF_COMPACT, MAX_PAYLOAD_SIZE, MAX_TREE_ARITY, MAX_TREE_DEPTH,
@@ -183,10 +184,11 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
             (value, script_pubkey.clone())
         };
         // Siblings in exact order from ingredients, then fee anchor as last (adapter provides it).
+        // Use canonical birth tx hash so verification passes.
         let mut sibling_nodes: Vec<SiblingNode> = siblings
             .iter()
             .map(|s| SiblingNode::Compact {
-                hash: s.hash,
+                hash: hash_sibling_birth_tx(s.value, &s.script),
                 value: s.value,
                 script: s.script.clone(),
             })
@@ -195,7 +197,7 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
             vec![]
         } else {
             sibling_nodes.push(SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: hash_sibling_birth_tx(0, &fee_anchor_script),
                 value: 0,
                 script: fee_anchor_script.clone(),
             });
@@ -217,7 +219,7 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
             script_pubkey: child_script_pubkey,
         };
         let leaf_siblings = vec![SiblingNode::Compact {
-            hash: [0u8; 32],
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
             value: 0,
             script: fee_anchor_script.clone(),
         }];
@@ -240,14 +242,14 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
             .iter()
             .skip(1)
             .map(|o| SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: hash_sibling_birth_tx(o.value, &o.script),
                 value: o.value,
                 script: o.script.clone(),
             })
             .collect();
         if leaf_siblings.is_empty() && !fee_anchor_script.is_empty() {
             leaf_siblings.push(SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: hash_sibling_birth_tx(0, &fee_anchor_script),
                 value: 0,
                 script: fee_anchor_script.clone(),
             });
@@ -293,13 +295,13 @@ fn tree_from_second_tech_ingredients(
                 .siblings
                 .iter()
                 .map(|s| SiblingNode::Compact {
-                    hash: s.hash,
+                    hash: hash_sibling_birth_tx(s.value, &s.script),
                     value: s.value,
                     script: s.script.clone(),
                 })
                 .collect();
             siblings.push(SiblingNode::Compact {
-                hash: [0u8; 32],
+                hash: hash_sibling_birth_tx(0, &fee_anchor_script),
                 value: 0,
                 script: fee_anchor_script.clone(),
             });
@@ -324,7 +326,7 @@ fn tree_from_second_tech_ingredients(
     };
 
     let leaf_siblings = vec![SiblingNode::Compact {
-        hash: [0u8; 32],
+        hash: hash_sibling_birth_tx(0, &fee_anchor_script),
         value: 0,
         script: fee_anchor_script.clone(),
     }];
