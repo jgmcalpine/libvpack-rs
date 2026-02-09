@@ -9,9 +9,14 @@ use alloc::vec::Vec;
 
 use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
-use crate::consensus::{hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
+use crate::consensus::{
+    hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId,
+};
 use crate::error::VPackError;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree};
+
+#[cfg(feature = "schnorr-verify")]
+use crate::consensus::taproot_sighash::{extract_verify_key, taproot_sighash, verify_schnorr_bip340};
 
 /// Second Tech V3-Plain consensus engine (Variant 0x03).
 ///
@@ -33,6 +38,8 @@ impl ConsensusEngine for SecondTechV3 {
         // Top-down chaining: start with on-chain anchor
         let mut current_prevout = tree.anchor;
         let mut last_outpoint = None;
+        let mut prev_output_values: Option<Vec<u64>> = None;
+        let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
 
         // Iterate through path (top-down from root to leaf). Fee anchor is last sibling (adapter provides it).
         for (i, genesis_item) in tree.path.iter().enumerate() {
@@ -44,6 +51,33 @@ impl ConsensusEngine for SecondTechV3 {
                 prev_out_vout: current_prevout.vout,
                 sequence: genesis_item.sequence,
             };
+
+            #[cfg(feature = "schnorr-verify")]
+            if let Some(sig) = genesis_item.signature {
+                if i > 0 {
+                    let verify_key = extract_verify_key(tree.leaf.script_pubkey.as_slice())
+                        .or_else(|| {
+                            if tree.leaf.script_pubkey.len() == 33 {
+                                tree.leaf.script_pubkey[1..33].try_into().ok()
+                            } else {
+                                None
+                            }
+                        });
+                    let verify_key = verify_key.ok_or(VPackError::InvalidSignature)?;
+                    let vals = prev_output_values.as_ref().ok_or(VPackError::EncodingError)?;
+                    let scripts =
+                        prev_output_scripts.as_ref().ok_or(VPackError::EncodingError)?;
+                    let idx = current_prevout.vout as usize;
+                    if idx >= vals.len() || idx >= scripts.len() {
+                        return Err(VPackError::InvalidVout(current_prevout.vout));
+                    }
+                    let parent_amount = vals[idx];
+                    let parent_script = scripts[idx].as_slice();
+                    let sighash =
+                        taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs);
+                    verify_schnorr_bip340(&verify_key, &sighash, &sig)?;
+                }
+            }
 
             // Hash transaction → OutPoint
             let txid_bytes = Self::hash_transaction(3, &[input], &outputs, 0)?;
@@ -58,6 +92,14 @@ impl ConsensusEngine for SecondTechV3 {
 
             // Store the last transaction's OutPoint
             last_outpoint = Some(OutPoint { txid, vout });
+
+            prev_output_values = Some(outputs.iter().map(|o| o.value).collect());
+            prev_output_scripts = Some(
+                outputs
+                    .iter()
+                    .map(|o| o.script_pubkey.to_vec())
+                    .collect(),
+            );
 
             // Hand-off: Convert to OutPoint for next step
             current_prevout = OutPoint { txid, vout };
@@ -146,7 +188,7 @@ impl SecondTechV3 {
     /// - For each index i from 0 to total_outputs-1:
     ///   - If i == parent_index: Place the Child Coin (Amount/Script)
     ///   - Else: Place the next sibling from the siblings array (order preserved).
-    fn reconstruct_link<'a>(
+    pub fn reconstruct_link<'a>(
         genesis_item: &'a GenesisItem,
     ) -> Result<Vec<TxOutPreimage<'a>>, VPackError> {
         let siblings_count = genesis_item.siblings.len();

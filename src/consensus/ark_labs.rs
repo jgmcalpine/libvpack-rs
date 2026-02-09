@@ -8,9 +8,14 @@ use alloc::vec::Vec;
 
 use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
-use crate::consensus::{hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
+use crate::consensus::{
+    hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId,
+};
 use crate::error::VPackError;
 use crate::payload::tree::{SiblingNode, VPackTree};
+
+#[cfg(feature = "schnorr-verify")]
+use crate::consensus::taproot_sighash::{extract_verify_key, taproot_sighash, verify_schnorr_bip340};
 
 /// Ark Labs V3-Anchored consensus engine (Variant 0x04).
 ///
@@ -34,9 +39,11 @@ impl ConsensusEngine for ArkLabsV3 {
         // Top-down chaining: start with on-chain anchor
         let mut current_prevout = tree.anchor;
         let mut last_txid_bytes = None;
+        let mut prev_output_values: Option<Vec<u64>> = None;
+        let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
 
         // Iterate through path (top-down from root to leaf). Outputs = child (if present) + siblings only.
-        for genesis_item in &tree.path {
+        for (i, genesis_item) in tree.path.iter().enumerate() {
             let mut outputs = Vec::new();
 
             // Add child output only if present (represents the next level down)
@@ -71,12 +78,47 @@ impl ConsensusEngine for ArkLabsV3 {
                 sequence: genesis_item.sequence,
             };
 
+            #[cfg(feature = "schnorr-verify")]
+            if let Some(sig) = genesis_item.signature {
+                if i > 0 {
+                    let verify_key = extract_verify_key(tree.leaf.script_pubkey.as_slice())
+                        .or_else(|| {
+                            if tree.leaf.script_pubkey.len() == 33 {
+                                tree.leaf.script_pubkey[1..33].try_into().ok()
+                            } else {
+                                None
+                            }
+                        });
+                    let verify_key = verify_key.ok_or(VPackError::InvalidSignature)?;
+                    let vals = prev_output_values.as_ref().ok_or(VPackError::EncodingError)?;
+                    let scripts =
+                        prev_output_scripts.as_ref().ok_or(VPackError::EncodingError)?;
+                    let idx = current_prevout.vout as usize;
+                    if idx >= vals.len() || idx >= scripts.len() {
+                        return Err(VPackError::InvalidVout(current_prevout.vout));
+                    }
+                    let parent_amount = vals[idx];
+                    let parent_script = scripts[idx].as_slice();
+                    let sighash =
+                        taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs);
+                    verify_schnorr_bip340(&verify_key, &sighash, &sig)?;
+                }
+            }
+
             // Hash transaction → Raw Hash
             let txid_bytes = Self::hash_node_bytes(3, &[input], &outputs, 0)?;
             let txid = Txid::from_byte_array(txid_bytes);
 
             // Store the last transaction's hash
             last_txid_bytes = Some(txid_bytes);
+
+            prev_output_values = Some(outputs.iter().map(|o| o.value).collect());
+            prev_output_scripts = Some(
+                outputs
+                    .iter()
+                    .map(|o| o.script_pubkey.to_vec())
+                    .collect(),
+            );
 
             // Hand-off: Convert to OutPoint for next step (always vout 0 for Ark Labs)
             current_prevout = OutPoint { txid, vout: 0 };

@@ -30,8 +30,9 @@ mod wasm_shim {
     use crate::compact_size::read_compact_size;
     use crate::error::VPackError;
 
-    /// Re-export so `crate::types::hashes::Hash` and `sha256d` match the bitcoin crate API.
+    /// Re-export so `crate::types::hashes::Hash`, `sha256`, and `sha256d` match the bitcoin crate API.
     pub mod hashes {
+        pub use bitcoin_hashes::sha256;
         pub use bitcoin_hashes::sha256d;
         pub use bitcoin_hashes::Hash;
     }

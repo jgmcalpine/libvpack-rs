@@ -62,6 +62,9 @@ pub enum VPackError {
 
     /// Payload had trailing bytes after full VPackTree parse (cursor desynchronization).
     TrailingData(usize),
+
+    /// A GenesisItem signature failed Taproot (BIP-340/341) verification.
+    InvalidSignature,
 }
 
 // Manual implementation of Display for no_std environments.
@@ -114,6 +117,10 @@ impl core::fmt::Display for VPackError {
                 "Invalid VTXO ID format (expected 64-char hex or Hash:Index)"
             ),
             Self::TrailingData(n) => write!(f, "Trailing data: {} bytes left after parse", n),
+            Self::InvalidSignature => write!(
+                f,
+                "Invalid signature: GenesisItem Schnorr signature verification failed"
+            ),
         }
     }
 }

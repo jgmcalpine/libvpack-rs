@@ -16,7 +16,7 @@ use std::io::Cursor;
 
 use vpack::header::{Header, TxVariant, FLAG_PROOF_COMPACT};
 use vpack::pack::pack;
-use vpack::payload::tree::{VPackTree, VtxoLeaf};
+use vpack::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
 
 // Naked hash tests use hex from audit fixtures (round_leaf, round_branch, oor).
 const ARK_LABS_OOR_FORFEIT_TX_HEX: &str = "0300000001411d0d848ab79c0f7ae5a73742c4addd4e5b5646c2bc4bea854d287107825c750000000000feffffff02e803000000000000150014a1b2c3d4e5f6789012345678901234567890ab00000000000000000451024e7300000000";
@@ -236,5 +236,158 @@ fn master_universal_verification() {
     assert!(!ark_tree_result.leaf.script_pubkey.is_empty() || ark_tree_result.leaf.amount > 0);
     assert!(
         !second_tree_result.leaf.script_pubkey.is_empty() || second_tree_result.leaf.amount > 0
+    );
+}
+
+/// Verification gate: an invalid GenesisItem signature must yield InvalidSignature.
+/// Uses valid ROUND_1 Second Tech ingredients; flips the last byte of a signature to sabotage.
+#[test]
+#[cfg(feature = "schnorr-verify")]
+fn test_sabotage_invalid_signature() {
+    use vpack::consensus::{ConsensusEngine, SecondTechV3};
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fixture_path = manifest_dir.join("tests/fixtures/second_tech_round1_step0.json");
+    let contents = std::fs::read_to_string(&fixture_path).expect("read step0 fixture");
+    let j: serde_json::Value = serde_json::from_str(&contents).expect("parse fixture JSON");
+
+    let grandparent_hash_str = j["grandparent_hash"].as_str().expect("grandparent_hash");
+    let anchor_id = vpack::VtxoId::from_str(grandparent_hash_str).expect("parse anchor");
+    let anchor = match anchor_id {
+        vpack::VtxoId::Raw(hash_bytes) => {
+            let txid = vpack::types::Txid::from_byte_array(hash_bytes);
+            vpack::types::OutPoint { txid, vout: 0 }
+        }
+        vpack::VtxoId::OutPoint(op) => op,
+    };
+
+    let fee_anchor_script =
+        hex::decode(j["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+            .expect("decode fee anchor");
+    let child_script = hex::decode(j["child_script"].as_str().expect("child_script"))
+        .expect("decode child script");
+    let sibling_value = j["sibling_value"].as_u64().expect("sibling_value") as u64;
+    let parent_index = j["parent_index"].as_u64().expect("parent_index") as u32;
+    let step0_child_amount = j["child_amount"].as_u64().expect("child_amount") as u64;
+    let sibling_scripts: Vec<Vec<u8>> = j["sibling_scripts"]
+        .as_array()
+        .expect("sibling_scripts")
+        .iter()
+        .map(|v| hex::decode(v.as_str().expect("script")).expect("decode sibling script"))
+        .collect();
+
+    let step0_siblings: Vec<SiblingNode> = sibling_scripts
+        .into_iter()
+        .map(|script| SiblingNode::Compact {
+            hash: vpack::consensus::hash_sibling_birth_tx(sibling_value, &script),
+            value: sibling_value,
+            script,
+        })
+        .chain(std::iter::once(SiblingNode::Compact {
+            hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }))
+        .collect();
+
+    let step0_item = GenesisItem {
+        siblings: step0_siblings,
+        parent_index,
+        sequence: 0,
+        child_amount: step0_child_amount,
+        child_script_pubkey: child_script.clone(),
+        signature: None,
+    };
+
+    let intermediate_script = hex::decode(
+        "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+    )
+    .expect("decode intermediate script");
+
+    let step1_siblings = vec![
+        SiblingNode::Compact {
+            hash: vpack::consensus::hash_sibling_birth_tx(1000, &intermediate_script),
+            value: 1000,
+            script: intermediate_script.clone(),
+        },
+        SiblingNode::Compact {
+            hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
+            value: 0,
+            script: fee_anchor_script.clone(),
+        },
+    ];
+
+    let step1_item = GenesisItem {
+        siblings: step1_siblings,
+        parent_index: 1,
+        sequence: 0,
+        child_amount: 19000u64,
+        child_script_pubkey: child_script.clone(),
+        signature: None,
+    };
+
+    let leaf_siblings = vec![SiblingNode::Compact {
+        hash: vpack::consensus::hash_sibling_birth_tx(0, &fee_anchor_script),
+        value: 0,
+        script: fee_anchor_script.clone(),
+    }];
+
+    let tree_no_sig = VPackTree {
+        leaf: VtxoLeaf {
+            amount: 15000,
+            vout: 0,
+            sequence: 0,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: child_script.clone(),
+        },
+        leaf_siblings: leaf_siblings.clone(),
+        path: vec![step0_item.clone(), step1_item.clone()],
+        anchor,
+        asset_id: None,
+        fee_anchor_script: fee_anchor_script.clone(),
+    };
+
+    let expected_id = SecondTechV3
+        .compute_vtxo_id(&tree_no_sig)
+        .expect("compute VTXO ID without signature");
+
+    let mut tampered_sig = [0u8; 64];
+    tampered_sig[63] = 0xff;
+    let step1_tampered = GenesisItem {
+        signature: Some(tampered_sig),
+        ..step1_item.clone()
+    };
+    let tree_tampered = VPackTree {
+        leaf: VtxoLeaf {
+            script_pubkey: [0x51, 0x20]
+                .iter()
+                .chain([1u8; 32].iter())
+                .copied()
+                .collect(),
+            ..tree_no_sig.leaf.clone()
+        },
+        path: vec![step0_item, step1_tampered],
+        ..tree_no_sig.clone()
+    };
+
+    let header = Header {
+        flags: FLAG_PROOF_COMPACT,
+        version: 1,
+        tx_variant: TxVariant::V3Plain,
+        tree_arity: 16,
+        tree_depth: 32,
+        node_count: 0,
+        asset_type: 0,
+        payload_len: 0,
+        checksum: 0,
+    };
+
+    let packed_tampered = pack(&header, &tree_tampered).expect("pack tampered V-PACK");
+    let result = vpack::verify(&packed_tampered, &expected_id);
+    assert!(
+        matches!(result, Err(vpack::error::VPackError::InvalidSignature)),
+        "tampered or invalid signature must yield InvalidSignature, got {:?}",
+        result
     );
 }

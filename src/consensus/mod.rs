@@ -15,6 +15,9 @@ pub mod ark_labs;
 pub mod second_tech;
 pub mod tx_factory;
 
+#[cfg(feature = "schnorr-verify")]
+pub mod taproot_sighash;
+
 pub use ark_labs::ArkLabsV3;
 pub use second_tech::SecondTechV3;
 pub use tx_factory::{tx_preimage, TxInPreimage, TxOutPreimage};
