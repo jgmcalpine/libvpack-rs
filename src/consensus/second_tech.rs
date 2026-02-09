@@ -22,13 +22,11 @@ pub struct SecondTechV3;
 
 impl ConsensusEngine for SecondTechV3 {
     fn compute_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
-        // Validate fee anchor script is present
-        if tree.fee_anchor_script.is_empty() {
-            return Err(VPackError::FeeAnchorMissing);
-        }
-
         // If path is empty, this is a leaf node
         if tree.path.is_empty() {
+            if tree.leaf_siblings.is_empty() && !tree.fee_anchor_script.is_empty() {
+                return Err(VPackError::FeeAnchorMissing);
+            }
             return self.compute_leaf_vtxo_id(tree);
         }
 
@@ -36,16 +34,15 @@ impl ConsensusEngine for SecondTechV3 {
         let mut current_prevout = tree.anchor;
         let mut last_outpoint = None;
 
-        // Iterate through path (top-down from root to leaf)
+        // Iterate through path (top-down from root to leaf). Fee anchor is last sibling (adapter provides it).
         for (i, genesis_item) in tree.path.iter().enumerate() {
-            // Build outputs using reconstruct_link (child at parent_index + siblings + fee anchor)
-            let outputs = Self::reconstruct_link(genesis_item, &tree.fee_anchor_script)?;
+            let outputs = Self::reconstruct_link(genesis_item)?;
 
-            // Build input spending current_prevout
+            // Build input spending current_prevout; use sequence from data
             let input = TxInPreimage {
                 prev_out_txid: current_prevout.txid.to_byte_array(),
                 prev_out_vout: current_prevout.vout,
-                sequence: 0x00000000, // ZERO for Second Tech
+                sequence: genesis_item.sequence,
             };
 
             // Hash transaction → OutPoint
@@ -96,27 +93,27 @@ impl SecondTechV3 {
         tree: &VPackTree,
         prevout: OutPoint,
     ) -> Result<VtxoId, VPackError> {
-        // Build outputs list: [Final Leaf Output, Fee Anchor]
-        let mut outputs = Vec::with_capacity(2);
-
-        // Output 0: Final leaf
+        // Build outputs from data only: [leaf output] + leaf_siblings (adapter provides fee anchor when required)
+        let mut outputs = Vec::with_capacity(1 + tree.leaf_siblings.len());
         outputs.push(TxOutPreimage {
             value: tree.leaf.amount,
             script_pubkey: tree.leaf.script_pubkey.as_slice(),
         });
+        for sibling in &tree.leaf_siblings {
+            let (value, script) = match sibling {
+                SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
+                SiblingNode::Full(txout) => {
+                    (txout.value.to_sat(), txout.script_pubkey.as_bytes())
+                }
+            };
+            outputs.push(TxOutPreimage { value, script_pubkey: script });
+        }
 
-        // Output 1: Fee Anchor (always last)
-        outputs.push(TxOutPreimage {
-            value: 0,
-            script_pubkey: tree.fee_anchor_script.as_slice(),
-        });
-
-        // Build input from prevout OutPoint
-        // Sequence: 0x00000000 (ZERO) for Second Tech
+        // Build input from prevout OutPoint; use sequence from data
         let input = TxInPreimage {
             prev_out_txid: prevout.txid.to_byte_array(),
             prev_out_vout: prevout.vout,
-            sequence: 0x00000000, // ZERO for Second Tech
+            sequence: tree.leaf.sequence,
         };
 
         // Hash the transaction: Version 3, Locktime 0
@@ -132,49 +129,37 @@ impl SecondTechV3 {
         Ok(VtxoId::OutPoint(outpoint))
     }
 
-    /// Reconstruct a chain link's outputs dynamically.
+    /// Reconstruct a chain link's outputs from data only.
     ///
     /// **Output Construction Rule:**
-    /// - Total Outputs = siblings.len() + 2 (siblings + child + anchor)
-    /// - For i from 0 to Total-2:
+    /// - Total Outputs = siblings.len() + 1 (siblings include fee anchor as last; adapter provides it).
+    /// - For each index i from 0 to total_outputs-1:
     ///   - If i == parent_index: Place the Child Coin (Amount/Script)
-    ///   - Else: Place the next available sibling from the siblings array
-    /// - Final Output: Place the Fee Anchor at the very last index
-    ///
-    /// This allows the child coin to occupy any index, with siblings filling
-    /// all other available slots before the fee anchor.
+    ///   - Else: Place the next sibling from the siblings array (order preserved).
     fn reconstruct_link<'a>(
         genesis_item: &'a GenesisItem,
-        fee_anchor_script: &'a [u8],
     ) -> Result<Vec<TxOutPreimage<'a>>, VPackError> {
         let siblings_count = genesis_item.siblings.len();
         let parent_index = genesis_item.parent_index as usize;
+        let total_outputs = siblings_count + 1;
 
-        // Total outputs = siblings + child + anchor
-        let total_outputs = siblings_count + 2;
-
-        // Validate parent_index is within bounds (must be < total_outputs - 1, since last is anchor)
-        if parent_index >= total_outputs - 1 {
+        if parent_index >= total_outputs {
             return Err(VPackError::EncodingError);
         }
 
         let mut outputs = Vec::with_capacity(total_outputs);
         let mut sibling_idx = 0;
 
-        // Loop from 0 to Total-2 (all positions except the final fee anchor)
-        for i in 0..(total_outputs - 1) {
+        for i in 0..total_outputs {
             if i == parent_index {
-                // Place child coin at parent_index
                 outputs.push(TxOutPreimage {
                     value: genesis_item.child_amount,
                     script_pubkey: genesis_item.child_script_pubkey.as_slice(),
                 });
             } else {
-                // Place next available sibling
                 if sibling_idx >= siblings_count {
                     return Err(VPackError::EncodingError);
                 }
-
                 let sibling = &genesis_item.siblings[sibling_idx];
                 let (value, script) = match sibling {
                     SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
@@ -182,23 +167,14 @@ impl SecondTechV3 {
                         (txout.value.to_sat(), txout.script_pubkey.as_bytes())
                     }
                 };
-
                 outputs.push(TxOutPreimage {
                     value,
                     script_pubkey: script,
                 });
-
                 sibling_idx += 1;
             }
         }
 
-        // Final output: Fee Anchor at the very last index
-        outputs.push(TxOutPreimage {
-            value: 0,
-            script_pubkey: fee_anchor_script,
-        });
-
-        // Validate we used all siblings
         if sibling_idx != siblings_count {
             return Err(VPackError::EncodingError);
         }
@@ -282,7 +258,7 @@ mod tests {
             .map(|v| hex::decode(v.as_str().expect("script")).expect("decode sibling script"))
             .collect();
 
-        let siblings: Vec<SiblingNode> = sibling_scripts
+        let mut siblings: Vec<SiblingNode> = sibling_scripts
             .into_iter()
             .map(|script| SiblingNode::Compact {
                 hash: [0u8; 32],
@@ -290,6 +266,11 @@ mod tests {
                 script,
             })
             .collect();
+        siblings.push(SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        });
 
         let genesis_item = GenesisItem {
             siblings,
@@ -309,6 +290,7 @@ mod tests {
                 exit_delta: 0,
                 script_pubkey: Vec::new(),
             },
+            leaf_siblings: Vec::new(),
             path: vec![genesis_item],
             anchor,
             asset_id: None,
@@ -336,6 +318,91 @@ mod tests {
             }
             VtxoId::Raw(_) => panic!("expected OutPoint variant"),
         }
+    }
+
+    /// Verification gate: engine must be reactive. Sabotaged anchor (wrong script) must produce IdMismatch.
+    #[test]
+    fn test_second_tech_v3_link_sabotage_anchor_mismatch() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let fixture_path = manifest_dir.join("tests/fixtures/second_tech_round1_step0.json");
+        let contents = std::fs::read_to_string(&fixture_path).expect("read step0 fixture");
+        let j: serde_json::Value = serde_json::from_str(&contents).expect("parse fixture JSON");
+
+        let expected_str = j["expected_vtxo_id"].as_str().expect("expected_vtxo_id");
+        let expected_id = VtxoId::from_str(expected_str).expect("parse expected VTXO ID");
+
+        let grandparent_hash_str = j["grandparent_hash"].as_str().expect("grandparent_hash");
+        let anchor_id = VtxoId::from_str(grandparent_hash_str).expect("parse anchor hash");
+        let anchor = match anchor_id {
+            VtxoId::Raw(hash_bytes) => {
+                use crate::types::Txid;
+                let txid = Txid::from_byte_array(hash_bytes);
+                OutPoint { txid, vout: 0 }
+            }
+            VtxoId::OutPoint(op) => op,
+        };
+
+        let child_amount = j["child_amount"].as_u64().expect("child_amount") as u64;
+        let child_script = hex::decode(j["child_script"].as_str().expect("child_script"))
+            .expect("decode child script");
+        let fee_anchor_script =
+            hex::decode(j["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+                .expect("decode fee anchor");
+        let sibling_value = j["sibling_value"].as_u64().expect("sibling_value") as u64;
+        let parent_index = j["parent_index"].as_u64().expect("parent_index") as u32;
+        let sibling_scripts: Vec<Vec<u8>> = j["sibling_scripts"]
+            .as_array()
+            .expect("sibling_scripts array")
+            .iter()
+            .map(|v| hex::decode(v.as_str().expect("script")).expect("decode sibling script"))
+            .collect();
+
+        let mut siblings: Vec<SiblingNode> = sibling_scripts
+            .into_iter()
+            .map(|script| SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: sibling_value,
+                script,
+            })
+            .collect();
+        // Sabotage: wrong script on the fee anchor (engine must not "fix" it)
+        siblings.push(SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: vec![0x00],
+        });
+
+        let genesis_item = GenesisItem {
+            siblings,
+            parent_index,
+            sequence: 0,
+            child_amount,
+            child_script_pubkey: child_script,
+            signature: None,
+        };
+
+        let tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: 0,
+                vout: 0,
+                sequence: 0,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: Vec::new(),
+            },
+            leaf_siblings: Vec::new(),
+            path: vec![genesis_item],
+            anchor,
+            asset_id: None,
+            fee_anchor_script,
+        };
+
+        let engine = SecondTechV3;
+        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+        assert_ne!(
+            computed_id, expected_id,
+            "Sabotage test: engine must not inject correct anchor; wrong anchor must yield IdMismatch"
+        );
     }
 
     #[test]
@@ -373,7 +440,7 @@ mod tests {
             .iter()
             .map(|v| hex::decode(v.as_str().expect("script")).expect("decode sibling script"))
             .collect();
-        let step0_siblings: Vec<SiblingNode> = sibling_scripts
+        let mut step0_siblings: Vec<SiblingNode> = sibling_scripts
             .into_iter()
             .map(|script| SiblingNode::Compact {
                 hash: [0u8; 32],
@@ -381,6 +448,11 @@ mod tests {
                 script,
             })
             .collect();
+        step0_siblings.push(SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        });
         let step0_item = GenesisItem {
             siblings: step0_siblings,
             parent_index,
@@ -406,11 +478,18 @@ mod tests {
 
         let mut path_items = vec![step0_item];
         for i in 1..5 {
-            let step_siblings = vec![SiblingNode::Compact {
-                hash: [0u8; 32],
-                value: 1000,
-                script: intermediate_script.clone(),
-            }];
+            let step_siblings = vec![
+                SiblingNode::Compact {
+                    hash: [0u8; 32],
+                    value: 1000,
+                    script: intermediate_script.clone(),
+                },
+                SiblingNode::Compact {
+                    hash: [0u8; 32],
+                    value: 0,
+                    script: fee_anchor_script.clone(),
+                },
+            ];
             let step_item = GenesisItem {
                 siblings: step_siblings,
                 parent_index: 1,
@@ -422,6 +501,11 @@ mod tests {
             path_items.push(step_item);
         }
 
+        let leaf_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }];
         let tree = VPackTree {
             leaf: VtxoLeaf {
                 amount: 15000,
@@ -431,6 +515,7 @@ mod tests {
                 exit_delta: 0,
                 script_pubkey: child_script,
             },
+            leaf_siblings,
             path: path_items,
             anchor,
             asset_id: None,

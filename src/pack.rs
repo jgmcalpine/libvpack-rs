@@ -108,6 +108,32 @@ fn serialize_payload_inner(tree: &VPackTree, include_asset_id: bool) -> Result<V
         .serialize(&mut out)
         .map_err(|_| VPackError::EncodingError)?;
 
+    // Tree: leaf_siblings (Borsh u32 length + array of SiblingNode)
+    let leaf_siblings_len = tree.leaf_siblings.len() as u32;
+    leaf_siblings_len
+        .serialize(&mut out)
+        .map_err(|_| VPackError::EncodingError)?;
+    for sibling in &tree.leaf_siblings {
+        match sibling {
+            SiblingNode::Compact {
+                hash,
+                value,
+                script,
+            } => {
+                out.extend_from_slice(hash);
+                let mut val_buf = [0u8; 8];
+                LittleEndian::write_u64(&mut val_buf, *value);
+                out.extend_from_slice(&val_buf);
+                script
+                    .serialize(&mut out)
+                    .map_err(|_| VPackError::EncodingError)?;
+            }
+            SiblingNode::Full(txout) => {
+                encode_txout(txout, &mut out)?;
+            }
+        }
+    }
+
     // Tree: path_len (Borsh u32)
     let path_len = tree.path.len() as u32;
     path_len

@@ -616,6 +616,11 @@ fn test_vpack_internal_consistency_roundtrip() {
     let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
         .expect("decode user script");
 
+    let ark_leaf_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: fee_anchor_script.clone(),
+    }];
     let ark_tree = VPackTree {
         leaf: VtxoLeaf {
             amount: user_value,
@@ -625,6 +630,7 @@ fn test_vpack_internal_consistency_roundtrip() {
             exit_delta: 0,
             script_pubkey: user_script,
         },
+        leaf_siblings: ark_leaf_siblings,
         path: Vec::new(),
         anchor,
         asset_id: None,
@@ -632,7 +638,7 @@ fn test_vpack_internal_consistency_roundtrip() {
     };
 
     let ark_header = Header {
-        flags: 0,
+        flags: FLAG_PROOF_COMPACT,
         version: 1,
         tx_variant: TxVariant::V3Anchored,
         tree_arity: 16,
@@ -664,8 +670,8 @@ fn test_vpack_internal_consistency_roundtrip() {
         vpack::VtxoId::from_str(grandparent_hash_str).expect("parse anchor hash");
     let second_anchor = match second_anchor_id {
         vpack::VtxoId::Raw(hash_bytes) => {
-            let txid = bitcoin::Txid::from_byte_array(hash_bytes);
-            bitcoin::OutPoint { txid, vout: 0 }
+            let txid = vpack::types::Txid::from_byte_array(hash_bytes);
+            vpack::types::OutPoint { txid, vout: 0 }
         }
         vpack::VtxoId::OutPoint(op) => op,
     };
@@ -699,6 +705,11 @@ fn test_vpack_internal_consistency_roundtrip() {
             )
             .expect("decode sibling 2 script"),
         },
+        vpack::payload::tree::SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: second_fee_anchor_script.clone(),
+        },
     ];
     let step0_item = vpack::payload::tree::GenesisItem {
         siblings: step0_siblings,
@@ -711,14 +722,21 @@ fn test_vpack_internal_consistency_roundtrip() {
 
     let mut second_path_items = vec![step0_item];
     for i in 1..5 {
-        let step_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
-            hash: [0u8; 32],
-            value: 1000,
-            script: hex::decode(
-                "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
-            )
-            .expect("decode sibling script"),
-        }];
+        let step_siblings = vec![
+            vpack::payload::tree::SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 1000,
+                script: hex::decode(
+                    "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+                )
+                .expect("decode sibling script"),
+            },
+            vpack::payload::tree::SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 0,
+                script: second_fee_anchor_script.clone(),
+            },
+        ];
         let step_item = vpack::payload::tree::GenesisItem {
             siblings: step_siblings,
             parent_index: 1,
@@ -730,6 +748,11 @@ fn test_vpack_internal_consistency_roundtrip() {
         second_path_items.push(step_item);
     }
 
+    let second_leaf_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: second_fee_anchor_script.clone(),
+    }];
     let second_tree = VPackTree {
         leaf: VtxoLeaf {
             amount: 15000,
@@ -739,6 +762,7 @@ fn test_vpack_internal_consistency_roundtrip() {
             exit_delta: 0,
             script_pubkey: step0_child_script,
         },
+        leaf_siblings: second_leaf_siblings,
         path: second_path_items,
         anchor: second_anchor,
         asset_id: None,

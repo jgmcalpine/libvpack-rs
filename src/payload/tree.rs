@@ -8,6 +8,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 pub struct VPackTree {
     /// The specific leaf owned by the user.
     pub leaf: VtxoLeaf,
+    /// Siblings of the leaf (e.g. fee anchor). Order matches reconstruction; engine builds leaf outputs as [leaf] + leaf_siblings.
+    pub leaf_siblings: Vec<SiblingNode>,
     /// The path from Leaf to Root (The "Recipe").
     /// Validated to not exceed `header.tree_depth`.
     pub path: Vec<GenesisItem>,
@@ -15,7 +17,7 @@ pub struct VPackTree {
     pub anchor: OutPoint,
     /// Optional Asset ID (Parsed from the Prefix if flag set).
     pub asset_id: Option<[u8; 32]>,
-    /// Fee anchor script (Prefix). Required non-empty for V3-Anchored.
+    /// Fee anchor script (Prefix). Required non-empty for V3-Anchored. Used for validation/defaulting; engines build from leaf_siblings/path siblings only.
     pub fee_anchor_script: Vec<u8>,
 }
 

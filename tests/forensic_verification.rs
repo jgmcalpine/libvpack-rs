@@ -159,6 +159,11 @@ fn master_universal_verification() {
     let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
         .expect("decode user script");
 
+    let ark_leaf_siblings = vec![vpack::payload::tree::SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: fee_anchor_script.clone(),
+    }];
     let ark_tree = VPackTree {
         leaf: VtxoLeaf {
             amount: user_value,
@@ -168,6 +173,7 @@ fn master_universal_verification() {
             exit_delta: 0,
             script_pubkey: user_script,
         },
+        leaf_siblings: ark_leaf_siblings,
         path: Vec::new(),
         anchor,
         asset_id: None,
@@ -175,7 +181,7 @@ fn master_universal_verification() {
     };
 
     let ark_header = Header {
-        flags: 0,
+        flags: FLAG_PROOF_COMPACT,
         version: 1,
         tx_variant: TxVariant::V3Anchored,
         tree_arity: 16,

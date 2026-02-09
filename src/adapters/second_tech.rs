@@ -218,9 +218,17 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         read_compact_size(rest).ok_or(VPackError::IncompleteData)?;
     rest = &rest[compact_consumed..];
 
+    let fee_anchor_script_vec = fee_anchor_script.to_vec();
+    let fee_anchor_sibling = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: fee_anchor_script_vec.clone(),
+    };
+
     let mut path = Vec::with_capacity(genesis_count as usize);
     for _ in 0..genesis_count {
-        let (item, item_consumed) = parse_genesis_item(rest)?;
+        let (mut item, item_consumed) = parse_genesis_item(rest)?;
+        item.siblings.push(fee_anchor_sibling.clone());
         path.push(item);
         rest = &rest[item_consumed..];
     }
@@ -244,11 +252,15 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         script_pubkey: server_pubkey,
     };
 
+    let mut leaf_siblings = Vec::new();
+    leaf_siblings.push(fee_anchor_sibling);
+
     Ok(VPackTree {
         leaf,
+        leaf_siblings,
         path,
         anchor: anchor_point,
         asset_id: None,
-        fee_anchor_script: fee_anchor_script.to_vec(),
+        fee_anchor_script: fee_anchor_script_vec,
     })
 }

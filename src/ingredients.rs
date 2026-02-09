@@ -51,7 +51,7 @@ impl LogicAdapter for ArkLabsAdapter {
             .map_err(|_| VPackError::EncodingError)?
             .unwrap_or_else(Vec::new);
 
-        let (path, leaf) = if let Some(siblings) = json["siblings"].as_array() {
+        let (path, leaf, leaf_siblings) = if let Some(siblings) = json["siblings"].as_array() {
             let child_output = json["child_output"].as_object().or_else(|| {
                 json["outputs"]
                     .as_array()
@@ -68,7 +68,8 @@ impl LogicAdapter for ArkLabsAdapter {
             } else {
                 (value, script_pubkey.clone())
             };
-            let sibling_nodes: Vec<SiblingNode> = siblings
+            // Siblings in exact order from JSON, then fee anchor as last (adapter provides it).
+            let mut sibling_nodes: Vec<SiblingNode> = siblings
                 .iter()
                 .filter_map(|s| {
                     let hash_hex = s["hash"].as_str()?;
@@ -87,6 +88,11 @@ impl LogicAdapter for ArkLabsAdapter {
             let path = if sibling_nodes.is_empty() {
                 vec![]
             } else {
+                sibling_nodes.push(SiblingNode::Compact {
+                    hash: [0u8; 32],
+                    value: 0,
+                    script: fee_anchor_script.clone(),
+                });
                 vec![GenesisItem {
                     siblings: sibling_nodes,
                     parent_index: 0,
@@ -104,7 +110,12 @@ impl LogicAdapter for ArkLabsAdapter {
                 exit_delta: 0,
                 script_pubkey: child_script_pubkey,
             };
-            (path, leaf)
+            let leaf_siblings = vec![SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 0,
+                script: fee_anchor_script.clone(),
+            }];
+            (path, leaf, leaf_siblings)
         } else {
             if script_pubkey.is_empty() {
                 return Err(VPackError::EncodingError);
@@ -117,11 +128,29 @@ impl LogicAdapter for ArkLabsAdapter {
                 exit_delta: 0,
                 script_pubkey,
             };
-            (Vec::new(), leaf)
+            // Leaf-only: leaf_siblings from outputs in exact order (outputs[1..] = fee anchor etc.).
+            let leaf_siblings: Vec<SiblingNode> = outputs
+                .map(|arr| {
+                    arr.iter()
+                        .skip(1)
+                        .filter_map(|o| {
+                            let val = o["value"].as_u64()?;
+                            let script = hex::decode(o["script"].as_str()?).ok()?;
+                            Some(SiblingNode::Compact {
+                                hash: [0u8; 32],
+                                value: val,
+                                script,
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_else(Vec::new);
+            (Vec::new(), leaf, leaf_siblings)
         };
 
         Ok(VPackTree {
             leaf,
+            leaf_siblings,
             path,
             anchor,
             asset_id: None,
@@ -164,7 +193,7 @@ impl LogicAdapter for SecondTechAdapter {
                 .iter()
                 .filter_map(|step| {
                     let siblings = step["siblings"].as_array()?;
-                    let sibling_nodes: Vec<SiblingNode> = siblings
+                    let mut sibling_nodes: Vec<SiblingNode> = siblings
                         .iter()
                         .filter_map(|s| {
                             let hash_hex = s["hash"].as_str()?;
@@ -180,6 +209,11 @@ impl LogicAdapter for SecondTechAdapter {
                             })
                         })
                         .collect();
+                    sibling_nodes.push(SiblingNode::Compact {
+                        hash: [0u8; 32],
+                        value: 0,
+                        script: fee_anchor_script.clone(),
+                    });
                     let parent_index = step["parent_index"].as_u64().unwrap_or(0) as u32;
                     let sequence = step["sequence"].as_u64().unwrap_or(0) as u32;
                     let child_amount = step["child_amount"].as_u64()?;
@@ -210,8 +244,15 @@ impl LogicAdapter for SecondTechAdapter {
             script_pubkey,
         };
 
+        let leaf_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }];
+
         Ok(VPackTree {
             leaf,
+            leaf_siblings,
             path,
             anchor,
             asset_id: None,

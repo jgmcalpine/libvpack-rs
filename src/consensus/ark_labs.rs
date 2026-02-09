@@ -22,13 +22,12 @@ pub struct ArkLabsV3;
 
 impl ConsensusEngine for ArkLabsV3 {
     fn compute_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
-        // Validate fee anchor script is present
-        if tree.fee_anchor_script.is_empty() {
-            return Err(VPackError::FeeAnchorMissing);
-        }
-
         // If path is empty, this is a leaf node
         if tree.path.is_empty() {
+            // Optional validation: V3-Anchored leaf must have anchor in data (leaf_siblings)
+            if tree.leaf_siblings.is_empty() && !tree.fee_anchor_script.is_empty() {
+                return Err(VPackError::FeeAnchorMissing);
+            }
             return self.compute_leaf_vtxo_id(tree);
         }
 
@@ -36,9 +35,8 @@ impl ConsensusEngine for ArkLabsV3 {
         let mut current_prevout = tree.anchor;
         let mut last_txid_bytes = None;
 
-        // Iterate through path (top-down from root to leaf)
+        // Iterate through path (top-down from root to leaf). Outputs = child (if present) + siblings only.
         for genesis_item in &tree.path {
-            // Build outputs: child (if present) + siblings + fee anchor
             let mut outputs = Vec::new();
 
             // Add child output only if present (represents the next level down)
@@ -49,7 +47,7 @@ impl ConsensusEngine for ArkLabsV3 {
                 });
             }
 
-            // Add sibling outputs
+            // Add sibling outputs (fee anchor must be in siblings when required; adapter provides it)
             for sibling in &genesis_item.siblings {
                 match sibling {
                     SiblingNode::Compact { value, script, .. } => {
@@ -61,12 +59,6 @@ impl ConsensusEngine for ArkLabsV3 {
                     SiblingNode::Full(_) => return Err(VPackError::EncodingError),
                 }
             }
-
-            // Add fee anchor (always last)
-            outputs.push(TxOutPreimage {
-                value: 0,
-                script_pubkey: tree.fee_anchor_script.as_slice(),
-            });
 
             // Build input spending current_prevout
             let input = TxInPreimage {
@@ -112,20 +104,23 @@ impl ArkLabsV3 {
         tree: &VPackTree,
         prevout: OutPoint,
     ) -> Result<VtxoId, VPackError> {
-        // Build outputs list dynamically: [User Output, Fee Anchor]
-        let mut outputs = Vec::with_capacity(2);
-
-        // Add user output
+        // Build outputs from data only: [leaf output] + leaf_siblings (adapter provides fee anchor when required)
+        let mut outputs = Vec::with_capacity(1 + tree.leaf_siblings.len());
         outputs.push(TxOutPreimage {
             value: tree.leaf.amount,
             script_pubkey: tree.leaf.script_pubkey.as_slice(),
         });
-
-        // Append fee anchor (always last)
-        outputs.push(TxOutPreimage {
-            value: 0,
-            script_pubkey: tree.fee_anchor_script.as_slice(),
-        });
+        for sibling in &tree.leaf_siblings {
+            match sibling {
+                SiblingNode::Compact { value, script, .. } => {
+                    outputs.push(TxOutPreimage {
+                        value: *value,
+                        script_pubkey: script.as_slice(),
+                    });
+                }
+                SiblingNode::Full(_) => return Err(VPackError::EncodingError),
+            }
+        }
 
         // Build input from prevout OutPoint
         let input = TxInPreimage {
@@ -226,6 +221,11 @@ mod tests {
         let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
             .expect("decode user script");
 
+        let leaf_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }];
         let tree = VPackTree {
             leaf: VtxoLeaf {
                 amount: user_value,
@@ -235,6 +235,7 @@ mod tests {
                 exit_delta: 0,
                 script_pubkey: user_script,
             },
+            leaf_siblings,
             path: Vec::new(),
             anchor,
             asset_id: None,
@@ -251,15 +252,19 @@ mod tests {
         );
 
         // Verification gate: reconstructed preimage must match expected bytes (V3, strict endianness).
-        let mut outputs_pre = Vec::with_capacity(2);
+        let mut outputs_pre = Vec::with_capacity(1 + tree.leaf_siblings.len());
         outputs_pre.push(TxOutPreimage {
             value: tree.leaf.amount,
             script_pubkey: tree.leaf.script_pubkey.as_slice(),
         });
-        outputs_pre.push(TxOutPreimage {
-            value: 0,
-            script_pubkey: tree.fee_anchor_script.as_slice(),
-        });
+        for s in &tree.leaf_siblings {
+            if let SiblingNode::Compact { value, script, .. } = s {
+                outputs_pre.push(TxOutPreimage {
+                    value: *value,
+                    script_pubkey: script.as_slice(),
+                });
+            }
+        }
         let input = TxInPreimage {
             prev_out_txid: tree.anchor.txid.to_byte_array(),
             prev_out_vout: tree.anchor.vout,
@@ -276,6 +281,66 @@ mod tests {
             "Reconstructed preimage must match gold transaction bytes byte-for-byte. RECONSTRUCTED_HEX: {} EXPECTED from fixture: {}",
             hex::encode(&preimage_bytes),
             gold_hex
+        );
+    }
+
+    /// Verification gate: engine must be reactive. Sabotaged anchor (wrong script) must produce IdMismatch.
+    #[test]
+    fn test_ark_labs_v3_leaf_sabotage_anchor_mismatch() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_leaf_v3.json");
+        let contents = fs::read_to_string(&path).expect("read round_leaf_v3.json");
+        let json: serde_json::Value = serde_json::from_str(&contents).expect("parse JSON");
+
+        let expected_vtxo_id_str = json["raw_evidence"]["expected_vtxo_id"]
+            .as_str()
+            .expect("expected_vtxo_id present");
+        let expected_vtxo_id =
+            VtxoId::from_str(expected_vtxo_id_str).expect("parse expected VTXO ID");
+
+        let ri = &json["reconstruction_ingredients"];
+        let anchor_outpoint_str = ri["parent_outpoint"].as_str().expect("parent_outpoint");
+        let anchor_id = VtxoId::from_str(anchor_outpoint_str).expect("parse anchor OutPoint");
+        let anchor = match anchor_id {
+            VtxoId::OutPoint(op) => op,
+            VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
+        };
+        let sequence = ri["nSequence"].as_u64().expect("nSequence") as u32;
+        let fee_anchor_script =
+            hex::decode(ri["fee_anchor_script"].as_str().expect("fee_anchor_script"))
+                .expect("decode fee_anchor_script");
+        let outputs = ri["outputs"].as_array().expect("outputs array");
+        let user_value = outputs[0]["value"].as_u64().expect("user value");
+        let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
+            .expect("decode user script");
+
+        // Sabotage: wrong script on the fee anchor sibling (engine must not "fix" it)
+        let leaf_siblings_sabotaged = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: vec![0x00], // wrong script; correct would be fee_anchor_script
+        }];
+        let tree_sabotaged = VPackTree {
+            leaf: VtxoLeaf {
+                amount: user_value,
+                vout: 0,
+                sequence,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: user_script,
+            },
+            leaf_siblings: leaf_siblings_sabotaged,
+            path: Vec::new(),
+            anchor,
+            asset_id: None,
+            fee_anchor_script,
+        };
+
+        let engine = ArkLabsV3;
+        let computed_id = engine.compute_vtxo_id(&tree_sabotaged).expect("compute VTXO ID");
+        assert_ne!(
+            computed_id, expected_vtxo_id,
+            "Sabotage test: engine must not inject correct anchor; wrong anchor must yield IdMismatch (computed != expected)"
         );
     }
 
@@ -322,6 +387,12 @@ mod tests {
                 script,
             });
         }
+        // Fee anchor is last sibling (passive reconstruction: adapter puts it in data)
+        siblings.push(SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        });
 
         let child_output = ri.get("child_output").and_then(|co| co.as_object());
         let (child_amount, child_script_pubkey) = if let Some(co) = child_output {
@@ -344,6 +415,11 @@ mod tests {
             signature: None,
         };
 
+        let leaf_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }];
         let tree = VPackTree {
             leaf: VtxoLeaf {
                 amount: child_amount,
@@ -353,6 +429,7 @@ mod tests {
                 exit_delta: 0,
                 script_pubkey: child_script_pubkey,
             },
+            leaf_siblings,
             path: vec![path_item],
             anchor,
             asset_id: None,
@@ -416,6 +493,11 @@ mod tests {
                 script,
             });
         }
+        level1_siblings.push(SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        });
 
         // Child/leaf script from round_leaf_v3 (same as user output script)
         let leaf_path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_leaf_v3.json");
@@ -441,12 +523,19 @@ mod tests {
             signature: None,
         };
 
-        // Level 2: Intermediate node (simplified - using same structure)
-        let level2_siblings = vec![SiblingNode::Compact {
-            hash: [0u8; 32],
-            value: 500,
-            script: sibling_script.clone(),
-        }];
+        // Level 2: Intermediate node (simplified - using same structure). Fee anchor last.
+        let level2_siblings = vec![
+            SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 500,
+                script: sibling_script.clone(),
+            },
+            SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 0,
+                script: fee_anchor_script.clone(),
+            },
+        ];
         let level2_item = GenesisItem {
             siblings: level2_siblings,
             parent_index: 0,
@@ -457,6 +546,11 @@ mod tests {
         };
 
         // Level 3: Leaf node
+        let leaf_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }];
         let tree = VPackTree {
             leaf: VtxoLeaf {
                 amount: 600,
@@ -466,6 +560,7 @@ mod tests {
                 exit_delta: 0,
                 script_pubkey: child_script,
             },
+            leaf_siblings,
             path: vec![level1_item, level2_item], // 2 levels in path + 1 leaf = 3 levels total
             anchor,
             asset_id: None,

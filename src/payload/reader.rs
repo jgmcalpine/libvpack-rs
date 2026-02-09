@@ -94,7 +94,21 @@ impl BoundedReader {
             script_pubkey: leaf_script_bytes.to_vec(),
         };
 
-        // B. Path length (Borsh u32 = 4 bytes LE)
+        // B. leaf_siblings length (Borsh u32 = 4 bytes LE)
+        if data.len() < 4 {
+            return Err(VPackError::IncompleteData);
+        }
+        let leaf_siblings_len = LittleEndian::read_u32(&data[0..4]);
+        let (_, rest) = data.split_at(4);
+        data = rest;
+
+        if leaf_siblings_len > header.tree_arity as u32 {
+            return Err(VPackError::ExceededMaxArity(leaf_siblings_len as u16));
+        }
+
+        let leaf_siblings = Self::parse_siblings(header, &mut data, leaf_siblings_len as usize)?;
+
+        // C. Path length (Borsh u32 = 4 bytes LE)
         if data.len() < 4 {
             return Err(VPackError::IncompleteData);
         }
@@ -110,7 +124,7 @@ impl BoundedReader {
         let mut path = Vec::with_capacity(path_len as usize);
 
         for _item_idx in 0..path_len {
-            // C. Siblings length (V-PACK standard: Borsh u32 = 4 bytes LE; do not use u16)
+            // D. Siblings length (V-PACK standard: Borsh u32 = 4 bytes LE; do not use u16)
             if data.len() < 4 {
                 return Err(VPackError::IncompleteData);
             }
@@ -123,10 +137,92 @@ impl BoundedReader {
                 return Err(VPackError::ExceededMaxArity(siblings_len as u16));
             }
 
-            let mut siblings = Vec::with_capacity(siblings_len as usize);
+            let siblings = Self::parse_siblings(header, &mut data, siblings_len as usize)?;
 
-            for _sibling_idx in 0..siblings_len {
-                let sibling = if header.is_compact() {
+            // E. parent_index(4) + sequence(4) + child_amount(8) + child_script_pubkey(4+len) + signature(1 or 1+64)
+            if data.len() < 4 {
+                return Err(VPackError::IncompleteData);
+            }
+            let parent_index = LittleEndian::read_u32(&data[0..4]);
+            let (_, rest) = data.split_at(4);
+            data = rest;
+            if data.len() < 4 {
+                return Err(VPackError::IncompleteData);
+            }
+            let sequence = LittleEndian::read_u32(&data[0..4]);
+            let (_, rest) = data.split_at(4);
+            data = rest;
+            if data.len() < 8 {
+                return Err(VPackError::IncompleteData);
+            }
+            let child_amount = LittleEndian::read_u64(&data[0..8]);
+            let (_, rest) = data.split_at(8);
+            data = rest;
+            if data.len() < 4 {
+                return Err(VPackError::IncompleteData);
+            }
+            let child_script_len = LittleEndian::read_u32(&data[0..4]) as usize;
+            let (_, rest) = data.split_at(4);
+            data = rest;
+            if data.len() < child_script_len {
+                return Err(VPackError::IncompleteData);
+            }
+            let (child_script_slice, rest) = data.split_at(child_script_len);
+            data = rest;
+            let child_script_pubkey = child_script_slice.to_vec();
+            if data.is_empty() {
+                return Err(VPackError::IncompleteData);
+            }
+            let sig_tag = data[0];
+            let (_, rest) = data.split_at(1);
+            data = rest;
+            let signature = if sig_tag == 0 {
+                None
+            } else if sig_tag == 1 {
+                if data.len() < 64 {
+                    return Err(VPackError::IncompleteData);
+                }
+                let (sig_bytes, rest) = data.split_at(64);
+                data = rest;
+                let mut arr = [0u8; 64];
+                arr.copy_from_slice(sig_bytes);
+                Some(arr)
+            } else {
+                return Err(VPackError::EncodingError);
+            };
+
+            path.push(GenesisItem {
+                siblings,
+                parent_index,
+                sequence,
+                child_amount,
+                child_script_pubkey,
+                signature,
+            });
+        }
+
+        if !data.is_empty() {
+            return Err(VPackError::TrailingData(data.len()));
+        }
+
+        Ok(VPackTree {
+            leaf,
+            leaf_siblings,
+            path,
+            anchor,
+            asset_id,
+            fee_anchor_script,
+        })
+    }
+
+    fn parse_siblings(
+        header: &Header,
+        data: &mut &[u8],
+        len: usize,
+    ) -> Result<Vec<SiblingNode>, VPackError> {
+        let mut siblings = Vec::with_capacity(len);
+        for _ in 0..len {
+            let sibling = if header.is_compact() {
                     // COMPACT MODE:
                     // 1. 32-byte hash
                     // 2. 8-byte value (u64 LE)
@@ -138,14 +234,14 @@ impl BoundedReader {
                     }
                     let mut hash = [0u8; 32];
                     hash.copy_from_slice(&data[..32]);
-                    data = &data[32..];
+                    *data = &data[32..];
 
                     // 2. Read Value (8B LE)
                     if data.len() < 8 {
                         return Err(VPackError::IncompleteData);
                     }
                     let value = LittleEndian::read_u64(&data[..8]);
-                    data = &data[8..];
+                    *data = &data[8..];
 
                     // 3. Script (Borsh Vec<u8>: u32 len + bytes)
                     if data.len() < 4 {
@@ -153,12 +249,12 @@ impl BoundedReader {
                     }
                     let script_len = LittleEndian::read_u32(&data[0..4]) as usize;
                     let (_, rest) = data.split_at(4);
-                    data = rest;
+                    *data = rest;
                     if data.len() < script_len {
                         return Err(VPackError::IncompleteData);
                     }
                     let (script_slice, rest) = data.split_at(script_len);
-                    data = rest;
+                    *data = rest;
                     let script = script_slice.to_vec();
 
                     SiblingNode::Compact {
@@ -232,85 +328,12 @@ impl BoundedReader {
                         9
                     };
                     let total_consumed = 8 + varint_bytes + script_len_usize;
-                    data = &data[total_consumed..]; // EXPLICITLY ADVANCE THE SLICE
+                    *data = &data[total_consumed..]; // EXPLICITLY ADVANCE THE SLICE
 
                     SiblingNode::Full(txout)
                 };
                 siblings.push(sibling);
             }
-
-            // D. parent_index(4) + sequence(4) + child_amount(8) + child_script_pubkey(4+len) + signature(1 or 1+64)
-            if data.len() < 4 {
-                return Err(VPackError::IncompleteData);
-            }
-            let parent_index = LittleEndian::read_u32(&data[0..4]);
-            let (_, rest) = data.split_at(4);
-            data = rest;
-            if data.len() < 4 {
-                return Err(VPackError::IncompleteData);
-            }
-            let sequence = LittleEndian::read_u32(&data[0..4]);
-            let (_, rest) = data.split_at(4);
-            data = rest;
-            if data.len() < 8 {
-                return Err(VPackError::IncompleteData);
-            }
-            let child_amount = LittleEndian::read_u64(&data[0..8]);
-            let (_, rest) = data.split_at(8);
-            data = rest;
-            if data.len() < 4 {
-                return Err(VPackError::IncompleteData);
-            }
-            let child_script_len = LittleEndian::read_u32(&data[0..4]) as usize;
-            let (_, rest) = data.split_at(4);
-            data = rest;
-            if data.len() < child_script_len {
-                return Err(VPackError::IncompleteData);
-            }
-            let (child_script_slice, rest) = data.split_at(child_script_len);
-            data = rest;
-            let child_script_pubkey = child_script_slice.to_vec();
-            if data.is_empty() {
-                return Err(VPackError::IncompleteData);
-            }
-            let sig_tag = data[0];
-            let (_, rest) = data.split_at(1);
-            data = rest;
-            let signature = if sig_tag == 0 {
-                None
-            } else if sig_tag == 1 {
-                if data.len() < 64 {
-                    return Err(VPackError::IncompleteData);
-                }
-                let (sig_bytes, rest) = data.split_at(64);
-                data = rest;
-                let mut arr = [0u8; 64];
-                arr.copy_from_slice(sig_bytes);
-                Some(arr)
-            } else {
-                return Err(VPackError::EncodingError);
-            };
-
-            path.push(GenesisItem {
-                siblings,
-                parent_index,
-                sequence,
-                child_amount,
-                child_script_pubkey,
-                signature,
-            });
-        }
-
-        if !data.is_empty() {
-            return Err(VPackError::TrailingData(data.len()));
-        }
-
-        Ok(VPackTree {
-            leaf,
-            path,
-            anchor,
-            asset_id,
-            fee_anchor_script,
-        })
+        Ok(siblings)
     }
 }

@@ -176,13 +176,14 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
     let value = first_output.value;
     let script_pubkey = first_output.script.clone();
 
-    let (path, leaf) = if let Some(ref siblings) = ingredients.siblings {
+    let (path, leaf, leaf_siblings) = if let Some(ref siblings) = ingredients.siblings {
         let (child_amount, child_script_pubkey) = if let Some(ref co) = ingredients.child_output {
             (co.value, co.script.clone())
         } else {
             (value, script_pubkey.clone())
         };
-        let sibling_nodes: Vec<SiblingNode> = siblings
+        // Siblings in exact order from ingredients, then fee anchor as last (adapter provides it).
+        let mut sibling_nodes: Vec<SiblingNode> = siblings
             .iter()
             .map(|s| SiblingNode::Compact {
                 hash: s.hash,
@@ -193,6 +194,11 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
         let path = if sibling_nodes.is_empty() {
             vec![]
         } else {
+            sibling_nodes.push(SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 0,
+                script: fee_anchor_script.clone(),
+            });
             vec![GenesisItem {
                 siblings: sibling_nodes,
                 parent_index: 0,
@@ -210,7 +216,12 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
             exit_delta: 0,
             script_pubkey: child_script_pubkey,
         };
-        (path, leaf)
+        let leaf_siblings = vec![SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }];
+        (path, leaf, leaf_siblings)
     } else {
         if script_pubkey.is_empty() {
             return Err(VPackError::EncodingError);
@@ -223,11 +234,30 @@ fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VP
             exit_delta: 0,
             script_pubkey,
         };
-        (Vec::new(), leaf)
+        // Leaf-only: leaf_siblings from outputs in exact order (outputs[1..]). If only one output, add fee anchor so engine has it.
+        let mut leaf_siblings: Vec<SiblingNode> = ingredients
+            .outputs
+            .iter()
+            .skip(1)
+            .map(|o| SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: o.value,
+                script: o.script.clone(),
+            })
+            .collect();
+        if leaf_siblings.is_empty() && !fee_anchor_script.is_empty() {
+            leaf_siblings.push(SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 0,
+                script: fee_anchor_script.clone(),
+            });
+        }
+        (Vec::new(), leaf, leaf_siblings)
     };
 
     Ok(VPackTree {
         leaf,
+        leaf_siblings,
         path,
         anchor,
         asset_id: None,
@@ -258,8 +288,8 @@ fn tree_from_second_tech_ingredients(
     let path: Vec<GenesisItem> = ingredients
         .path
         .iter()
-        .map(|step| GenesisItem {
-            siblings: step
+        .map(|step| {
+            let mut siblings: Vec<SiblingNode> = step
                 .siblings
                 .iter()
                 .map(|s| SiblingNode::Compact {
@@ -267,12 +297,20 @@ fn tree_from_second_tech_ingredients(
                     value: s.value,
                     script: s.script.clone(),
                 })
-                .collect(),
-            parent_index: step.parent_index,
-            sequence: step.sequence,
-            child_amount: step.child_amount,
-            child_script_pubkey: step.child_script_pubkey.clone(),
-            signature: None,
+                .collect();
+            siblings.push(SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: 0,
+                script: fee_anchor_script.clone(),
+            });
+            GenesisItem {
+                siblings,
+                parent_index: step.parent_index,
+                sequence: step.sequence,
+                child_amount: step.child_amount,
+                child_script_pubkey: step.child_script_pubkey.clone(),
+                signature: None,
+            }
         })
         .collect();
 
@@ -285,8 +323,15 @@ fn tree_from_second_tech_ingredients(
         script_pubkey: ingredients.script_pubkey.clone(),
     };
 
+    let leaf_siblings = vec![SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: fee_anchor_script.clone(),
+    }];
+
     Ok(VPackTree {
         leaf,
+        leaf_siblings,
         path,
         anchor,
         asset_id: None,
