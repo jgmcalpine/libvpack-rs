@@ -228,9 +228,11 @@ fn master_universal_verification() {
     };
     let second_bytes = pack(&header, &second_tree).expect("pack Second Tech V-PACK");
 
+    const ARK_ANCHOR: u64 = 1100;
+    const SECOND_ROUND_ANCHOR: u64 = 10_000;
     let ark_tree_result =
-        vpack::verify(&ark_bytes, &ark_expected_id).expect("Ark Labs verification should succeed");
-    let second_tree_result = vpack::verify(&second_bytes, &second_expected)
+        vpack::verify(&ark_bytes, &ark_expected_id, ARK_ANCHOR).expect("Ark Labs verification should succeed");
+    let second_tree_result = vpack::verify(&second_bytes, &second_expected, SECOND_ROUND_ANCHOR)
         .expect("Second Tech verification should succeed");
 
     assert!(!ark_tree_result.leaf.script_pubkey.is_empty() || ark_tree_result.leaf.amount > 0);
@@ -321,7 +323,7 @@ fn test_sabotage_invalid_signature() {
         siblings: step1_siblings,
         parent_index: 1,
         sequence: 0,
-        child_amount: 19000u64,
+        child_amount: 4000u64,
         child_script_pubkey: child_script.clone(),
         signature: None,
     };
@@ -334,7 +336,7 @@ fn test_sabotage_invalid_signature() {
 
     let tree_no_sig = VPackTree {
         leaf: VtxoLeaf {
-            amount: 15000,
+            amount: 4000,
             vout: 0,
             sequence: 0,
             expiry: 0,
@@ -349,7 +351,7 @@ fn test_sabotage_invalid_signature() {
     };
 
     let expected_id = SecondTechV3
-        .compute_vtxo_id(&tree_no_sig)
+        .compute_vtxo_id(&tree_no_sig, None)
         .expect("compute VTXO ID without signature");
 
     let mut tampered_sig = [0u8; 64];
@@ -384,7 +386,8 @@ fn test_sabotage_invalid_signature() {
     };
 
     let packed_tampered = pack(&header, &tree_tampered).expect("pack tampered V-PACK");
-    let result = vpack::verify(&packed_tampered, &expected_id);
+    const ROUND_1_ANCHOR: u64 = 45_000;
+    let result = vpack::verify(&packed_tampered, &expected_id, ROUND_1_ANCHOR);
     assert!(
         matches!(result, Err(vpack::error::VPackError::InvalidSignature)),
         "tampered or invalid signature must yield InvalidSignature, got {:?}",

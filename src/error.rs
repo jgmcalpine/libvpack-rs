@@ -57,6 +57,9 @@ pub enum VPackError {
     /// Reconstructed VTXO ID did not match the expected ID (verification gate).
     IdMismatch,
 
+    /// Output sum did not equal input amount (conservation of value); or overflow when summing outputs.
+    ValueMismatch,
+
     /// VTXO ID string could not be parsed (expected raw 64-char hex or "Hash:Index").
     InvalidVtxoIdFormat,
 
@@ -111,6 +114,10 @@ impl core::fmt::Display for VPackError {
             Self::IdMismatch => write!(
                 f,
                 "VTXO ID mismatch: reconstructed ID does not match expected"
+            ),
+            Self::ValueMismatch => write!(
+                f,
+                "Output sum did not equal input amount (conservation of value)"
             ),
             Self::InvalidVtxoIdFormat => write!(
                 f,

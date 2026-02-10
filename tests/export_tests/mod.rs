@@ -34,7 +34,14 @@ fn export_ark_labs_parity() {
         let ingredients = crate::common::ark_labs_ingredients_from_json(&ingredients_json)
             .unwrap_or_else(|e| panic!("{}: ingredients_from_json: {}", path.display(), e));
         let bytes = create_vpack_ark_labs(ingredients).expect("create_vpack_ark_labs");
-        vpack::verify(&bytes, &expected_id).expect("verify");
+        let name = path.file_name().and_then(|p| p.to_str()).unwrap_or("");
+        let anchor_value = match name {
+            "round_leaf_v3.json" => 1100,
+            "round_branch_v3.json" => 1700,
+            "oor_forfeit_pset.json" => 1000,
+            _ => 1100,
+        };
+        vpack::verify(&bytes, &expected_id, anchor_value).expect("verify");
     }
 }
 
@@ -65,6 +72,11 @@ fn export_second_tech_parity() {
         let ingredients = crate::common::second_tech_ingredients_from_json(&ingredients_json)
             .unwrap_or_else(|e| panic!("{}: ingredients_from_json: {}", path.display(), e));
         let bytes = create_vpack_second_tech(ingredients).expect("create_vpack_second_tech");
-        vpack::verify(&bytes, &expected_id).expect("verify");
+        let anchor_value = path
+            .file_name()
+            .and_then(|p| p.to_str())
+            .map(|n| if n == "round_v3_borsh.json" { 10_000u64 } else { 10_000u64 })
+            .unwrap_or(10_000);
+        vpack::verify(&bytes, &expected_id, anchor_value).expect("verify");
     }
 }

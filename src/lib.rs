@@ -36,16 +36,21 @@ use crate::error::VPackError;
 use crate::header::{Header, HEADER_SIZE};
 use crate::payload::reader::BoundedReader;
 
-/// Verifies a V-PACK byte array against an expected VTXO ID.
+/// Verifies a V-PACK byte array against an expected VTXO ID with conservation of value.
 ///
 /// # Arguments
 /// * `vpack_bytes` - Complete V-PACK byte array. The first 24 bytes must be the header.
 /// * `expected_id` - The expected VTXO ID to verify against.
+/// * `anchor_value` - Value (in satoshis) of the L1 UTXO that anchors the tree.
 ///
 /// # Returns
 /// * `Ok(VPackTree)` - Verification succeeded, returns the parsed tree
-/// * `Err(VPackError)` - Verification failed (checksum, parsing, or ID mismatch)
-pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPackError> {
+/// * `Err(VPackError)` - Verification failed (checksum, parsing, ID mismatch, or ValueMismatch)
+pub fn verify(
+    vpack_bytes: &[u8],
+    expected_id: &VtxoId,
+    anchor_value: u64,
+) -> Result<VPackTree, VPackError> {
     // Step 1: Parse Header (first 24 bytes)
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])?;
 
@@ -65,11 +70,11 @@ pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPa
     match header.tx_variant {
         crate::header::TxVariant::V3Anchored => {
             let engine = crate::consensus::ArkLabsV3;
-            engine.verify(&tree, expected_id)?;
+            engine.verify(&tree, expected_id, anchor_value)?;
         }
         crate::header::TxVariant::V3Plain => {
             let engine = crate::consensus::SecondTechV3;
-            engine.verify(&tree, expected_id)?;
+            engine.verify(&tree, expected_id, anchor_value)?;
         }
     }
 
@@ -78,14 +83,19 @@ pub fn verify(vpack_bytes: &[u8], expected_id: &VtxoId) -> Result<VPackTree, VPa
 }
 
 /// Test-only: compute the VTXO ID that would be verified for this V-PACK. Used to fill expected_vtxo_id in vectors.
+/// Does not perform conservation-of-value checks (anchor_value is None).
 #[cfg(feature = "std")]
 pub fn compute_vtxo_id_from_bytes(vpack_bytes: &[u8]) -> Result<VtxoId, VPackError> {
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])?;
     header.verify_checksum(&vpack_bytes[HEADER_SIZE..])?;
     let tree = BoundedReader::parse(&header, &vpack_bytes[HEADER_SIZE..])?;
     match header.tx_variant {
-        crate::header::TxVariant::V3Anchored => crate::consensus::ArkLabsV3.compute_vtxo_id(&tree),
-        crate::header::TxVariant::V3Plain => crate::consensus::SecondTechV3.compute_vtxo_id(&tree),
+        crate::header::TxVariant::V3Anchored => {
+            crate::consensus::ArkLabsV3.compute_vtxo_id(&tree, None)
+        }
+        crate::header::TxVariant::V3Plain => {
+            crate::consensus::SecondTechV3.compute_vtxo_id(&tree, None)
+        }
     }
 }
 
@@ -119,16 +129,20 @@ mod wasm_auto_inference_test {
         if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
             let bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored)
                 .map_err(|e| e.to_string())?;
-            verify(&bytes, &expected_id).map_err(|e| e.to_string())?;
-            let reconstructed = ArkLabsV3.compute_vtxo_id(&tree).map_err(|e| e.to_string())?;
+            let anchor_value = value["anchor_value"].as_u64().unwrap_or(1100u64);
+            verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
+            let reconstructed =
+                ArkLabsV3.compute_vtxo_id(&tree, None).map_err(|e| e.to_string())?;
             return Ok(("0x04".into(), reconstructed.to_string()));
         }
 
         if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
             let bytes =
                 create_vpack_from_tree(&tree, TxVariant::V3Plain).map_err(|e| e.to_string())?;
-            verify(&bytes, &expected_id).map_err(|e| e.to_string())?;
-            let reconstructed = SecondTechV3.compute_vtxo_id(&tree).map_err(|e| e.to_string())?;
+            let anchor_value = value["anchor_value"].as_u64().unwrap_or(10_000u64);
+            verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
+            let reconstructed =
+                SecondTechV3.compute_vtxo_id(&tree, None).map_err(|e| e.to_string())?;
             return Ok(("0x03".into(), reconstructed.to_string()));
         }
 

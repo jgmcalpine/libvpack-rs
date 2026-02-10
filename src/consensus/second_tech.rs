@@ -26,13 +26,17 @@ use crate::consensus::taproot_sighash::{extract_verify_key, taproot_sighash, ver
 pub struct SecondTechV3;
 
 impl ConsensusEngine for SecondTechV3 {
-    fn compute_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
+    fn compute_vtxo_id(
+        &self,
+        tree: &VPackTree,
+        anchor_value: Option<u64>,
+    ) -> Result<VtxoId, VPackError> {
         // If path is empty, this is a leaf node
         if tree.path.is_empty() {
             if tree.leaf_siblings.is_empty() && !tree.fee_anchor_script.is_empty() {
                 return Err(VPackError::FeeAnchorMissing);
             }
-            return self.compute_leaf_vtxo_id(tree);
+            return self.compute_leaf_vtxo_id(tree, anchor_value);
         }
 
         // Top-down chaining: start with on-chain anchor
@@ -40,10 +44,28 @@ impl ConsensusEngine for SecondTechV3 {
         let mut last_outpoint = None;
         let mut prev_output_values: Option<Vec<u64>> = None;
         let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
+        let mut input_amount: Option<u64> = anchor_value;
 
         // Iterate through path (top-down from root to leaf). Fee anchor is last sibling (adapter provides it).
         for (i, genesis_item) in tree.path.iter().enumerate() {
             let outputs = Self::reconstruct_link(genesis_item)?;
+
+            if let Some(expected) = input_amount {
+                let sum = outputs
+                    .iter()
+                    .try_fold(0u64, |acc, o| acc.checked_add(o.value));
+                match sum {
+                    None => return Err(VPackError::ValueMismatch),
+                    Some(s) if s != expected => return Err(VPackError::ValueMismatch),
+                    Some(_) => {}
+                }
+                let vout = if i + 1 < tree.path.len() {
+                    tree.path[i + 1].parent_index
+                } else {
+                    tree.leaf.vout
+                };
+                input_amount = outputs.get(vout as usize).map(|o| o.value);
+            }
 
             // Build input spending current_prevout; use sequence from data
             let input = TxInPreimage {
@@ -113,7 +135,7 @@ impl ConsensusEngine for SecondTechV3 {
                 last_outpoint.expect("path should have at least one item"),
             ))
         } else {
-            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout)
+            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)
         }
     }
 }
@@ -124,8 +146,12 @@ impl SecondTechV3 {
     /// A leaf has two outputs:
     /// - Output 0: The final leaf script - uses script_pubkey from VtxoLeaf
     /// - Output 1: The Fee Anchor (51024e73)
-    fn compute_leaf_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
-        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor)
+    fn compute_leaf_vtxo_id(
+        &self,
+        tree: &VPackTree,
+        anchor_value: Option<u64>,
+    ) -> Result<VtxoId, VPackError> {
+        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor, anchor_value)
     }
 
     /// Compute VTXO ID for a leaf node with a custom prevout.
@@ -134,6 +160,7 @@ impl SecondTechV3 {
         &self,
         tree: &VPackTree,
         prevout: OutPoint,
+        input_amount: Option<u64>,
     ) -> Result<VtxoId, VPackError> {
         let num_outputs = 1 + tree.leaf_siblings.len();
         if tree.leaf.vout >= num_outputs as u32 {
@@ -159,6 +186,17 @@ impl SecondTechV3 {
                 }
             };
             outputs.push(TxOutPreimage { value, script_pubkey: script });
+        }
+
+        if let Some(expected) = input_amount {
+            let sum = outputs
+                .iter()
+                .try_fold(0u64, |acc, o| acc.checked_add(o.value));
+            match sum {
+                None => return Err(VPackError::ValueMismatch),
+                Some(s) if s != expected => return Err(VPackError::ValueMismatch),
+                Some(_) => {}
+            }
         }
 
         // Build input from prevout OutPoint; use sequence from data
@@ -357,7 +395,7 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
 
         let expected_str = j["expected_vtxo_id"].as_str().expect("expected_vtxo_id");
         let expected_id = VtxoId::from_str(expected_str).expect("parse expected VTXO ID");
@@ -456,7 +494,7 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let result = engine.compute_vtxo_id(&tree);
+        let result = engine.compute_vtxo_id(&tree, None);
         assert!(
             matches!(result, Err(VPackError::SiblingHashMismatch)),
             "Sabotage test: wrong fee anchor script must yield SiblingHashMismatch, got {:?}",
@@ -582,7 +620,7 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
 
         // Verify it's an OutPoint (Second Tech format)
         match computed_id {

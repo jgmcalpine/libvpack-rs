@@ -137,12 +137,22 @@ pub fn hash_sibling_birth_tx(value: u64, script: &[u8]) -> [u8; 32] {
 
 /// Rosetta Stone for Ark verification: maps a parsed tree to a VTXO ID and verifies it.
 pub trait ConsensusEngine {
-    /// Compute the VTXO ID from the tree (variant-specific logic not implemented here).
-    fn compute_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError>;
+    /// Compute the VTXO ID from the tree (variant-specific logic).
+    /// When `anchor_value` is `Some(v)`, conservation of value is enforced during the walk.
+    fn compute_vtxo_id(
+        &self,
+        tree: &VPackTree,
+        anchor_value: Option<u64>,
+    ) -> Result<VtxoId, VPackError>;
 
-    /// Verify that the tree yields the expected VTXO ID. Default: compute and compare.
-    fn verify(&self, tree: &VPackTree, expected: &VtxoId) -> Result<(), VPackError> {
-        let computed = self.compute_vtxo_id(tree)?;
+    /// Verify that the tree yields the expected VTXO ID with conservation of value.
+    fn verify(
+        &self,
+        tree: &VPackTree,
+        expected: &VtxoId,
+        anchor_value: u64,
+    ) -> Result<(), VPackError> {
+        let computed = self.compute_vtxo_id(tree, Some(anchor_value))?;
         if computed == *expected {
             Ok(())
         } else {

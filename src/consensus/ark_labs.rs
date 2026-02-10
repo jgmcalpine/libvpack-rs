@@ -26,14 +26,18 @@ use crate::consensus::taproot_sighash::{extract_verify_key, taproot_sighash, ver
 pub struct ArkLabsV3;
 
 impl ConsensusEngine for ArkLabsV3 {
-    fn compute_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
+    fn compute_vtxo_id(
+        &self,
+        tree: &VPackTree,
+        anchor_value: Option<u64>,
+    ) -> Result<VtxoId, VPackError> {
         // If path is empty, this is a leaf node
         if tree.path.is_empty() {
             // Optional validation: V3-Anchored leaf must have anchor in data (leaf_siblings)
             if tree.leaf_siblings.is_empty() && !tree.fee_anchor_script.is_empty() {
                 return Err(VPackError::FeeAnchorMissing);
             }
-            return self.compute_leaf_vtxo_id(tree);
+            return self.compute_leaf_vtxo_id(tree, anchor_value);
         }
 
         // Top-down chaining: start with on-chain anchor
@@ -41,6 +45,7 @@ impl ConsensusEngine for ArkLabsV3 {
         let mut last_txid_bytes = None;
         let mut prev_output_values: Option<Vec<u64>> = None;
         let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
+        let mut input_amount: Option<u64> = anchor_value;
 
         // Iterate through path (top-down from root to leaf). Outputs = child (if present) + siblings only.
         for (i, genesis_item) in tree.path.iter().enumerate() {
@@ -69,6 +74,18 @@ impl ConsensusEngine for ArkLabsV3 {
                     }
                     SiblingNode::Full(_) => return Err(VPackError::EncodingError),
                 }
+            }
+
+            if let Some(expected) = input_amount {
+                let sum = outputs
+                    .iter()
+                    .try_fold(0u64, |acc, o| acc.checked_add(o.value));
+                match sum {
+                    None => return Err(VPackError::ValueMismatch),
+                    Some(s) if s != expected => return Err(VPackError::ValueMismatch),
+                    Some(_) => {}
+                }
+                input_amount = outputs.get(0).map(|o| o.value);
             }
 
             // Build input spending current_prevout
@@ -132,15 +149,19 @@ impl ConsensusEngine for ArkLabsV3 {
                 last_txid_bytes.expect("path should have at least one item"),
             ))
         } else {
-            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout)
+            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)
         }
     }
 }
 
 impl ArkLabsV3 {
     /// Compute VTXO ID for a leaf node (no path).
-    fn compute_leaf_vtxo_id(&self, tree: &VPackTree) -> Result<VtxoId, VPackError> {
-        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor)
+    fn compute_leaf_vtxo_id(
+        &self,
+        tree: &VPackTree,
+        anchor_value: Option<u64>,
+    ) -> Result<VtxoId, VPackError> {
+        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor, anchor_value)
     }
 
     /// Compute VTXO ID for a leaf node with a custom prevout.
@@ -149,6 +170,7 @@ impl ArkLabsV3 {
         &self,
         tree: &VPackTree,
         prevout: OutPoint,
+        input_amount: Option<u64>,
     ) -> Result<VtxoId, VPackError> {
         let num_outputs = 1 + tree.leaf_siblings.len();
         if tree.leaf.vout >= num_outputs as u32 {
@@ -173,6 +195,17 @@ impl ArkLabsV3 {
                     });
                 }
                 SiblingNode::Full(_) => return Err(VPackError::EncodingError),
+            }
+        }
+
+        if let Some(expected) = input_amount {
+            let sum = outputs
+                .iter()
+                .try_fold(0u64, |acc, o| acc.checked_add(o.value));
+            match sum {
+                None => return Err(VPackError::ValueMismatch),
+                Some(s) if s != expected => return Err(VPackError::ValueMismatch),
+                Some(_) => {}
             }
         }
 
@@ -298,7 +331,7 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
 
         assert_eq!(
             computed_id, expected_vtxo_id,
@@ -390,7 +423,7 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let result = engine.compute_vtxo_id(&tree_sabotaged);
+        let result = engine.compute_vtxo_id(&tree_sabotaged, None);
         assert!(
             matches!(result, Err(VPackError::SiblingHashMismatch)),
             "Sabotage test: wrong sibling script must yield SiblingHashMismatch, got {:?}",
@@ -486,7 +519,7 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
 
         assert_eq!(
             computed_id, expected_vtxo_id,
@@ -611,7 +644,7 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree).expect("compute VTXO ID");
+        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
 
         // Verify it's a Raw hash (Ark Labs format)
         match computed_id {
