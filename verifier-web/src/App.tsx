@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import initWasm, { init as setPanicHook, wasm_compute_vtxo_id, wasm_verify } from './wasm/wasm_vpack';
 import VTXOInput from './components/VTXOInput';
-import ReconstructedIdBox from './components/ReconstructedIdBox';
 import ProgressiveVerificationBadge from './components/ProgressiveVerificationBadge';
+import SovereigntyMap from './components/SovereigntyMap';
+import MockDataBadge from './components/MockDataBadge';
+import { TestModeProvider, useTestMode } from './contexts/TestModeContext';
 import { fetchTxVoutValue } from './services/mempool';
 import {
+  computeOutputSumFromIngredients,
+  extractAnchorData,
   parseParentOutpoint,
+  type PathDetail,
   type VerificationPhase,
   type VerifyResult,
   type VtxoInputJson,
@@ -13,19 +18,25 @@ import {
 
 type EngineStatus = 'Loading' | 'Ready' | 'Error';
 
-function injectAnchorValue(json: string, anchorValue: number): string {
+/** Pass anchor as string to WASM to avoid JS 53-bit integer precision issues. */
+function injectAnchorValue(json: string, anchorValue: number | string): string {
   const parsed = JSON.parse(json) as VtxoInputJson;
-  const withAnchor = { ...parsed, anchor_value: anchorValue };
+  const valueForWasm = typeof anchorValue === 'number' ? String(anchorValue) : anchorValue;
+  const withAnchor = { ...parsed, anchor_value: valueForWasm };
   return JSON.stringify(withAnchor);
 }
 
-function App() {
+function AppContent() {
+  const { isTestMode, toggleTestMode } = useTestMode();
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('Loading');
   const [vtxoData, setVtxoData] = useState('');
   const [phase, setPhase] = useState<VerificationPhase>('calculating');
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [manualAnchorValue, setManualAnchorValue] = useState('');
+  const [l1Status, setL1Status] = useState<'verified' | 'unknown' | 'mock' | null>(null);
+  const [lastAuditInputValue, setLastAuditInputValue] = useState<number | null>(null);
+  const [lastAuditOutputSum, setLastAuditOutputSum] = useState<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -46,6 +57,9 @@ function App() {
   const runProgressiveVerification = useCallback(async (input: string) => {
     setVerifyResult(null);
     setVerificationError(null);
+    setL1Status(null);
+    setLastAuditInputValue(null);
+    setLastAuditOutputSum(null);
     setPhase('calculating');
 
     let parsed: VtxoInputJson;
@@ -89,18 +103,37 @@ function App() {
 
     setPhase('path_verified');
 
-    const outpoint = parseParentOutpoint(parsed.reconstruction_ingredients.parent_outpoint);
-    if (!outpoint) {
-      setVerificationError('Invalid parent_outpoint; enter anchor value manually.');
-      setPhase('fetch_failed');
-      return;
-    }
+    const outputSum = computeOutputSumFromIngredients(parsed.reconstruction_ingredients);
+    let anchorValue: number | null = null;
 
-    const anchorValue = await fetchTxVoutValue(outpoint.txid, outpoint.voutIndex);
-    if (anchorValue === null) {
-      setVerificationError('Could not fetch L1 value from mempool.space. Enter value below to continue.');
-      setPhase('fetch_failed');
-      return;
+    if (isTestMode) {
+      // Test Mode: self-consistency audit — anchor = sum of outputs so tree math matches.
+      anchorValue = outputSum > 0 ? outputSum : 1100;
+      setL1Status('mock');
+      setLastAuditInputValue(anchorValue);
+      setLastAuditOutputSum(outputSum);
+    } else {
+      // Live mode: need outpoint to fetch L1 value (check both parent_outpoint and anchor_outpoint)
+      const outpointStr =
+        parsed.reconstruction_ingredients.parent_outpoint ??
+        parsed.reconstruction_ingredients.anchor_outpoint;
+      const outpoint = parseParentOutpoint(outpointStr);
+      if (!outpoint) {
+        setVerificationError('Invalid parent_outpoint or anchor_outpoint; enter anchor value manually.');
+        setPhase('fetch_failed');
+        return;
+      }
+      anchorValue = await fetchTxVoutValue(outpoint.txid, outpoint.voutIndex);
+      if (anchorValue === null) {
+        setVerificationError(
+          'Could not fetch L1 value from mempool.space. Switch to Test Mode or enter value below to continue.',
+        );
+        setPhase('fetch_failed');
+        return;
+      }
+      setL1Status('verified');
+      setLastAuditInputValue(anchorValue);
+      setLastAuditOutputSum(outputSum);
     }
 
     try {
@@ -112,7 +145,7 @@ function App() {
       setVerificationError(fullErr instanceof Error ? fullErr.message : String(fullErr));
       setPhase('error');
     }
-  }, []);
+  }, [isTestMode]);
 
   const handleVerifyWithManualAnchor = useCallback(() => {
     const value = parseInt(manualAnchorValue, 10);
@@ -121,6 +154,14 @@ function App() {
       return;
     }
     setVerificationError(null);
+    setL1Status('unknown');
+    try {
+      const parsed = JSON.parse(vtxoData) as VtxoInputJson;
+      setLastAuditInputValue(value);
+      setLastAuditOutputSum(computeOutputSumFromIngredients(parsed.reconstruction_ingredients));
+    } catch {
+      // ignore
+    }
     try {
       const jsonWithAnchor = injectAnchorValue(vtxoData, value);
       const result = wasm_verify(jsonWithAnchor) as VerifyResult;
@@ -153,21 +194,57 @@ function App() {
   }, [vtxoData, engineStatus, runProgressiveVerification]);
 
   const shouldShowResults = engineStatus === 'Ready' && vtxoData.trim();
-  const showManualAnchorFallback = shouldShowResults && phase === 'fetch_failed';
+  const showManualAnchorFallback =
+    shouldShowResults && phase === 'fetch_failed' && !isTestMode;
+
+  const anchorData = (() => {
+    try {
+      if (!vtxoData.trim()) return null;
+      const parsed = JSON.parse(vtxoData) as VtxoInputJson;
+      return extractAnchorData(parsed.reconstruction_ingredients, isTestMode);
+    } catch {
+      return null;
+    }
+  })();
+  const anchorTxid = anchorData?.txid ?? '';
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2 text-gray-900 dark:text-white">
             VTXO Inspector
           </h1>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            VTXO Engine: <span className="font-semibold">{engineStatus}</span>
+          <div className="flex items-center justify-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <span>
+              VTXO Engine: <span className="font-semibold">{engineStatus}</span>
+            </span>
+            {isTestMode && <MockDataBadge />}
+          </div>
+          {/* Test Mode Toggle */}
+          <div className="flex items-center justify-center gap-3">
+            <button
+              id="test-mode-toggle"
+              type="button"
+              onClick={toggleTestMode}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                isTestMode ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+              aria-label="Toggle test mode"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isTestMode ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <label htmlFor="test-mode-toggle" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Test Mode
+            </label>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6 mb-6">
           <VTXOInput value={vtxoData} onChange={setVtxoData} />
 
           {shouldShowResults && (
@@ -175,7 +252,50 @@ function App() {
               <ProgressiveVerificationBadge
                 phase={phase}
                 errorMessage={verificationError}
+                issuer={verifyResult?.variant}
+                l1Status={l1Status}
               />
+
+              {phase === 'error' &&
+                (lastAuditInputValue !== null || lastAuditOutputSum !== null) && (
+                  <div
+                    className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg space-y-2"
+                    role="region"
+                    aria-label="Audit Ledger"
+                  >
+                    <h3 className="text-sm font-semibold text-red-800 dark:text-red-200">
+                      Audit Ledger
+                    </h3>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-red-700 dark:text-red-300">
+                      <div>
+                        <dt className="font-medium">Input value</dt>
+                        <dd>
+                          {lastAuditInputValue !== null
+                            ? `${lastAuditInputValue.toLocaleString()} sats`
+                            : '—'}
+                          {lastAuditInputValue !== null && (
+                            <span className="text-red-600 dark:text-red-400 ml-1">
+                              (from blockchain or manual)
+                            </span>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-medium">Output sum</dt>
+                        <dd>
+                          {lastAuditOutputSum !== null
+                            ? `${lastAuditOutputSum.toLocaleString()} sats`
+                            : '—'}
+                          {lastAuditOutputSum !== null && (
+                            <span className="text-red-600 dark:text-red-400 ml-1">
+                              (calculated from JSON)
+                            </span>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
 
               {showManualAnchorFallback && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg space-y-3">
@@ -202,15 +322,61 @@ function App() {
                   </div>
                 </div>
               )}
-
-              {phase === 'sovereign_complete' && verifyResult && (
-                <ReconstructedIdBox reconstructedId={verifyResult.reconstructed_tx_id} />
-              )}
             </div>
           )}
         </div>
+
+        {/* Sovereignty Map */}
+        {phase === 'sovereign_complete' && verifyResult && (
+          <>
+            {(() => {
+              const raw = verifyResult.path_details;
+              const pathDetailsArray = Array.isArray(raw)
+                ? raw
+                : raw && typeof raw === 'object'
+                  ? Object.keys(raw)
+                      .filter((k) => /^\d+$/.test(k))
+                      .sort((a, b) => Number(a) - Number(b))
+                      .map((k) => (raw as Record<string, PathDetail>)[k])
+                  : [];
+              const hasPathDetails = pathDetailsArray.length > 0;
+              return hasPathDetails ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+                  <SovereigntyMap
+                    pathDetails={pathDetailsArray}
+                    anchorTxid={anchorTxid}
+                    finalVtxoId={verifyResult.reconstructed_tx_id}
+                    variant={verifyResult.variant}
+                  />
+                </div>
+              ) : (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>Note:</strong> Path details not available. The WASM module needs to be rebuilt to include path_details.
+                  <br />
+                  <br />
+                  Current result: <code className="bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded text-xs">
+                    {JSON.stringify({ has_path_details: 'path_details' in verifyResult, path_details_type: typeof verifyResult.path_details, path_details_length: verifyResult.path_details?.length })}
+                  </code>
+                  <br />
+                  <br />
+                  Run: <code className="bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded">cd wasm-vpack && wasm-pack build --target web && cd ../verifier-web && npm run wasm:sync</code>
+                </p>
+              </div>
+              );
+            })()}
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <TestModeProvider>
+      <AppContent />
+    </TestModeProvider>
   );
 }
 

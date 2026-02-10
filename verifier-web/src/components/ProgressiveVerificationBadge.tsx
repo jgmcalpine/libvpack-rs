@@ -1,8 +1,12 @@
 import type { VerificationPhase } from '../types/verification';
 
+export type L1Status = 'verified' | 'unknown' | 'mock' | null;
+
 interface ProgressiveVerificationBadgeProps {
   phase: VerificationPhase;
   errorMessage?: string | null;
+  issuer?: string;
+  l1Status?: L1Status;
 }
 
 const PHASE_CONFIG: Record<
@@ -41,20 +45,46 @@ const PHASE_CONFIG: Record<
   },
 };
 
-function ProgressiveVerificationBadge({ phase, errorMessage }: ProgressiveVerificationBadgeProps) {
+const L1_STATUS_LABELS: Record<NonNullable<ProgressiveVerificationBadgeProps['l1Status']>, string> = {
+  verified: 'L1 Status: Verified',
+  unknown: 'L1 Status: Unknown',
+  mock: 'Local Test Data',
+};
+
+function ProgressiveVerificationBadge({
+  phase,
+  errorMessage,
+  issuer,
+  l1Status,
+}: ProgressiveVerificationBadgeProps) {
   const config = PHASE_CONFIG[phase];
+  const issuerLabel = issuer === '0x04' ? 'Ark Labs' : issuer === '0x03' ? 'Second Tech' : null;
+  const showL1Badge =
+    phase === 'sovereign_complete' && l1Status && l1Status !== 'verified';
 
   return (
     <div className="verification-badge-wrapper">
-      <div
-        className={`inline-flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-semibold transition-all duration-300 ease-out ${config.className}`}
-        role="status"
-        aria-live="polite"
-      >
-        <span className="verification-badge-icon" aria-hidden>
-          {config.icon}
-        </span>
-        <span>{config.label}</span>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div
+          className={`inline-flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-semibold transition-all duration-300 ease-out ${config.className}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="verification-badge-icon" aria-hidden>
+            {config.icon}
+          </span>
+          <span>{config.label}</span>
+        </div>
+        {issuerLabel && phase === 'sovereign_complete' && (
+          <div className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
+            Issuer: {issuerLabel}
+          </div>
+        )}
+        {showL1Badge && (
+          <div className="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium">
+            {L1_STATUS_LABELS[l1Status]}
+          </div>
+        )}
       </div>
       {errorMessage && (
         <p className="mt-2 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
