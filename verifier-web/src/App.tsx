@@ -54,6 +54,17 @@ function AppContent() {
     initializeWasm();
   }, []);
 
+  const handleVtxoDataChange = useCallback((newValue: string) => {
+    setVtxoData(newValue);
+    setVerifyResult(null);
+    setManualAnchorValue('');
+    setLastAuditInputValue(null);
+    setLastAuditOutputSum(null);
+    setVerificationError(null);
+    setL1Status(null);
+    setPhase('calculating');
+  }, []);
+
   const runProgressiveVerification = useCallback(async (input: string) => {
     setVerifyResult(null);
     setVerificationError(null);
@@ -245,7 +256,7 @@ function AppContent() {
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6 mb-6">
-          <VTXOInput value={vtxoData} onChange={setVtxoData} />
+          <VTXOInput value={vtxoData} onChange={handleVtxoDataChange} />
 
           {shouldShowResults && (
             <div className="space-y-4">

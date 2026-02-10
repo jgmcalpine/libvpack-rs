@@ -40,10 +40,15 @@ impl LogicAdapter for ArkLabsAdapter {
             vpack::VtxoId::Raw(_) => return Err(VPackError::InvalidVtxoIdFormat),
         };
 
-        let fee_hex = json["fee_anchor_script"]
-            .as_str()
-            .unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
-        let fee_anchor_script = hex::decode(fee_hex).map_err(|_| VPackError::EncodingError)?;
+        // No 0x04 (Anchored) V-PACK with empty fee anchor: default to audited constant when missing or empty.
+        let fee_hex = json["fee_anchor_script"].as_str();
+        let fee_anchor_script = match fee_hex {
+            Some(h) if !h.is_empty() => hex::decode(h).map_err(|_| VPackError::EncodingError)?,
+            _ => hex::decode(FEE_ANCHOR_SCRIPT_HEX).map_err(|_| VPackError::EncodingError)?,
+        };
+        if fee_anchor_script.is_empty() {
+            return Err(VPackError::EncodingError);
+        }
 
         let sequence = json["nSequence"]
             .as_u64()
@@ -171,11 +176,13 @@ pub struct SecondTechAdapter;
 
 impl LogicAdapter for SecondTechAdapter {
     fn map_ingredients(json: &serde_json::Value) -> Result<VPackTree, VPackError> {
-        let fee_hex = json["fee_anchor_script"]
-            .as_str()
-            .unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
-        let fee_anchor_script = hex::decode(fee_hex).map_err(|_| VPackError::EncodingError)?;
+        let fee_hex = json["fee_anchor_script"].as_str();
+        let fee_anchor_script = match fee_hex {
+            Some(h) if !h.is_empty() => hex::decode(h).map_err(|_| VPackError::EncodingError)?,
+            _ => hex::decode(FEE_ANCHOR_SCRIPT_HEX).map_err(|_| VPackError::EncodingError)?,
+        };
 
+        // Explicit mapping: JSON "amount" -> tree.leaf.amount (reconstruct_link sums child_amount + siblings per level).
         let amount = json["amount"].as_u64().ok_or(VPackError::EncodingError)?;
         let script_hex = json["script_pubkey_hex"]
             .as_str()

@@ -29,7 +29,7 @@ export interface VtxoInputJson {
 
 /**
  * Computes the sum of output values from reconstruction_ingredients (self-consistency audit).
- * Uses outputs[] when present; otherwise child_output + siblings[] for branch-style ingredients.
+ * Uses outputs[] when present; else child_output + siblings[] for branch-style; else top-level amount (e.g. Second Tech leaf).
  */
 export function computeOutputSumFromIngredients(
   ingredients: ReconstructionIngredients | undefined
@@ -42,7 +42,10 @@ export function computeOutputSumFromIngredients(
   const child = (ingredients as { child_output?: { value?: number } }).child_output?.value ?? 0;
   const siblings = (ingredients as { siblings?: { value?: number }[] }).siblings ?? [];
   const siblingsSum = siblings.reduce((s, n) => s + (n.value ?? 0), 0);
-  return child + siblingsSum;
+  const branchSum = child + siblingsSum;
+  if (branchSum > 0) return branchSum;
+  const amount = (ingredients as { amount?: number }).amount;
+  return typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
 }
 
 /**
