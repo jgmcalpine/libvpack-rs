@@ -8,6 +8,23 @@ export function init() {
 }
 
 /**
+ * Computes the VTXO ID from reconstruction_ingredients only (no anchor_value).
+ * Use for path verification before fetching L1. Tries ArkLabs then SecondTech.
+ * Returns { variant, reconstructed_tx_id } or throws.
+ * @param {string} json_input
+ * @returns {any}
+ */
+export function wasm_compute_vtxo_id(json_input) {
+    const ptr0 = passStringToWasm0(json_input, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.wasm_compute_vtxo_id(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Verifies reconstruction_ingredients JSON against expected_vtxo_id.
  * JSON must include anchor_value (L1 UTXO value in sats) as string or number.
  * Use string for full 64-bit range (e.g. "anchor_value": "1100").

@@ -103,3 +103,46 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         "no adapter matched or verification failed for reconstruction_ingredients",
     ))
 }
+
+#[derive(Serialize)]
+struct WasmComputeVtxoIdResult {
+    variant: String,
+    reconstructed_tx_id: String,
+}
+
+/// Computes the VTXO ID from reconstruction_ingredients only (no anchor_value).
+/// Use for path verification before fetching L1. Tries ArkLabs then SecondTech.
+/// Returns { variant, reconstructed_tx_id } or throws.
+#[wasm_bindgen]
+pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
+    let value: serde_json::Value = serde_json::from_str(json_input)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let ri = value
+        .get("reconstruction_ingredients")
+        .ok_or_else(|| JsValue::from_str("missing reconstruction_ingredients"))?;
+
+    if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
+        let reconstructed = ArkLabsV3
+            .compute_vtxo_id(&tree, None)
+            .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
+        return Ok(serde_wasm_bindgen::to_value(&WasmComputeVtxoIdResult {
+            variant: "0x04".to_string(),
+            reconstructed_tx_id: reconstructed.to_string(),
+        })?);
+    }
+
+    if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
+        let reconstructed = SecondTechV3
+            .compute_vtxo_id(&tree, None)
+            .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
+        return Ok(serde_wasm_bindgen::to_value(&WasmComputeVtxoIdResult {
+            variant: "0x03".to_string(),
+            reconstructed_tx_id: reconstructed.to_string(),
+        })?);
+    }
+
+    Err(JsValue::from_str(
+        "no adapter matched for reconstruction_ingredients",
+    ))
+}

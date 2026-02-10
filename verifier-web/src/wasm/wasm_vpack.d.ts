@@ -7,6 +7,13 @@
 export function init(): void;
 
 /**
+ * Computes the VTXO ID from reconstruction_ingredients only (no anchor_value).
+ * Use for path verification before fetching L1. Tries ArkLabs then SecondTech.
+ * Returns { variant, reconstructed_tx_id } or throws.
+ */
+export function wasm_compute_vtxo_id(json_input: string): any;
+
+/**
  * Verifies reconstruction_ingredients JSON against expected_vtxo_id.
  * JSON must include anchor_value (L1 UTXO value in sats) as string or number.
  * Use string for full 64-bit range (e.g. "anchor_value": "1100").
@@ -19,6 +26,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly wasm_compute_vtxo_id: (a: number, b: number) => [number, number, number];
     readonly wasm_verify: (a: number, b: number) => [number, number, number];
     readonly init: () => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
