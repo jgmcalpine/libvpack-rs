@@ -9,9 +9,7 @@ use alloc::vec::Vec;
 
 use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
-use crate::consensus::{
-    hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId,
-};
+use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree};
 
@@ -174,13 +172,7 @@ impl SecondTechV3 {
         });
         for sibling in &tree.leaf_siblings {
             let (value, script) = match sibling {
-                SiblingNode::Compact { hash, value, script } => {
-                    let computed = hash_sibling_birth_tx(*value, script.as_slice());
-                    if computed != *hash {
-                        return Err(VPackError::SiblingHashMismatch);
-                    }
-                    (*value, script.as_slice())
-                }
+                SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
                 SiblingNode::Full(txout) => {
                     (txout.value.to_sat(), txout.script_pubkey.as_bytes())
                 }
@@ -252,13 +244,7 @@ impl SecondTechV3 {
                 }
                 let sibling = &genesis_item.siblings[sibling_idx];
                 let (value, script) = match sibling {
-                    SiblingNode::Compact { hash, value, script } => {
-                        let computed = hash_sibling_birth_tx(*value, script.as_slice());
-                        if computed != *hash {
-                            return Err(VPackError::SiblingHashMismatch);
-                        }
-                        (*value, script.as_slice())
-                    }
+                    SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
                     SiblingNode::Full(txout) => {
                         (txout.value.to_sat(), txout.script_pubkey.as_bytes())
                     }
@@ -453,31 +439,29 @@ mod tests {
             .map(|v| hex::decode(v.as_str().expect("script")).expect("decode sibling script"))
             .collect();
 
-        let mut siblings: Vec<SiblingNode> = sibling_scripts
-            .into_iter()
+        let mut good_siblings: Vec<SiblingNode> = sibling_scripts
+            .iter()
             .map(|script| SiblingNode::Compact {
                 hash: [0u8; 32],
                 value: sibling_value,
-                script,
+                script: script.clone(),
             })
             .collect();
-        // Sabotage: wrong script on the fee anchor (engine must detect SiblingHashMismatch)
-        siblings.push(SiblingNode::Compact {
+        good_siblings.push(SiblingNode::Compact {
             hash: [0u8; 32],
             value: 0,
-            script: vec![0x00],
+            script: fee_anchor_script.clone(),
         });
 
-        let genesis_item = GenesisItem {
-            siblings,
+        let good_item = GenesisItem {
+            siblings: good_siblings.clone(),
             parent_index,
             sequence: 0,
             child_amount,
-            child_script_pubkey: child_script,
+            child_script_pubkey: child_script.clone(),
             signature: None,
         };
-
-        let tree = VPackTree {
+        let good_tree = VPackTree {
             leaf: VtxoLeaf {
                 amount: 0,
                 vout: 0,
@@ -487,17 +471,58 @@ mod tests {
                 script_pubkey: Vec::new(),
             },
             leaf_siblings: Vec::new(),
-            path: vec![genesis_item],
+            path: vec![good_item],
+            anchor,
+            asset_id: None,
+            fee_anchor_script: fee_anchor_script.clone(),
+        };
+
+        let mut bad_siblings: Vec<SiblingNode> = sibling_scripts
+            .into_iter()
+            .map(|script| SiblingNode::Compact {
+                hash: [0u8; 32],
+                value: sibling_value,
+                script,
+            })
+            .collect();
+        bad_siblings.push(SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: vec![0x00],
+        });
+        let bad_genesis_item = GenesisItem {
+            siblings: bad_siblings,
+            parent_index,
+            sequence: 0,
+            child_amount,
+            child_script_pubkey: child_script,
+            signature: None,
+        };
+        let bad_tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: 0,
+                vout: 0,
+                sequence: 0,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: Vec::new(),
+            },
+            leaf_siblings: Vec::new(),
+            path: vec![bad_genesis_item],
             anchor,
             asset_id: None,
             fee_anchor_script,
         };
 
         let engine = SecondTechV3;
-        let result = engine.compute_vtxo_id(&tree, None);
+        // Input amount = sum of outputs: child + N siblings at sibling_value + fee anchor 0
+        let anchor_value =
+            child_amount + ((good_siblings.len() - 1) as u64 * sibling_value) + 0u64;
+        let expected_id = engine.compute_vtxo_id(&good_tree, Some(anchor_value)).expect("good tree");
+        let result = engine.verify(&bad_tree, &expected_id, anchor_value);
         assert!(
-            matches!(result, Err(VPackError::SiblingHashMismatch)),
-            "Sabotage test: wrong fee anchor script must yield SiblingHashMismatch, got {:?}",
+            matches!(result, Err(VPackError::IdMismatch)),
+            "Sabotage test: wrong fee anchor script must yield IdMismatch, got {:?}",
             result
         );
     }

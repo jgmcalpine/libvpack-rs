@@ -206,7 +206,7 @@ fn run_integrity_sabotage(path: &Path) {
         );
     }
 
-    // Sabotage: sibling hash wrong (Ark Labs with siblings) -> SiblingHashMismatch
+    // Sabotage: sibling script wrong (Ark Labs with siblings) -> IdMismatch (chain-of-spends breaks)
     if tx_variant == TxVariant::V3Anchored
         && vector.reconstruction_ingredients.get("siblings").and_then(|s| s.as_array()).map(|a| !a.is_empty()).unwrap_or(false)
     {
@@ -216,15 +216,19 @@ fn run_integrity_sabotage(path: &Path) {
         let good_bytes = create_vpack_ark_labs(ingredients).expect("pack");
         let mut tree = vpack::verify(&good_bytes, &expected_id, anchor_value).expect("verify good bytes");
         if let Some(sibling) = tree.path.first_mut().and_then(|p| p.siblings.first_mut()) {
-            if let vpack::payload::tree::SiblingNode::Compact { ref mut hash, .. } = sibling {
-                *hash = [0u8; 32];
+            if let vpack::payload::tree::SiblingNode::Compact { ref mut script, .. } = sibling {
+                if script.is_empty() {
+                    script.push(0x00);
+                } else {
+                    script[0] = script[0].wrapping_add(1);
+                }
             }
         }
         let bad_bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored).expect("pack mutated tree");
         let result = vpack::verify(&bad_bytes, &expected_id, anchor_value);
         assert!(
-            matches!(result, Err(VPackError::SiblingHashMismatch)),
-            "sabotaged sibling hash should yield SiblingHashMismatch, got {:?}",
+            matches!(result, Err(VPackError::IdMismatch)),
+            "sabotaged sibling script should yield IdMismatch, got {:?}",
             result
         );
     }

@@ -8,6 +8,8 @@ export function init(): void;
 
 /**
  * Verifies reconstruction_ingredients JSON against expected_vtxo_id.
+ * JSON must include anchor_value (L1 UTXO value in sats) as string or number.
+ * Use string for full 64-bit range (e.g. "anchor_value": "1100").
  * Tries ArkLabs then SecondTech adapters; returns the first that parses and verifies.
  * Response: { variant, status: "Success"|"Failure", reconstructed_tx_id }.
  */

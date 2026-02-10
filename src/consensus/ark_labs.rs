@@ -8,9 +8,7 @@ use alloc::vec::Vec;
 
 use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
 
-use crate::consensus::{
-    hash_sibling_birth_tx, tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId,
-};
+use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
 use crate::payload::tree::{SiblingNode, VPackTree};
 
@@ -59,14 +57,11 @@ impl ConsensusEngine for ArkLabsV3 {
                 });
             }
 
-            // Add sibling outputs (fee anchor must be in siblings when required; adapter provides it)
+            // Add sibling outputs (fee anchor must be in siblings when required; adapter provides it).
+            // Only script and value are used; sibling hash is not cross-verified (chain-of-spends).
             for sibling in &genesis_item.siblings {
                 match sibling {
-                    SiblingNode::Compact { hash, value, script } => {
-                        let computed = hash_sibling_birth_tx(*value, script.as_slice());
-                        if computed != *hash {
-                            return Err(VPackError::SiblingHashMismatch);
-                        }
+                    SiblingNode::Compact { value, script, .. } => {
                         outputs.push(TxOutPreimage {
                             value: *value,
                             script_pubkey: script.as_slice(),
@@ -184,11 +179,7 @@ impl ArkLabsV3 {
         });
         for sibling in &tree.leaf_siblings {
             match sibling {
-                SiblingNode::Compact { hash, value, script } => {
-                    let computed = hash_sibling_birth_tx(*value, script.as_slice());
-                    if computed != *hash {
-                        return Err(VPackError::SiblingHashMismatch);
-                    }
+                SiblingNode::Compact { value, script, .. } => {
                     outputs.push(TxOutPreimage {
                         value: *value,
                         script_pubkey: script.as_slice(),
@@ -400,11 +391,32 @@ mod tests {
         let user_script = hex::decode(outputs[0]["script"].as_str().expect("user script"))
             .expect("decode user script");
 
-        // Sabotage: wrong script on the fee anchor sibling (engine must detect SiblingHashMismatch)
+        let good_sibling = SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: 0,
+            script: fee_anchor_script.clone(),
+        };
+        let tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: user_value,
+                vout: 0,
+                sequence,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: user_script.clone(),
+            },
+            leaf_siblings: vec![good_sibling],
+            path: Vec::new(),
+            anchor,
+            asset_id: None,
+            fee_anchor_script: fee_anchor_script.clone(),
+        };
+
+        // Sabotage: wrong script on the fee anchor sibling → different parent tx → IdMismatch
         let leaf_siblings_sabotaged = vec![SiblingNode::Compact {
             hash: [0u8; 32],
             value: 0,
-            script: vec![0x00], // wrong script; canonical Birth tx hash won't match stored hash
+            script: vec![0x00],
         }];
         let tree_sabotaged = VPackTree {
             leaf: VtxoLeaf {
@@ -422,11 +434,13 @@ mod tests {
             fee_anchor_script,
         };
 
+        let anchor_value = 1100u64; // round_leaf_v3 input amount
         let engine = ArkLabsV3;
-        let result = engine.compute_vtxo_id(&tree_sabotaged, None);
+        let expected_id = engine.compute_vtxo_id(&tree, Some(anchor_value)).expect("good tree");
+        let result = engine.verify(&tree_sabotaged, &expected_id, anchor_value);
         assert!(
-            matches!(result, Err(VPackError::SiblingHashMismatch)),
-            "Sabotage test: wrong sibling script must yield SiblingHashMismatch, got {:?}",
+            matches!(result, Err(VPackError::IdMismatch)),
+            "Sabotage test: wrong sibling script must yield IdMismatch, got {:?}",
             result
         );
     }
