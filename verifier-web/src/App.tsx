@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import initWasm, { init as setPanicHook, wasm_compute_vtxo_id, wasm_verify } from './wasm/wasm_vpack';
 import VTXOInput from './components/VTXOInput';
+import VectorPillGroup from './components/VectorPillGroup';
 import ProgressiveVerificationBadge from './components/ProgressiveVerificationBadge';
 import SovereigntyMap from './components/SovereigntyMap';
 import MockDataBadge from './components/MockDataBadge';
+import { ARK_LABS_VECTORS, SECOND_VECTORS } from './constants/vectors';
+import type { VectorEntry } from './constants/vectors';
 import { TestModeProvider, useTestMode } from './contexts/TestModeContext';
 import { fetchTxVoutValue } from './services/mempool';
 import {
@@ -30,6 +33,7 @@ function AppContent() {
   const { isTestMode, toggleTestMode } = useTestMode();
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('Loading');
   const [vtxoData, setVtxoData] = useState('');
+  const [selectedVectorId, setSelectedVectorId] = useState<string | null>(null);
   const [phase, setPhase] = useState<VerificationPhase>('calculating');
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
@@ -54,8 +58,14 @@ function AppContent() {
     initializeWasm();
   }, []);
 
-  const handleVtxoDataChange = useCallback((newValue: string) => {
-    setVtxoData(newValue);
+  const handleToggleTestMode = useCallback(() => {
+    if (isTestMode) {
+      setSelectedVectorId(null);
+    }
+    toggleTestMode();
+  }, [isTestMode, toggleTestMode]);
+
+  const clearInvalidStates = useCallback(() => {
     setVerifyResult(null);
     setManualAnchorValue('');
     setLastAuditInputValue(null);
@@ -64,6 +74,25 @@ function AppContent() {
     setL1Status(null);
     setPhase('calculating');
   }, []);
+
+  const handleVtxoDataChange = useCallback(
+    (newValue: string) => {
+      setVtxoData(newValue);
+      setSelectedVectorId(null);
+      clearInvalidStates();
+    },
+    [clearInvalidStates],
+  );
+
+  const handleVectorSelect = useCallback(
+    (vector: VectorEntry) => {
+      const json = vector.getJson();
+      setVtxoData(json);
+      setSelectedVectorId(vector.id);
+      clearInvalidStates();
+    },
+    [clearInvalidStates],
+  );
 
   const runProgressiveVerification = useCallback(async (input: string) => {
     setVerifyResult(null);
@@ -237,7 +266,7 @@ function AppContent() {
             <button
               id="test-mode-toggle"
               type="button"
-              onClick={toggleTestMode}
+              onClick={handleToggleTestMode}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 isTestMode ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
               }`}
@@ -256,7 +285,29 @@ function AppContent() {
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6 mb-6">
-          <VTXOInput value={vtxoData} onChange={handleVtxoDataChange} />
+          {isTestMode && (
+            <div className="space-y-4">
+              <VectorPillGroup
+                title="Ark Labs Group (Variant 0x04)"
+                vectors={ARK_LABS_VECTORS}
+                accentColor="blue"
+                selectedVectorId={selectedVectorId}
+                onSelectVector={handleVectorSelect}
+              />
+              <VectorPillGroup
+                title="Second Tech Group (Variant 0x03)"
+                vectors={SECOND_VECTORS}
+                accentColor="purple"
+                selectedVectorId={selectedVectorId}
+                onSelectVector={handleVectorSelect}
+              />
+            </div>
+          )}
+          <VTXOInput
+            value={vtxoData}
+            onChange={handleVtxoDataChange}
+            readOnly={isTestMode}
+          />
 
           {shouldShowResults && (
             <div className="space-y-4">
