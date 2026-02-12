@@ -349,3 +349,31 @@ pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
         "no adapter matched for reconstruction_ingredients",
     ))
 }
+
+/// Exports reconstruction_ingredients JSON to standard-compliant V-PACK binary.
+/// Uses the same LogicAdapter mapping as verification (ArkLabs/SecondTech) for byte-perfect output.
+/// JSON must include reconstruction_ingredients; anchor_value is not required for packing.
+/// Returns raw bytes as Uint8Array, or throws on parse/encoding error.
+#[wasm_bindgen]
+pub fn wasm_export_to_vpack(json_input: &str) -> Result<Vec<u8>, JsValue> {
+    let value: serde_json::Value = serde_json::from_str(json_input)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let ri = value
+        .get("reconstruction_ingredients")
+        .ok_or_else(|| JsValue::from_str("missing reconstruction_ingredients"))?;
+
+    if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
+        return create_vpack_from_tree(&tree, TxVariant::V3Anchored)
+            .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()));
+    }
+
+    if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
+        return create_vpack_from_tree(&tree, TxVariant::V3Plain)
+            .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()));
+    }
+
+    Err(JsValue::from_str(
+        "no adapter matched for reconstruction_ingredients",
+    ))
+}

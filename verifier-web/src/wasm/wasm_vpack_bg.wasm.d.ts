@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const wasm_compute_vtxo_id: (a: number, b: number) => [number, number, number];
+export const wasm_export_to_vpack: (a: number, b: number) => [number, number, number, number];
 export const wasm_verify: (a: number, b: number) => [number, number, number];
 export const init: () => void;
 export const __wbindgen_free: (a: number, b: number, c: number) => void;

@@ -14,6 +14,14 @@ export function init(): void;
 export function wasm_compute_vtxo_id(json_input: string): any;
 
 /**
+ * Exports reconstruction_ingredients JSON to standard-compliant V-PACK binary.
+ * Uses the same LogicAdapter mapping as verification (ArkLabs/SecondTech) for byte-perfect output.
+ * JSON must include reconstruction_ingredients; anchor_value is not required for packing.
+ * Returns raw bytes as Uint8Array, or throws on parse/encoding error.
+ */
+export function wasm_export_to_vpack(json_input: string): Uint8Array;
+
+/**
  * Verifies reconstruction_ingredients JSON against expected_vtxo_id.
  * JSON must include anchor_value (L1 UTXO value in sats) as string or number.
  * Use string for full 64-bit range (e.g. "anchor_value": "1100").
@@ -27,6 +35,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly wasm_compute_vtxo_id: (a: number, b: number) => [number, number, number];
+    readonly wasm_export_to_vpack: (a: number, b: number) => [number, number, number, number];
     readonly wasm_verify: (a: number, b: number) => [number, number, number];
     readonly init: () => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;

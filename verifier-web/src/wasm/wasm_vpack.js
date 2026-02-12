@@ -25,6 +25,26 @@ export function wasm_compute_vtxo_id(json_input) {
 }
 
 /**
+ * Exports reconstruction_ingredients JSON to standard-compliant V-PACK binary.
+ * Uses the same LogicAdapter mapping as verification (ArkLabs/SecondTech) for byte-perfect output.
+ * JSON must include reconstruction_ingredients; anchor_value is not required for packing.
+ * Returns raw bytes as Uint8Array, or throws on parse/encoding error.
+ * @param {string} json_input
+ * @returns {Uint8Array}
+ */
+export function wasm_export_to_vpack(json_input) {
+    const ptr0 = passStringToWasm0(json_input, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.wasm_export_to_vpack(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Verifies reconstruction_ingredients JSON against expected_vtxo_id.
  * JSON must include anchor_value (L1 UTXO value in sats) as string or number.
  * Use string for full 64-bit range (e.g. "anchor_value": "1100").
@@ -118,6 +138,11 @@ function __wbg_get_imports() {
         __proto__: null,
         "./wasm_vpack_bg.js": import0,
     };
+}
+
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
 let cachedDataViewMemory0 = null;

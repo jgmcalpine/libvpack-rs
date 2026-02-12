@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import initWasm, { init as setPanicHook, wasm_compute_vtxo_id, wasm_verify } from './wasm/wasm_vpack';
+import initWasm, {
+  init as setPanicHook,
+  wasm_compute_vtxo_id,
+  wasm_export_to_vpack,
+  wasm_verify,
+} from './wasm/wasm_vpack';
+import ExportToVpackButton from './components/ExportToVpackButton';
 import VTXOInput from './components/VTXOInput';
 import VectorPillGroup from './components/VectorPillGroup';
 import ProgressiveVerificationBadge from './components/ProgressiveVerificationBadge';
@@ -9,6 +15,10 @@ import { ARK_LABS_VECTORS, SECOND_VECTORS } from './constants/vectors';
 import type { VectorEntry } from './constants/vectors';
 import { TestModeProvider, useTestMode } from './contexts/TestModeContext';
 import { fetchTxVoutValue } from './services/mempool';
+import {
+  buildVpackFilename,
+  downloadVpackBytes,
+} from './utils/exportVpack';
 import {
   computeOutputSumFromIngredients,
   extractAnchorData,
@@ -187,6 +197,23 @@ function AppContent() {
     }
   }, [isTestMode]);
 
+  const isExportEnabled =
+    verifyResult?.status === 'Success' && phase === 'sovereign_complete';
+
+  const handleExportToVpack = useCallback(() => {
+    if (!isExportEnabled || !verifyResult || !vtxoData.trim()) return;
+    try {
+      const bytes = wasm_export_to_vpack(vtxoData);
+      const filename = buildVpackFilename(
+        verifyResult.variant,
+        verifyResult.reconstructed_tx_id,
+      );
+      downloadVpackBytes(bytes, filename);
+    } catch (err) {
+      setVerificationError(err instanceof Error ? err.message : String(err));
+    }
+  }, [isExportEnabled, verifyResult, vtxoData]);
+
   const handleVerifyWithManualAnchor = useCallback(() => {
     const value = parseInt(manualAnchorValue, 10);
     if (Number.isNaN(value) || value < 0 || !vtxoData.trim()) {
@@ -307,6 +334,11 @@ function AppContent() {
             value={vtxoData}
             onChange={handleVtxoDataChange}
             readOnly={isTestMode}
+          />
+
+          <ExportToVpackButton
+            disabled={!isExportEnabled}
+            onExport={handleExportToVpack}
           />
 
           {shouldShowResults && (
