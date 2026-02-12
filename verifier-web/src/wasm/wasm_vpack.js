@@ -45,6 +45,50 @@ export function wasm_export_to_vpack(json_input) {
 }
 
 /**
+ * Parses the V-PACK header and minimal payload prefix to extract anchor outpoint.
+ * Validates magic bytes first. Returns { anchor_txid, anchor_vout, tx_variant, is_testnet }.
+ * Use anchor_txid (display hex) with mempool.space for L1 fetch.
+ * @param {Uint8Array} vpack_bytes
+ * @returns {any}
+ */
+export function wasm_parse_vpack_header(vpack_bytes) {
+    const ptr0 = passArray8ToWasm0(vpack_bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.wasm_parse_vpack_header(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Unpacks a binary V-PACK to JSON ingredients (reconstruction_ingredients + raw_evidence).
+ * Allows the user to "see inside" any .vpk file. Does not verify—parse only.
+ * @param {Uint8Array} vpack_bytes
+ * @returns {string}
+ */
+export function wasm_unpack_to_json(vpack_bytes) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(vpack_bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasm_unpack_to_json(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Verifies reconstruction_ingredients JSON against expected_vtxo_id.
  * JSON must include anchor_value (L1 UTXO value in sats) as string or number.
  * Use string for full 64-bit range (e.g. "anchor_value": "1100").
@@ -57,6 +101,24 @@ export function wasm_verify(json_input) {
     const ptr0 = passStringToWasm0(json_input, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.wasm_verify(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Verifies a binary V-PACK directly (bypasses Logic Adapters).
+ * Calls core vpack::verify() with bytes already in standard format.
+ * anchor_value: Some(sats) for L1 verification; None for Test Mode (uses output sum).
+ * @param {Uint8Array} vpack_bytes
+ * @param {bigint | null} [anchor_value]
+ * @returns {any}
+ */
+export function wasm_verify_binary(vpack_bytes, anchor_value) {
+    const ptr0 = passArray8ToWasm0(vpack_bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.wasm_verify_binary(ptr0, len0, !isLikeNone(anchor_value), isLikeNone(anchor_value) ? BigInt(0) : anchor_value);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -164,6 +226,17 @@ function getUint8ArrayMemory0() {
         cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
     }
     return cachedUint8ArrayMemory0;
+}
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {

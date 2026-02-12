@@ -107,6 +107,8 @@ export function extractAnchorData(
   return null;
 }
 
+export type L1Status = 'verified' | 'unknown' | 'mock' | 'anchor_not_found' | null;
+
 export type VerificationPhase =
   | 'calculating'
   | 'path_verified'

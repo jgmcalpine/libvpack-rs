@@ -1,6 +1,6 @@
 import type { VerificationPhase } from '../types/verification';
 
-export type L1Status = 'verified' | 'unknown' | 'mock' | null;
+export type L1Status = 'verified' | 'unknown' | 'mock' | 'anchor_not_found' | null;
 
 interface ProgressiveVerificationBadgeProps {
   phase: VerificationPhase;
@@ -49,6 +49,7 @@ const L1_STATUS_LABELS: Record<NonNullable<ProgressiveVerificationBadgeProps['l1
   verified: 'L1 Status: Verified',
   unknown: 'L1 Status: Unknown',
   mock: 'Local Test Data',
+  anchor_not_found: 'Math Verified, but Anchor not found on Mainnet',
 };
 
 function ProgressiveVerificationBadge({

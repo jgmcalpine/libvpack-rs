@@ -3,6 +3,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 interface TestModeContextType {
   isTestMode: boolean;
   toggleTestMode: () => void;
+  setTestMode: (enabled: boolean) => void;
 }
 
 const TestModeContext = createContext<TestModeContextType | undefined>(undefined);
@@ -18,8 +19,12 @@ export function TestModeProvider({ children }: TestModeProviderProps) {
     setIsTestMode((prev) => !prev);
   };
 
+  const setTestMode = (enabled: boolean) => {
+    setIsTestMode(enabled);
+  };
+
   return (
-    <TestModeContext.Provider value={{ isTestMode, toggleTestMode }}>
+    <TestModeContext.Provider value={{ isTestMode, toggleTestMode, setTestMode }}>
       {children}
     </TestModeContext.Provider>
   );

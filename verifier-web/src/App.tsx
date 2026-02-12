@@ -3,6 +3,8 @@ import initWasm, {
   init as setPanicHook,
   wasm_compute_vtxo_id,
   wasm_export_to_vpack,
+  wasm_parse_vpack_header,
+  wasm_unpack_to_json,
   wasm_verify,
 } from './wasm/wasm_vpack';
 import ExportToVpackButton from './components/ExportToVpackButton';
@@ -40,7 +42,7 @@ function injectAnchorValue(json: string, anchorValue: number | string): string {
 }
 
 function AppContent() {
-  const { isTestMode, toggleTestMode } = useTestMode();
+  const { isTestMode, toggleTestMode, setTestMode } = useTestMode();
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('Loading');
   const [vtxoData, setVtxoData] = useState('');
   const [selectedVectorId, setSelectedVectorId] = useState<string | null>(null);
@@ -48,9 +50,10 @@ function AppContent() {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [manualAnchorValue, setManualAnchorValue] = useState('');
-  const [l1Status, setL1Status] = useState<'verified' | 'unknown' | 'mock' | null>(null);
+  const [l1Status, setL1Status] = useState<'verified' | 'unknown' | 'mock' | 'anchor_not_found' | null>(null);
   const [lastAuditInputValue, setLastAuditInputValue] = useState<number | null>(null);
   const [lastAuditOutputSum, setLastAuditOutputSum] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -85,6 +88,12 @@ function AppContent() {
     setPhase('calculating');
   }, []);
 
+  const handleClearAll = useCallback(() => {
+    setVtxoData('');
+    setSelectedVectorId(null);
+    clearInvalidStates();
+  }, [clearInvalidStates]);
+
   const handleVtxoDataChange = useCallback(
     (newValue: string) => {
       setVtxoData(newValue);
@@ -102,6 +111,67 @@ function AppContent() {
       clearInvalidStates();
     },
     [clearInvalidStates],
+  );
+
+  const handleImportVpack = useCallback(async () => {
+    if (engineStatus !== 'Ready' || !fileInputRef.current) return;
+    fileInputRef.current.click();
+  }, [engineStatus]);
+
+  const handleFileSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file || engineStatus !== 'Ready') return;
+
+      clearInvalidStates();
+      setVerificationError(null);
+      setPhase('calculating');
+
+      let bytes: ArrayBuffer;
+      try {
+        bytes = await file.arrayBuffer();
+      } catch {
+        setVerificationError('Failed to read file.');
+        setPhase('error');
+        return;
+      }
+
+      const vpackBytes = new Uint8Array(bytes);
+
+      let headerResult: { is_testnet: boolean };
+      try {
+        headerResult = wasm_parse_vpack_header(vpackBytes) as {
+          anchor_txid: string;
+          anchor_vout: number;
+          tx_variant: string;
+          is_testnet: boolean;
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setVerificationError(msg.startsWith('Error:') ? msg : `Error: ${msg}`);
+        setPhase('error');
+        return;
+      }
+
+      if (headerResult.is_testnet) {
+        setTestMode(true);
+      }
+
+      let jsonStr: string;
+      try {
+        jsonStr = wasm_unpack_to_json(vpackBytes);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setVerificationError(msg.startsWith('Error:') ? msg : `Error: ${msg}`);
+        setPhase('error');
+        return;
+      }
+
+      setVtxoData(jsonStr);
+      setSelectedVectorId(null);
+    },
+    [engineStatus, setTestMode, clearInvalidStates],
   );
 
   const runProgressiveVerification = useCallback(async (input: string) => {
@@ -163,7 +233,7 @@ function AppContent() {
       setLastAuditInputValue(anchorValue);
       setLastAuditOutputSum(outputSum);
     } else {
-      // Live mode: need outpoint to fetch L1 value (check both parent_outpoint and anchor_outpoint)
+      // Live mode: fetch L1 value. If fetch fails, use output sum for math verification and show "Anchor not found".
       const outpointStr =
         parsed.reconstruction_ingredients.parent_outpoint ??
         parsed.reconstruction_ingredients.anchor_outpoint;
@@ -173,15 +243,14 @@ function AppContent() {
         setPhase('fetch_failed');
         return;
       }
-      anchorValue = await fetchTxVoutValue(outpoint.txid, outpoint.voutIndex);
-      if (anchorValue === null) {
-        setVerificationError(
-          'Could not fetch L1 value from mempool.space. Switch to Test Mode or enter value below to continue.',
-        );
-        setPhase('fetch_failed');
-        return;
+      const fetchedAnchor = await fetchTxVoutValue(outpoint.txid, outpoint.voutIndex);
+      if (fetchedAnchor !== null) {
+        anchorValue = fetchedAnchor;
+        setL1Status('verified');
+      } else {
+        anchorValue = outputSum > 0 ? outputSum : 1100;
+        setL1Status('anchor_not_found');
       }
-      setL1Status('verified');
       setLastAuditInputValue(anchorValue);
       setLastAuditOutputSum(outputSum);
     }
@@ -198,7 +267,9 @@ function AppContent() {
   }, [isTestMode]);
 
   const isExportEnabled =
-    verifyResult?.status === 'Success' && phase === 'sovereign_complete';
+    verifyResult?.status === 'Success' &&
+    phase === 'sovereign_complete' &&
+    vtxoData.trim().length > 0;
 
   const handleExportToVpack = useCallback(() => {
     if (!isExportEnabled || !verifyResult || !vtxoData.trim()) return;
@@ -312,22 +383,52 @@ function AppContent() {
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6 mb-6">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".vpk"
+            onChange={handleFileSelected}
+            className="hidden"
+            aria-hidden
+          />
           {isTestMode && (
             <div className="space-y-4">
-              <VectorPillGroup
-                title="Ark Labs Group (Variant 0x04)"
-                vectors={ARK_LABS_VECTORS}
-                accentColor="blue"
-                selectedVectorId={selectedVectorId}
-                onSelectVector={handleVectorSelect}
-              />
-              <VectorPillGroup
-                title="Second Tech Group (Variant 0x03)"
-                vectors={SECOND_VECTORS}
-                accentColor="purple"
-                selectedVectorId={selectedVectorId}
-                onSelectVector={handleVectorSelect}
-              />
+              <div className="flex flex-wrap items-center gap-3">
+                <VectorPillGroup
+                  title="Ark Labs Group (Variant 0x04)"
+                  vectors={ARK_LABS_VECTORS}
+                  accentColor="blue"
+                  selectedVectorId={selectedVectorId}
+                  onSelectVector={handleVectorSelect}
+                />
+                <VectorPillGroup
+                  title="Second Tech Group (Variant 0x03)"
+                  vectors={SECOND_VECTORS}
+                  accentColor="purple"
+                  selectedVectorId={selectedVectorId}
+                  onSelectVector={handleVectorSelect}
+                />
+                <button
+                  type="button"
+                  onClick={handleImportVpack}
+                  disabled={engineStatus !== 'Ready'}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-gray-800 dark:text-gray-200 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Import V-PACK
+                </button>
+              </div>
+            </div>
+          )}
+          {!isTestMode && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleImportVpack}
+                disabled={engineStatus !== 'Ready'}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-gray-800 dark:text-gray-200 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Import V-PACK
+              </button>
             </div>
           )}
           <VTXOInput
@@ -336,10 +437,21 @@ function AppContent() {
             readOnly={isTestMode}
           />
 
-          <ExportToVpackButton
-            disabled={!isExportEnabled}
-            onExport={handleExportToVpack}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <ExportToVpackButton
+              disabled={!isExportEnabled}
+              onExport={handleExportToVpack}
+            />
+            {vtxoData.trim() && (
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Clear
+              </button>
+            )}
+          </div>
 
           {shouldShowResults && (
             <div className="space-y-4">
