@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- White Background Container -->
+  <rect width="64" height="64" rx="16" fill="#FFFFFF"/>
+  
+  <!-- Hexagon Lens -->
+  <path d="M26 13L40 21.08V37.25L26 45.33L12 37.25V21.08L26 13Z" 
+        stroke="#111827" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  
+  <!-- Handle -->
+  <path d="M42 39L54 51" 
+        stroke="#111827" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+</svg>
