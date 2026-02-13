@@ -32,6 +32,8 @@ struct PathDetail {
     has_signature: bool,
     has_fee_anchor: bool,
     exit_weight_vb: u32,
+    /// Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx).
+    tx_preimage_hex: String,
 }
 
 #[derive(Serialize)]
@@ -119,6 +121,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         has_signature: false,
         has_fee_anchor: false,
         exit_weight_vb: estimate_exit_weight_vb(anchor_outputs),
+        tx_preimage_hex: String::new(), // L1 tx; no virtual preimage
     });
     
     // Traverse path (similar to consensus engine compute_vtxo_id)
@@ -196,6 +199,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
             has_signature: genesis_item.signature.is_some(),
             has_fee_anchor,
             exit_weight_vb: exit_weight,
+            tx_preimage_hex: hex::encode(&preimage_bytes),
         });
         
         // Update for next iteration - determine which output index to use
@@ -258,6 +262,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         has_signature: false,
         has_fee_anchor: leaf_has_fee_anchor,
         exit_weight_vb: estimate_exit_weight_vb(leaf_outputs.len()),
+        tx_preimage_hex: hex::encode(&leaf_preimage),
     });
     
     Ok(path_details)

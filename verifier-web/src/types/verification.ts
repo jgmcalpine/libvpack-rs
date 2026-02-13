@@ -29,7 +29,8 @@ export interface VtxoInputJson {
 
 /**
  * Computes the sum of output values from reconstruction_ingredients (self-consistency audit).
- * Uses outputs[] when present; else child_output + siblings[] for branch-style; else top-level amount (e.g. Second Tech leaf).
+ * Uses outputs[] when present; else child_output + siblings[] for branch-style;
+ * else path[0] child_amount + siblings for Second Tech chain; else top-level amount (leaf).
  */
 export function computeOutputSumFromIngredients(
   ingredients: ReconstructionIngredients | undefined
@@ -44,6 +45,15 @@ export function computeOutputSumFromIngredients(
   const siblingsSum = siblings.reduce((s, n) => s + (n.value ?? 0), 0);
   const branchSum = child + siblingsSum;
   if (branchSum > 0) return branchSum;
+  const path = (ingredients as { path?: { child_amount?: number; siblings?: { value?: number }[] }[] }).path;
+  if (Array.isArray(path) && path.length > 0) {
+    const first = path[0];
+    const childAmount = first?.child_amount ?? 0;
+    const pathSiblings = first?.siblings ?? [];
+    const pathSiblingsSum = pathSiblings.reduce((s, n) => s + (n.value ?? 0), 0);
+    const pathSum = childAmount + pathSiblingsSum;
+    if (pathSum > 0) return pathSum;
+  }
   const amount = (ingredients as { amount?: number }).amount;
   return typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
 }
@@ -130,6 +140,8 @@ export interface PathDetail {
   has_signature: boolean;
   has_fee_anchor: boolean;
   exit_weight_vb: number; // Estimated vbytes for exit transaction
+  /** Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx). */
+  tx_preimage_hex?: string;
 }
 
 export interface VerifyResult {

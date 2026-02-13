@@ -1,5 +1,38 @@
-import { X, CheckCircle2, Shield, Scale } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { X, CheckCircle2, Shield, Scale, Copy } from 'lucide-react';
 import type { PathDetail } from '../types/verification';
+
+const rawHexClasses = {
+  container: 'pt-4 border-t border-gray-200 dark:border-gray-700',
+  label: 'text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2',
+  pre: 'font-mono text-xs text-gray-900 dark:text-gray-100 break-all bg-gray-100 dark:bg-gray-900 p-3 rounded-lg overflow-x-auto max-h-32 overflow-y-auto',
+  copyBtn:
+    'mt-2 flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors',
+};
+
+function RawHexSection({ hex }: { hex: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(hex);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }, [hex]);
+
+  return (
+    <div className={rawHexClasses.container}>
+      <h3 className={rawHexClasses.label}>Raw TX Preimage (Hex)</h3>
+      <pre className={rawHexClasses.pre}>{hex}</pre>
+      <button type="button" onClick={handleCopy} className={rawHexClasses.copyBtn}>
+        <Copy className="w-4 h-4" />
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
 
 interface NodeDetailModalProps {
   node: PathDetail;
@@ -86,6 +119,11 @@ function NodeDetailModal({ node, variant, onClose }: NodeDetailModalProps) {
               </p>
             </div>
           </div>
+
+          {/* Raw TX Preimage (Hex) */}
+          {node.tx_preimage_hex && node.tx_preimage_hex.length > 0 && (
+            <RawHexSection hex={node.tx_preimage_hex} />
+          )}
 
           {/* Amount and Vout */}
           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">

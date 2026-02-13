@@ -11,7 +11,8 @@ import ExportToVpackButton from './components/ExportToVpackButton';
 import VTXOInput from './components/VTXOInput';
 import VectorPillGroup from './components/VectorPillGroup';
 import ProgressiveVerificationBadge from './components/ProgressiveVerificationBadge';
-import SovereigntyMap from './components/SovereigntyMap';
+import SovereigntyPath from './components/SovereigntyPath';
+import PrivacyShieldBadge from './components/PrivacyShieldBadge';
 import MockDataBadge from './components/MockDataBadge';
 import { ARK_LABS_VECTORS, SECOND_VECTORS } from './constants/vectors';
 import type { VectorEntry } from './constants/vectors';
@@ -30,6 +31,7 @@ import {
   type VerifyResult,
   type VtxoInputJson,
 } from './types/verification';
+import { pathDetailsToTreeData } from './types/arkTree';
 
 type EngineStatus = 'Loading' | 'Ready' | 'Error';
 
@@ -528,6 +530,7 @@ function AppContent() {
                   </div>
                 </div>
               )}
+              <PrivacyShieldBadge />
             </div>
           )}
         </div>
@@ -546,13 +549,18 @@ function AppContent() {
                       .map((k) => (raw as Record<string, PathDetail>)[k])
                   : [];
               const hasPathDetails = pathDetailsArray.length > 0;
-              return hasPathDetails ? (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-                  <SovereigntyMap
-                    pathDetails={pathDetailsArray}
-                    anchorTxid={anchorTxid}
-                    finalVtxoId={verifyResult.reconstructed_tx_id}
+              const treeData = pathDetailsToTreeData(
+                pathDetailsArray,
+                anchorTxid,
+                verifyResult.reconstructed_tx_id
+              );
+              return hasPathDetails && treeData ? (
+                <div className="space-y-4">
+                  <SovereigntyPath
+                    treeData={treeData}
                     variant={verifyResult.variant}
+                    network={isTestMode ? 'Signet' : 'Mainnet'}
+                    blockHeight={isTestMode ? 850_000 : undefined}
                   />
                 </div>
               ) : (

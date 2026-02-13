@@ -103,7 +103,7 @@ fn anchor_value_for_vector(path: &Path, tx_variant: TxVariant) -> u64 {
         }
         TxVariant::V3Plain => {
             if name == "round_v3_borsh.json" {
-                10_000
+                15_000 // 5-step path: step 0 outputs 14000+1000+0
             } else {
                 10_000
             }
@@ -511,6 +511,122 @@ fn print_oor_forfeit_expected_id() {
     let bytes = create_vpack_ark_labs(ingredients).expect("pack");
     let id = vpack::compute_vtxo_id_from_bytes(&bytes).expect("compute id");
     println!("expected_vtxo_id for oor_forfeit_pset.json: {}", id);
+}
+
+/// One-off: run with `cargo test print_round_v3_borsh_5step_path -- --ignored --nocapture` to print
+/// 5-step path JSON and expected_vtxo_id for round_v3_borsh (Slender Vine / Sturdy Oak testing).
+#[test]
+#[ignore = "one-off; run manually to update round_v3_borsh.json"]
+fn print_round_v3_borsh_5step_path() {
+    use vpack::consensus::hash_sibling_birth_tx;
+    use vpack::consensus::SecondTechV3;
+    use vpack::payload::tree::{GenesisItem, SiblingNode, VtxoLeaf};
+
+    let fee_anchor_script = hex::decode("51024e73").expect("fee hex");
+    let fee_anchor_script_clone = fee_anchor_script.clone();
+    let leaf_script = hex::decode("5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8")
+        .expect("leaf script");
+    let anchor = vpack::types::OutPoint {
+        txid: vpack::types::Txid::all_zeros(),
+        vout: 0,
+    };
+
+    // Sibling scripts from round_branch (P2TR-like)
+    let sibling_script = hex::decode("5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3")
+        .expect("sibling script");
+
+    // Each step: output sum must equal input. Step 0 input=anchor. Step i+1 input = step i child.
+    // Leaf amount 10000. Work backwards: step 4 child=10000 (leaf input). Step 4 out = 10000+1000+0=11000.
+    // Step 3 child=11000. Step 3 out=12000. Step 2 child=12000. Step 2 out=13000. Step 1 child=13000. Step 1 out=14000. Step 0 child=14000. Anchor=15000.
+    let child_amounts = [14000u64, 13000, 12000, 11000, 10000];
+    let mut path_items = Vec::new();
+    for i in 0..5 {
+        let child_amount = child_amounts[i];
+        // Only user sibling; fee anchor is added by adapter/export
+        let step_siblings = vec![SiblingNode::Compact {
+            hash: hash_sibling_birth_tx(1000, &sibling_script),
+            value: 1000,
+            script: sibling_script.clone(),
+        }];
+        path_items.push(GenesisItem {
+            siblings: step_siblings,
+            parent_index: 0, // child at output 0; next step spends it
+            sequence: 0,
+            child_amount,
+            child_script_pubkey: leaf_script.clone(),
+            signature: None,
+        });
+    }
+
+    let tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: 10000,
+            vout: 0,
+            sequence: 0,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: leaf_script,
+        },
+        leaf_siblings: vec![SiblingNode::Compact {
+            hash: hash_sibling_birth_tx(0, &fee_anchor_script),
+            value: 0,
+            script: fee_anchor_script.clone(),
+        }],
+        path: path_items,
+        anchor,
+        asset_id: None,
+        fee_anchor_script,
+    };
+
+    // Path for JSON: only user siblings (adapter adds fee anchor). second_path_from_tree includes fee anchor.
+    let path_json = {
+        let path_no_fee: Vec<serde_json::Value> = tree
+            .path
+            .iter()
+            .map(|item| {
+                let siblings: Vec<serde_json::Value> = item
+                    .siblings
+                    .iter()
+                    .filter(|s| match s {
+                        SiblingNode::Compact { script, .. } => script != &fee_anchor_script_clone,
+                        SiblingNode::Full(_) => true,
+                    })
+                    .filter_map(|s| {
+                        let (hash_hex, value, script_hex) = match s {
+                            SiblingNode::Compact { hash, value, script } => (
+                                hash.iter()
+                                    .rev()
+                                    .map(|b| format!("{:02x}", b))
+                                    .collect::<String>(),
+                                *value,
+                                hex::encode(script),
+                            ),
+                            SiblingNode::Full(_) => return None,
+                        };
+                        Some(serde_json::json!({
+                            "hash": hash_hex,
+                            "value": value,
+                            "script": script_hex
+                        }))
+                    })
+                    .collect();
+                serde_json::json!({
+                    "siblings": siblings,
+                    "parent_index": item.parent_index,
+                    "sequence": item.sequence,
+                    "child_amount": item.child_amount,
+                    "child_script_pubkey": hex::encode(&item.child_script_pubkey),
+                })
+            })
+            .collect();
+        serde_json::Value::Array(path_no_fee)
+    };
+    let engine = SecondTechV3;
+    // Anchor value = sum of outputs at step 0: child_amount 14000 + sibling 1000 + fee 0
+    let anchor_value = 15000u64;
+    let expected_id = engine.compute_vtxo_id(&tree, Some(anchor_value)).expect("compute");
+    println!("PATH_JSON: {}", path_json);
+    println!("EXPECTED_VTXO_ID: {}", expected_id);
 }
 
 /// One-off: run with `cargo test export_second_path_ingredients -- --ignored --nocapture` to print path JSON for round/oor.
