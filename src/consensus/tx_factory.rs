@@ -88,6 +88,101 @@ pub fn tx_preimage(
     out
 }
 
+// -----------------------------------------------------------------------------
+// SegWit signed transaction serialization (BIP-141)
+// -----------------------------------------------------------------------------
+
+/// Builds the full SegWit wire-format signed transaction bytes.
+/// Layout: nVersion | Marker (0x00) | Flag (0x01) | vin | vout | witness | nLockTime.
+/// Requires `signatures.len() == inputs.len()`; each input gets one witness stack (empty if None).
+pub fn tx_signed_hex(
+    version: u32,
+    inputs: &[TxInPreimage],
+    outputs: &[TxOutPreimage<'_>],
+    signatures: &[Option<[u8; 64]>],
+    locktime: u32,
+) -> Vec<u8> {
+    assert_eq!(
+        signatures.len(),
+        inputs.len(),
+        "signatures.len() must equal inputs.len()"
+    );
+    let cap = estimate_signed_capacity(inputs, outputs, signatures);
+    let mut out = Vec::with_capacity(cap);
+
+    // nVersion (4 bytes LE)
+    let mut ver_buf = [0u8; 4];
+    LittleEndian::write_u32(&mut ver_buf, version);
+    out.extend_from_slice(&ver_buf);
+
+    // Marker + Flag
+    out.push(0x00);
+    out.push(0x01);
+
+    // vin count
+    write_compact_size(&mut out, inputs.len() as u64);
+
+    // vin details (same as preimage)
+    for inp in inputs {
+        out.extend_from_slice(&inp.prev_out_txid);
+        let mut vout_buf = [0u8; 4];
+        LittleEndian::write_u32(&mut vout_buf, inp.prev_out_vout);
+        out.extend_from_slice(&vout_buf);
+        write_compact_size(&mut out, 0);
+        let mut seq_buf = [0u8; 4];
+        LittleEndian::write_u32(&mut seq_buf, inp.sequence);
+        out.extend_from_slice(&seq_buf);
+    }
+
+    // vout count
+    write_compact_size(&mut out, outputs.len() as u64);
+
+    // vout details (same as preimage)
+    for out_pre in outputs {
+        let mut val_buf = [0u8; 8];
+        LittleEndian::write_u64(&mut val_buf, out_pre.value);
+        out.extend_from_slice(&val_buf);
+        write_compact_size(&mut out, out_pre.script_pubkey.len() as u64);
+        out.extend_from_slice(out_pre.script_pubkey);
+    }
+
+    // Witness stack: per input, VarInt item count; for each item, VarInt length + bytes
+    for sig in signatures {
+        match sig {
+            None => write_compact_size(&mut out, 0),
+            Some(s) => {
+                write_compact_size(&mut out, 1);
+                write_compact_size(&mut out, 64);
+                out.extend_from_slice(s);
+            }
+        }
+    }
+
+    // nLockTime (4 bytes LE)
+    let mut lt_buf = [0u8; 4];
+    LittleEndian::write_u32(&mut lt_buf, locktime);
+    out.extend_from_slice(&lt_buf);
+
+    out
+}
+
+fn estimate_signed_capacity(
+    inputs: &[TxInPreimage],
+    outputs: &[TxOutPreimage<'_>],
+    signatures: &[Option<[u8; 64]>],
+) -> usize {
+    let base = estimate_capacity(inputs, outputs);
+    // Preimage has no marker/flag; signed adds 2 bytes.
+    let mut cap = base + 2;
+    for sig in signatures {
+        cap += 1; // witness item count
+        if sig.is_some() {
+            cap += 1 + 64; // length VarInt + 64 bytes
+        }
+    }
+    cap
+}
+
 fn estimate_capacity(inputs: &[TxInPreimage], outputs: &[TxOutPreimage<'_>]) -> usize {
     let mut cap = 4 + 1 + (inputs.len() * (32 + 4 + 1 + 4)) + 1;
     for o in outputs {
@@ -120,7 +215,7 @@ mod tests {
 
     use crate::types::hashes::Hash;
 
-    use super::{tx_preimage, TxInPreimage, TxOutPreimage};
+    use super::{tx_preimage, tx_signed_hex, TxInPreimage, TxOutPreimage};
     use crate::consensus::VtxoId;
 
     /// Fee anchor script hex from reconstruction_ingredients.
@@ -169,6 +264,73 @@ mod tests {
         assert_eq!(
             result, expected,
             "factory output must match unsigned_tx_hex byte-for-byte"
+        );
+    }
+
+    #[test]
+    fn test_factory_signed_v3_parity() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("tests/conformance/vectors/ark_labs/oor_forfeit_pset.json");
+        let contents = std::fs::read_to_string(&path).expect("read oor_forfeit_pset.json");
+        let json: serde_json::Value = serde_json::from_str(&contents).expect("parse JSON");
+        let unsigned_tx_hex = json["raw_evidence"]["unsigned_tx_hex"]
+            .as_str()
+            .expect("unsigned_tx_hex present");
+        let anchor_str = json["reconstruction_ingredients"]["parent_outpoint"]
+            .as_str()
+            .expect("parent_outpoint present");
+
+        let preimage = hex::decode(unsigned_tx_hex).expect("decode unsigned_tx_hex");
+        let id = VtxoId::from_str(anchor_str).expect("parse anchor");
+        let (prev_out_txid, prev_out_vout) = match id {
+            VtxoId::OutPoint(op) => (op.txid.to_byte_array(), op.vout),
+            VtxoId::Raw(_) => panic!("expected OutPoint for anchor"),
+        };
+
+        let input = TxInPreimage {
+            prev_out_txid,
+            prev_out_vout,
+            sequence: 0xFFFFFFFE,
+        };
+
+        let first_output_script = extract_first_output_script(&preimage);
+        let fee_anchor_script =
+            hex::decode(FEE_ANCHOR_SCRIPT_HEX).expect("decode fee_anchor_script");
+
+        let out1 = TxOutPreimage {
+            value: 1000,
+            script_pubkey: first_output_script.as_slice(),
+        };
+        let out2 = TxOutPreimage {
+            value: 0,
+            script_pubkey: fee_anchor_script.as_slice(),
+        };
+
+        let dummy_sig = [0u8; 64];
+        let result =
+            tx_signed_hex(3, &[input], &[out1, out2], &[Some(dummy_sig)], 0);
+
+        assert!(
+            result.starts_with(&[0x03, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            "output must start with version 3 LE + marker + flag (030000000001)"
+        );
+        assert!(
+            result.ends_with(&[0u8; 4]),
+            "output must end with locktime 00000000"
+        );
+        let sig_start = result.len() - 4 - 64;
+        assert_eq!(
+            &result[sig_start..sig_start + 64],
+            &dummy_sig[..],
+            "last 68 bytes must be 64-byte signature + 4-byte locktime"
+        );
+
+        let witness_len = 66; // 1 (item count) + 1 (length) + 64 (sig)
+        let expected_len = preimage.len() + 2 + witness_len;
+        assert_eq!(
+            result.len(),
+            expected_len,
+            "total length must equal preimage + 2 (marker/flag) + witness"
         );
     }
 

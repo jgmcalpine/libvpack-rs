@@ -20,7 +20,7 @@ pub mod taproot_sighash;
 
 pub use ark_labs::ArkLabsV3;
 pub use second_tech::SecondTechV3;
-pub use tx_factory::{tx_preimage, TxInPreimage, TxOutPreimage};
+pub use tx_factory::{tx_preimage, tx_signed_hex, TxInPreimage, TxOutPreimage};
 
 // -----------------------------------------------------------------------------
 // VtxoId
