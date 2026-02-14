@@ -371,11 +371,8 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
             &output.signed_txs,
         )
         .map_err(|e| e)?;
-        let signed_txs_hex: Vec<String> = output
-            .signed_txs
-            .iter()
-            .map(|b| hex::encode(b))
-            .collect();
+        let signed_txs_hex: Vec<String> =
+            output.signed_txs.iter().map(|b| hex::encode(b)).collect();
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x04".to_string(),
             status: "Success".to_string(),
@@ -399,11 +396,8 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         let path_details =
             extract_path_details(&tree, anchor_value, TxVariant::V3Plain, &output.signed_txs)
                 .map_err(|e| e)?;
-        let signed_txs_hex: Vec<String> = output
-            .signed_txs
-            .iter()
-            .map(|b| hex::encode(b))
-            .collect();
+        let signed_txs_hex: Vec<String> =
+            output.signed_txs.iter().map(|b| hex::encode(b)).collect();
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x03".to_string(),
             status: "Success".to_string(),
@@ -444,11 +438,7 @@ pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
         return Ok(serde_wasm_bindgen::to_value(&WasmComputeVtxoIdResult {
             variant: "0x04".to_string(),
             reconstructed_tx_id: output.id.to_string(),
-            signed_txs: output
-                .signed_txs
-                .iter()
-                .map(|b| hex::encode(b))
-                .collect(),
+            signed_txs: output.signed_txs.iter().map(|b| hex::encode(b)).collect(),
         })?);
     }
 
@@ -459,11 +449,7 @@ pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
         return Ok(serde_wasm_bindgen::to_value(&WasmComputeVtxoIdResult {
             variant: "0x03".to_string(),
             reconstructed_tx_id: output.id.to_string(),
-            signed_txs: output
-                .signed_txs
-                .iter()
-                .map(|b| hex::encode(b))
-                .collect(),
+            signed_txs: output.signed_txs.iter().map(|b| hex::encode(b)).collect(),
         })?);
     }
 
@@ -810,11 +796,7 @@ pub fn wasm_verify_binary(
     let path_details =
         extract_path_details(&tree, anchor_val, header.tx_variant, &output.signed_txs)?;
 
-    let signed_txs_hex: Vec<String> = output
-        .signed_txs
-        .iter()
-        .map(|b| hex::encode(b))
-        .collect();
+    let signed_txs_hex: Vec<String> = output.signed_txs.iter().map(|b| hex::encode(b)).collect();
     Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
         variant: variant_str.to_string(),
         status: "Success".to_string(),

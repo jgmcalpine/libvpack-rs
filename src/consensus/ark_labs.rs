@@ -150,9 +150,7 @@ impl ConsensusEngine for ArkLabsV3 {
         if tree.leaf.script_pubkey.is_empty() {
             // Return the Raw hash from the last transaction (no leaf tx in signed_txs)
             Ok(VerificationOutput {
-                id: VtxoId::Raw(
-                    last_txid_bytes.expect("path should have at least one item"),
-                ),
+                id: VtxoId::Raw(last_txid_bytes.expect("path should have at least one item")),
                 signed_txs,
             })
         } else {
@@ -355,7 +353,9 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let output = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
         let computed_id = output.id;
 
         assert_eq!(
@@ -570,7 +570,9 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let output = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
         let computed_id = output.id;
 
         assert_eq!(
@@ -696,7 +698,9 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let output = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
         let computed_id = output.id;
 
         // Verify it's a Raw hash (Ark Labs format)

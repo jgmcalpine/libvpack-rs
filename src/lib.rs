@@ -90,16 +90,12 @@ pub fn compute_vtxo_id_from_bytes(vpack_bytes: &[u8]) -> Result<VtxoId, VPackErr
     header.verify_checksum(&vpack_bytes[HEADER_SIZE..])?;
     let tree = BoundedReader::parse(&header, &vpack_bytes[HEADER_SIZE..])?;
     match header.tx_variant {
-        crate::header::TxVariant::V3Anchored => {
-            crate::consensus::ArkLabsV3
-                .compute_vtxo_id(&tree, None)
-                .map(|o| o.id)
-        }
-        crate::header::TxVariant::V3Plain => {
-            crate::consensus::SecondTechV3
-                .compute_vtxo_id(&tree, None)
-                .map(|o| o.id)
-        }
+        crate::header::TxVariant::V3Anchored => crate::consensus::ArkLabsV3
+            .compute_vtxo_id(&tree, None)
+            .map(|o| o.id),
+        crate::header::TxVariant::V3Plain => crate::consensus::SecondTechV3
+            .compute_vtxo_id(&tree, None)
+            .map(|o| o.id),
     }
 }
 

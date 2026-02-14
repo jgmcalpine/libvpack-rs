@@ -315,8 +315,7 @@ mod tests {
         };
 
         let dummy_sig = [0u8; 64];
-        let result =
-            tx_signed_hex(3, &[input], &[out1, out2], &[Some(dummy_sig)], 0);
+        let result = tx_signed_hex(3, &[input], &[out1, out2], &[Some(dummy_sig)], 0);
 
         assert!(
             result.starts_with(&[0x03, 0x00, 0x00, 0x00, 0x00, 0x01]),
@@ -359,7 +358,11 @@ mod tests {
         let result = tx_signed_hex(3, &[input.clone()], &outputs, &[None], 0);
 
         // Legacy format: version(4) + vin_count(1) + ... — no 0x00 0x01 after version.
-        assert_eq!(result[0..4], [0x03, 0x00, 0x00, 0x00], "version must be 3 LE");
+        assert_eq!(
+            result[0..4],
+            [0x03, 0x00, 0x00, 0x00],
+            "version must be 3 LE"
+        );
         assert_ne!(
             result[4..6],
             [0x00, 0x01],

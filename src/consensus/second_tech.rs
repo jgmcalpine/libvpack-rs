@@ -138,9 +138,7 @@ impl ConsensusEngine for SecondTechV3 {
         // If leaf has empty script_pubkey, return the ID from the last path transaction
         if tree.leaf.script_pubkey.is_empty() {
             Ok(VerificationOutput {
-                id: VtxoId::OutPoint(
-                    last_outpoint.expect("path should have at least one item"),
-                ),
+                id: VtxoId::OutPoint(last_outpoint.expect("path should have at least one item")),
                 signed_txs,
             })
         } else {
@@ -413,7 +411,9 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let output = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
         let computed_id = output.id;
 
         let expected_str = j["expected_vtxo_id"].as_str().expect("expected_vtxo_id");
@@ -680,7 +680,9 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let output = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
         let computed_id = output.id;
 
         // Assert signed_txs length: 5 path steps + 1 leaf = 6
