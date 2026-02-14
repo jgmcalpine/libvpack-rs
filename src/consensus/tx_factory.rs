@@ -95,7 +95,7 @@ pub fn tx_preimage(
 /// Builds the full transaction bytes in valid Bitcoin wire format.
 /// - **Case A (any signature present):** SegWit format: nVersion | Marker (0x00) | Flag (0x01) | vin | vout | witness | nLockTime.
 /// - **Case B (all None):** Legacy format: nVersion | vin | vout | nLockTime (no marker/flag; decodable by standard tools).
-/// Requires `signatures.len() == inputs.len()`; each input gets one witness stack (empty if None).
+///   Requires `signatures.len() == inputs.len()`; each input gets one witness stack (empty if None).
 pub fn tx_signed_hex(
     version: u32,
     inputs: &[TxInPreimage],
@@ -355,7 +355,7 @@ mod tests {
             value: 1000,
             script_pubkey: script.as_slice(),
         }];
-        let result = tx_signed_hex(3, &[input.clone()], &outputs, &[None], 0);
+        let result = tx_signed_hex(3, core::slice::from_ref(&input), &outputs, &[None], 0);
 
         // Legacy format: version(4) + vin_count(1) + ... — no 0x00 0x01 after version.
         assert_eq!(

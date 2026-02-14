@@ -128,7 +128,7 @@ impl ConsensusEngine for ArkLabsV3 {
             }
 
             let sig = [genesis_item.signature];
-            let signed_hex = tx_signed_hex(3, &[input.clone()], &outputs, &sig, 0);
+            let signed_hex = tx_signed_hex(3, core::slice::from_ref(&input), &outputs, &sig, 0);
             signed_txs.push(signed_hex);
 
             // Hash transaction → Raw Hash
@@ -235,7 +235,7 @@ impl ArkLabsV3 {
         };
 
         // Signed hex: leaf has no signature in schema, use empty witness
-        let signed_hex = tx_signed_hex(3, &[input.clone()], &outputs, &[None], 0);
+        let signed_hex = tx_signed_hex(3, core::slice::from_ref(&input), &outputs, &[None], 0);
 
         // Hash the node: Version 3, Locktime 0 (TxID from unsigned preimage)
         let id = Self::hash_node(3, &[input], &outputs, 0)?;
