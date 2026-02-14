@@ -4,11 +4,15 @@
 //! with arity-aware outputs (user output + siblings + fee anchor) and computing
 //! its Double-SHA256 hash.
 
+use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::types::{hashes::sha256d, hashes::Hash, OutPoint, Txid};
 
-use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
+use crate::consensus::{
+    tx_preimage, tx_signed_hex, ConsensusEngine, TxInPreimage, TxOutPreimage, VerificationOutput,
+    VtxoId,
+};
 use crate::error::VPackError;
 use crate::payload::tree::{SiblingNode, VPackTree};
 
@@ -30,7 +34,7 @@ impl ConsensusEngine for ArkLabsV3 {
         &self,
         tree: &VPackTree,
         anchor_value: Option<u64>,
-    ) -> Result<VtxoId, VPackError> {
+    ) -> Result<VerificationOutput, VPackError> {
         // If path is empty, this is a leaf node
         if tree.path.is_empty() {
             // Optional validation: V3-Anchored leaf must have anchor in data (leaf_siblings)
@@ -46,6 +50,7 @@ impl ConsensusEngine for ArkLabsV3 {
         let mut prev_output_values: Option<Vec<u64>> = None;
         let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
         let mut input_amount: Option<u64> = anchor_value;
+        let mut signed_txs = Vec::with_capacity(tree.path.len() + 1);
 
         // Iterate through path (top-down from root to leaf). Outputs = child (if present) + siblings only.
         for (i, genesis_item) in tree.path.iter().enumerate() {
@@ -122,6 +127,10 @@ impl ConsensusEngine for ArkLabsV3 {
                 }
             }
 
+            let sig = [genesis_item.signature];
+            let signed_hex = tx_signed_hex(3, &[input.clone()], &outputs, &sig, 0);
+            signed_txs.push(signed_hex);
+
             // Hash transaction → Raw Hash
             let txid_bytes = Self::hash_node_bytes(3, &[input], &outputs, 0)?;
             let txid = Txid::from_byte_array(txid_bytes);
@@ -139,12 +148,18 @@ impl ConsensusEngine for ArkLabsV3 {
         // Final step: Build leaf transaction spending current_prevout (if leaf is valid)
         // If leaf has empty script_pubkey, return the ID from the last path transaction
         if tree.leaf.script_pubkey.is_empty() {
-            // Return the Raw hash from the last transaction
-            Ok(VtxoId::Raw(
-                last_txid_bytes.expect("path should have at least one item"),
-            ))
+            // Return the Raw hash from the last transaction (no leaf tx in signed_txs)
+            Ok(VerificationOutput {
+                id: VtxoId::Raw(
+                    last_txid_bytes.expect("path should have at least one item"),
+                ),
+                signed_txs,
+            })
         } else {
-            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)
+            let (id, leaf_signed_hex) =
+                self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)?;
+            signed_txs.push(leaf_signed_hex);
+            Ok(VerificationOutput { id, signed_txs })
         }
     }
 }
@@ -155,38 +170,52 @@ impl ArkLabsV3 {
         &self,
         tree: &VPackTree,
         anchor_value: Option<u64>,
-    ) -> Result<VtxoId, VPackError> {
-        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor, anchor_value)
+    ) -> Result<VerificationOutput, VPackError> {
+        let (id, signed_hex) =
+            self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor, anchor_value)?;
+        Ok(VerificationOutput {
+            id,
+            signed_txs: vec![signed_hex],
+        })
     }
 
     /// Compute VTXO ID for a leaf node with a custom prevout.
     /// Used for the final leaf transaction in recursive path traversal.
+    /// Returns (VtxoId, signed_tx_bytes). Leaf output is placed at index leaf.vout per V-PACK data.
     fn compute_leaf_vtxo_id_with_prevout(
         &self,
         tree: &VPackTree,
         prevout: OutPoint,
         input_amount: Option<u64>,
-    ) -> Result<VtxoId, VPackError> {
+    ) -> Result<(VtxoId, Vec<u8>), VPackError> {
         let num_outputs = 1 + tree.leaf_siblings.len();
         if tree.leaf.vout >= num_outputs as u32 {
             return Err(VPackError::InvalidVout(tree.leaf.vout));
         }
-        // Build outputs from data only: [leaf output] + leaf_siblings (adapter provides fee anchor when required)
+        // Build outputs: leaf at index leaf.vout, siblings at other indices (matches reconstruct_link logic)
         let mut outputs = Vec::with_capacity(num_outputs);
-        outputs.push(TxOutPreimage {
-            value: tree.leaf.amount,
-            script_pubkey: tree.leaf.script_pubkey.as_slice(),
-        });
-        for sibling in &tree.leaf_siblings {
-            match sibling {
-                SiblingNode::Compact { value, script, .. } => {
-                    outputs.push(TxOutPreimage {
-                        value: *value,
-                        script_pubkey: script.as_slice(),
-                    });
+        let mut sibling_iter = tree.leaf_siblings.iter();
+        for i in 0..num_outputs {
+            if i == tree.leaf.vout as usize {
+                outputs.push(TxOutPreimage {
+                    value: tree.leaf.amount,
+                    script_pubkey: tree.leaf.script_pubkey.as_slice(),
+                });
+            } else {
+                let sibling = sibling_iter.next().ok_or(VPackError::EncodingError)?;
+                match sibling {
+                    SiblingNode::Compact { value, script, .. } => {
+                        outputs.push(TxOutPreimage {
+                            value: *value,
+                            script_pubkey: script.as_slice(),
+                        });
+                    }
+                    SiblingNode::Full(_) => return Err(VPackError::EncodingError),
                 }
-                SiblingNode::Full(_) => return Err(VPackError::EncodingError),
             }
+        }
+        if sibling_iter.next().is_some() {
+            return Err(VPackError::EncodingError);
         }
 
         if let Some(expected) = input_amount {
@@ -207,8 +236,12 @@ impl ArkLabsV3 {
             sequence: tree.leaf.sequence,
         };
 
-        // Hash the node: Version 3, Locktime 0
-        Self::hash_node(3, &[input], &outputs, 0)
+        // Signed hex: leaf has no signature in schema, use empty witness
+        let signed_hex = tx_signed_hex(3, &[input.clone()], &outputs, &[None], 0);
+
+        // Hash the node: Version 3, Locktime 0 (TxID from unsigned preimage)
+        let id = Self::hash_node(3, &[input], &outputs, 0)?;
+        Ok((id, signed_hex))
     }
 
     /// Helper function to hash a transaction node.
@@ -322,9 +355,8 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine
-            .compute_vtxo_id(&tree, None)
-            .expect("compute VTXO ID");
+        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = output.id;
 
         assert_eq!(
             computed_id, expected_vtxo_id,
@@ -440,7 +472,8 @@ mod tests {
         let engine = ArkLabsV3;
         let expected_id = engine
             .compute_vtxo_id(&tree, Some(anchor_value))
-            .expect("good tree");
+            .expect("good tree")
+            .id;
         let result = engine.verify(&tree_sabotaged, &expected_id, anchor_value);
         assert!(
             matches!(result, Err(VPackError::IdMismatch)),
@@ -537,9 +570,8 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine
-            .compute_vtxo_id(&tree, None)
-            .expect("compute VTXO ID");
+        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = output.id;
 
         assert_eq!(
             computed_id, expected_vtxo_id,
@@ -664,9 +696,8 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine
-            .compute_vtxo_id(&tree, None)
-            .expect("compute VTXO ID");
+        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = output.id;
 
         // Verify it's a Raw hash (Ark Labs format)
         match computed_id {

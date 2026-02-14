@@ -351,7 +351,8 @@ fn test_sabotage_invalid_signature() {
 
     let expected_id = SecondTechV3
         .compute_vtxo_id(&tree_no_sig, None)
-        .expect("compute VTXO ID without signature");
+        .expect("compute VTXO ID without signature")
+        .id;
 
     let mut tampered_sig = [0u8; 64];
     tampered_sig[63] = 0xff;

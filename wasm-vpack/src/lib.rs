@@ -332,7 +332,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         verify(&bytes, &expected_id, anchor_value)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         let engine = ArkLabsV3;
-        let reconstructed = engine
+        let output = engine
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         let path_details =
@@ -340,7 +340,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x04".to_string(),
             status: "Success".to_string(),
-            reconstructed_tx_id: reconstructed.to_string(),
+            reconstructed_tx_id: output.id.to_string(),
             path_details,
         })?);
     }
@@ -353,7 +353,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         verify(&bytes, &expected_id, anchor_value)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         let engine = SecondTechV3;
-        let reconstructed = engine
+        let output = engine
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         let path_details =
@@ -361,7 +361,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x03".to_string(),
             status: "Success".to_string(),
-            reconstructed_tx_id: reconstructed.to_string(),
+            reconstructed_tx_id: output.id.to_string(),
             path_details,
         })?);
     }
@@ -375,6 +375,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
 struct WasmComputeVtxoIdResult {
     variant: String,
     reconstructed_tx_id: String,
+    signed_txs: Vec<String>,
 }
 
 /// Computes the VTXO ID from reconstruction_ingredients only (no anchor_value).
@@ -390,22 +391,32 @@ pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
         .ok_or_else(|| JsValue::from_str("missing reconstruction_ingredients"))?;
 
     if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
-        let reconstructed = ArkLabsV3
+        let output = ArkLabsV3
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         return Ok(serde_wasm_bindgen::to_value(&WasmComputeVtxoIdResult {
             variant: "0x04".to_string(),
-            reconstructed_tx_id: reconstructed.to_string(),
+            reconstructed_tx_id: output.id.to_string(),
+            signed_txs: output
+                .signed_txs
+                .iter()
+                .map(|b| hex::encode(b))
+                .collect(),
         })?);
     }
 
     if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
-        let reconstructed = SecondTechV3
+        let output = SecondTechV3
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         return Ok(serde_wasm_bindgen::to_value(&WasmComputeVtxoIdResult {
             variant: "0x03".to_string(),
-            reconstructed_tx_id: reconstructed.to_string(),
+            reconstructed_tx_id: output.id.to_string(),
+            signed_txs: output
+                .signed_txs
+                .iter()
+                .map(|b| hex::encode(b))
+                .collect(),
         })?);
     }
 
@@ -542,7 +553,7 @@ pub fn wasm_unpack_to_json(vpack_bytes: Vec<u8>) -> Result<String, JsValue> {
 
     validate_invariants(&header, &tree).map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
-    let expected_id = match header.tx_variant {
+    let output = match header.tx_variant {
         TxVariant::V3Anchored => ArkLabsV3
             .compute_vtxo_id(&tree, None)
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?,
@@ -550,6 +561,7 @@ pub fn wasm_unpack_to_json(vpack_bytes: Vec<u8>) -> Result<String, JsValue> {
             .compute_vtxo_id(&tree, None)
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?,
     };
+    let expected_id = output.id;
 
     let fee_hex = hex::encode(&tree.fee_anchor_script);
 
@@ -729,7 +741,7 @@ pub fn wasm_verify_binary(
 
     validate_invariants(&header, &tree).map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
-    let expected_id = match header.tx_variant {
+    let output = match header.tx_variant {
         TxVariant::V3Anchored => ArkLabsV3
             .compute_vtxo_id(&tree, None)
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?,
@@ -737,6 +749,7 @@ pub fn wasm_verify_binary(
             .compute_vtxo_id(&tree, None)
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?,
     };
+    let expected_id = output.id;
 
     let anchor_val = anchor_value.unwrap_or_else(|| tree_output_sum(&tree));
 

@@ -334,6 +334,40 @@ mod tests {
         );
     }
 
+    /// Verification gate: empty witness (None) must emit exactly 0x00 (CompactSize for 0 items).
+    /// Bitcoin nodes expect a witness stack for every input in a SegWit transaction, even if empty.
+    #[test]
+    fn test_factory_empty_witness_emits_0x00() {
+        let input = TxInPreimage {
+            prev_out_txid: [0u8; 32],
+            prev_out_vout: 0,
+            sequence: 0,
+        };
+        let output = TxOutPreimage {
+            value: 1000,
+            script_pubkey: &[0x51], // OP_1
+        };
+        let result = tx_signed_hex(3, &[input], &[output], &[None], 0);
+
+        assert!(
+            result.starts_with(&[0x03, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            "output must start with V3-Segwit pattern"
+        );
+
+        // Witness section: for 1 input with None, we write CompactSize(0) = 0x00
+        // Structure: version(4) + marker(1) + flag(1) + vin(1+41) + vout(1+8+1+1) + witness(1) + locktime(4)
+        // Witness is 1 byte (0x00) for empty stack. Last 5 bytes = witness(0x00) + locktime(0).
+        assert!(
+            result.len() >= 5,
+            "signed tx must have at least 5 bytes"
+        );
+        assert_eq!(
+            result[result.len() - 5],
+            0x00,
+            "empty witness must serialize as single 0x00 byte (CompactSize for 0 items)"
+        );
+    }
+
     /// Parses the preimage buffer to return the first output's scriptPubKey bytes.
     fn extract_first_output_script(preimage: &[u8]) -> alloc::vec::Vec<u8> {
         let mut i = 0usize;

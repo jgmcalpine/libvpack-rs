@@ -3,6 +3,7 @@
 //! Accommodates **Transaction-Native** (Ark Labs: raw 32-byte hash) and
 //! **Object-Native** (Second Tech: OutPoint Hash:Index) identity philosophies.
 
+use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
 
@@ -132,6 +133,19 @@ pub fn hash_sibling_birth_tx(value: u64, script: &[u8]) -> [u8; 32] {
 }
 
 // -----------------------------------------------------------------------------
+// VerificationOutput
+// -----------------------------------------------------------------------------
+
+/// Result of consensus verification: the VTXO ID and the signed transaction hexes (path witnesses).
+#[derive(Debug, Clone)]
+pub struct VerificationOutput {
+    /// The computed VTXO ID.
+    pub id: VtxoId,
+    /// Signed transaction hexes ("Live Bullets") — anchor-spend first, leaf-spend last.
+    pub signed_txs: Vec<Vec<u8>>,
+}
+
+// -----------------------------------------------------------------------------
 // ConsensusEngine
 // -----------------------------------------------------------------------------
 
@@ -143,7 +157,7 @@ pub trait ConsensusEngine {
         &self,
         tree: &VPackTree,
         anchor_value: Option<u64>,
-    ) -> Result<VtxoId, VPackError>;
+    ) -> Result<VerificationOutput, VPackError>;
 
     /// Verify that the tree yields the expected VTXO ID with conservation of value.
     fn verify(
@@ -153,7 +167,7 @@ pub trait ConsensusEngine {
         anchor_value: u64,
     ) -> Result<(), VPackError> {
         let computed = self.compute_vtxo_id(tree, Some(anchor_value))?;
-        if computed == *expected {
+        if computed.id == *expected {
             Ok(())
         } else {
             Err(VPackError::IdMismatch)

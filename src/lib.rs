@@ -24,7 +24,7 @@ pub mod ingredients;
 #[cfg(any(feature = "adapter", feature = "wasm"))]
 pub use ingredients::{tree_from_ingredients, ArkLabsAdapter, LogicAdapter, SecondTechAdapter};
 
-pub use consensus::{ArkLabsV3, ConsensusEngine, SecondTechV3, VtxoId};
+pub use consensus::{ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput, VtxoId};
 pub use export::{
     create_vpack_ark_labs, create_vpack_from_tree, create_vpack_second_tech, ArkLabsIngredients,
     ArkLabsOutput, ArkLabsSibling, SecondTechGenesisStep, SecondTechIngredients, SecondTechSibling,
@@ -91,10 +91,14 @@ pub fn compute_vtxo_id_from_bytes(vpack_bytes: &[u8]) -> Result<VtxoId, VPackErr
     let tree = BoundedReader::parse(&header, &vpack_bytes[HEADER_SIZE..])?;
     match header.tx_variant {
         crate::header::TxVariant::V3Anchored => {
-            crate::consensus::ArkLabsV3.compute_vtxo_id(&tree, None)
+            crate::consensus::ArkLabsV3
+                .compute_vtxo_id(&tree, None)
+                .map(|o| o.id)
         }
         crate::header::TxVariant::V3Plain => {
-            crate::consensus::SecondTechV3.compute_vtxo_id(&tree, None)
+            crate::consensus::SecondTechV3
+                .compute_vtxo_id(&tree, None)
+                .map(|o| o.id)
         }
     }
 }
@@ -131,10 +135,10 @@ mod wasm_auto_inference_test {
                 create_vpack_from_tree(&tree, TxVariant::V3Anchored).map_err(|e| e.to_string())?;
             let anchor_value = value["anchor_value"].as_u64().unwrap_or(1100u64);
             verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
-            let reconstructed = ArkLabsV3
+            let output = ArkLabsV3
                 .compute_vtxo_id(&tree, None)
                 .map_err(|e| e.to_string())?;
-            return Ok(("0x04".into(), reconstructed.to_string()));
+            return Ok(("0x04".into(), output.id.to_string()));
         }
 
         if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
@@ -142,10 +146,10 @@ mod wasm_auto_inference_test {
                 create_vpack_from_tree(&tree, TxVariant::V3Plain).map_err(|e| e.to_string())?;
             let anchor_value = value["anchor_value"].as_u64().unwrap_or(10_000u64);
             verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
-            let reconstructed = SecondTechV3
+            let output = SecondTechV3
                 .compute_vtxo_id(&tree, None)
                 .map_err(|e| e.to_string())?;
-            return Ok(("0x03".into(), reconstructed.to_string()));
+            return Ok(("0x03".into(), output.id.to_string()));
         }
 
         Err("no adapter matched or verification failed".to_string())

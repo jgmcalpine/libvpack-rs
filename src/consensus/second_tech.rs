@@ -5,11 +5,15 @@
 //! yields the TxID. The result is `VtxoId::OutPoint` (Hash:Index). Borsh is used for storage
 //! only; the verified math is the chain of V3 transaction hashes.
 
+use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::types::{hashes::sha256d, hashes::Hash, OutPoint, Txid};
 
-use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
+use crate::consensus::{
+    tx_preimage, tx_signed_hex, ConsensusEngine, TxInPreimage, TxOutPreimage, VerificationOutput,
+    VtxoId,
+};
 use crate::error::VPackError;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree};
 
@@ -30,7 +34,7 @@ impl ConsensusEngine for SecondTechV3 {
         &self,
         tree: &VPackTree,
         anchor_value: Option<u64>,
-    ) -> Result<VtxoId, VPackError> {
+    ) -> Result<VerificationOutput, VPackError> {
         // If path is empty, this is a leaf node
         if tree.path.is_empty() {
             if tree.leaf_siblings.is_empty() && !tree.fee_anchor_script.is_empty() {
@@ -45,6 +49,7 @@ impl ConsensusEngine for SecondTechV3 {
         let mut prev_output_values: Option<Vec<u64>> = None;
         let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
         let mut input_amount: Option<u64> = anchor_value;
+        let mut signed_txs = Vec::with_capacity(tree.path.len() + 1);
 
         // Iterate through path (top-down from root to leaf). Fee anchor is last sibling (adapter provides it).
         for (i, genesis_item) in tree.path.iter().enumerate() {
@@ -104,6 +109,10 @@ impl ConsensusEngine for SecondTechV3 {
                 }
             }
 
+            let sig = [genesis_item.signature];
+            let signed_hex = tx_signed_hex(3, &[input.clone()], &outputs, &sig, 0);
+            signed_txs.push(signed_hex);
+
             // Hash transaction → OutPoint
             let txid_bytes = Self::hash_transaction(3, &[input], &outputs, 0)?;
             let txid = Txid::from_byte_array(txid_bytes);
@@ -128,12 +137,17 @@ impl ConsensusEngine for SecondTechV3 {
         // Final step: Build leaf transaction spending current_prevout (if leaf is valid)
         // If leaf has empty script_pubkey, return the ID from the last path transaction
         if tree.leaf.script_pubkey.is_empty() {
-            // Return the OutPoint from the last transaction
-            Ok(VtxoId::OutPoint(
-                last_outpoint.expect("path should have at least one item"),
-            ))
+            Ok(VerificationOutput {
+                id: VtxoId::OutPoint(
+                    last_outpoint.expect("path should have at least one item"),
+                ),
+                signed_txs,
+            })
         } else {
-            self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)
+            let (id, leaf_signed_hex) =
+                self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)?;
+            signed_txs.push(leaf_signed_hex);
+            Ok(VerificationOutput { id, signed_txs })
         }
     }
 }
@@ -148,37 +162,53 @@ impl SecondTechV3 {
         &self,
         tree: &VPackTree,
         anchor_value: Option<u64>,
-    ) -> Result<VtxoId, VPackError> {
-        self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor, anchor_value)
+    ) -> Result<VerificationOutput, VPackError> {
+        let (id, signed_hex) =
+            self.compute_leaf_vtxo_id_with_prevout(tree, tree.anchor, anchor_value)?;
+        Ok(VerificationOutput {
+            id,
+            signed_txs: vec![signed_hex],
+        })
     }
 
     /// Compute VTXO ID for a leaf node with a custom prevout.
     /// Used for the final leaf transaction in recursive path traversal.
+    /// Returns (VtxoId, signed_tx_bytes). Leaf output is placed at index leaf.vout per V-PACK data.
     fn compute_leaf_vtxo_id_with_prevout(
         &self,
         tree: &VPackTree,
         prevout: OutPoint,
         input_amount: Option<u64>,
-    ) -> Result<VtxoId, VPackError> {
+    ) -> Result<(VtxoId, Vec<u8>), VPackError> {
         let num_outputs = 1 + tree.leaf_siblings.len();
         if tree.leaf.vout >= num_outputs as u32 {
             return Err(VPackError::InvalidVout(tree.leaf.vout));
         }
-        // Build outputs from data only: [leaf output] + leaf_siblings (adapter provides fee anchor when required)
+        // Build outputs: leaf at index leaf.vout, siblings at other indices (matches reconstruct_link logic)
         let mut outputs = Vec::with_capacity(num_outputs);
-        outputs.push(TxOutPreimage {
-            value: tree.leaf.amount,
-            script_pubkey: tree.leaf.script_pubkey.as_slice(),
-        });
-        for sibling in &tree.leaf_siblings {
-            let (value, script) = match sibling {
-                SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
-                SiblingNode::Full(txout) => (txout.value.to_sat(), txout.script_pubkey.as_bytes()),
-            };
-            outputs.push(TxOutPreimage {
-                value,
-                script_pubkey: script,
-            });
+        let mut sibling_iter = tree.leaf_siblings.iter();
+        for i in 0..num_outputs {
+            if i == tree.leaf.vout as usize {
+                outputs.push(TxOutPreimage {
+                    value: tree.leaf.amount,
+                    script_pubkey: tree.leaf.script_pubkey.as_slice(),
+                });
+            } else {
+                let sibling = sibling_iter.next().ok_or(VPackError::EncodingError)?;
+                let (value, script) = match sibling {
+                    SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
+                    SiblingNode::Full(txout) => {
+                        (txout.value.to_sat(), txout.script_pubkey.as_bytes())
+                    }
+                };
+                outputs.push(TxOutPreimage {
+                    value,
+                    script_pubkey: script,
+                });
+            }
+        }
+        if sibling_iter.next().is_some() {
+            return Err(VPackError::EncodingError);
         }
 
         if let Some(expected) = input_amount {
@@ -199,17 +229,18 @@ impl SecondTechV3 {
             sequence: tree.leaf.sequence,
         };
 
-        // Hash the transaction: Version 3, Locktime 0
-        let txid_bytes = Self::hash_transaction(3, &[input], &outputs, 0)?;
+        // Signed hex: leaf has no signature in schema, use empty witness
+        let signed_hex = tx_signed_hex(3, &[input.clone()], &outputs, &[None], 0);
 
-        // Convert to TxID and create OutPoint with vout from leaf
+        // Hash the transaction: Version 3, Locktime 0 (TxID from unsigned preimage)
+        let txid_bytes = Self::hash_transaction(3, &[input], &outputs, 0)?;
         let txid = Txid::from_byte_array(txid_bytes);
         let outpoint = OutPoint {
             txid,
             vout: tree.leaf.vout,
         };
 
-        Ok(VtxoId::OutPoint(outpoint))
+        Ok((VtxoId::OutPoint(outpoint), signed_hex))
     }
 
     /// Reconstruct a chain link's outputs from data only.
@@ -382,9 +413,8 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let computed_id = engine
-            .compute_vtxo_id(&tree, None)
-            .expect("compute VTXO ID");
+        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = output.id;
 
         let expected_str = j["expected_vtxo_id"].as_str().expect("expected_vtxo_id");
         let expected_id = VtxoId::from_str(expected_str).expect("parse expected VTXO ID");
@@ -522,7 +552,8 @@ mod tests {
         let anchor_value = child_amount + ((good_siblings.len() - 1) as u64 * sibling_value);
         let expected_id = engine
             .compute_vtxo_id(&good_tree, Some(anchor_value))
-            .expect("good tree");
+            .expect("good tree")
+            .id;
         let result = engine.verify(&bad_tree, &expected_id, anchor_value);
         assert!(
             matches!(result, Err(VPackError::IdMismatch)),
@@ -649,9 +680,27 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let computed_id = engine
-            .compute_vtxo_id(&tree, None)
-            .expect("compute VTXO ID");
+        let output = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = output.id;
+
+        // Assert signed_txs length: 5 path steps + 1 leaf = 6
+        assert_eq!(
+            output.signed_txs.len(),
+            6,
+            "signed_txs must have one entry per path step plus leaf"
+        );
+
+        // Gold test: V3-Segwit pattern (version 3 LE + marker + flag)
+        let v3_segwit_prefix: [u8; 6] = [0x03, 0x00, 0x00, 0x00, 0x00, 0x01];
+        assert!(
+            output.signed_txs[0].len() >= 6,
+            "first signed tx must have at least 6 bytes"
+        );
+        assert_eq!(
+            &output.signed_txs[0][..6],
+            &v3_segwit_prefix[..],
+            "first signed tx must start with V3-Segwit pattern (version 3 + marker + flag)"
+        );
 
         // Verify it's an OutPoint (Second Tech format)
         match computed_id {

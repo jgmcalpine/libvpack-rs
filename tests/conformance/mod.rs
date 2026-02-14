@@ -653,7 +653,8 @@ fn print_round_v3_borsh_5step_path() {
     let anchor_value = 15000u64;
     let expected_id = engine
         .compute_vtxo_id(&tree, Some(anchor_value))
-        .expect("compute");
+        .expect("compute")
+        .id;
     println!("PATH_JSON: {}", path_json);
     println!("EXPECTED_VTXO_ID: {}", expected_id);
 }
@@ -1094,7 +1095,8 @@ fn test_vpack_internal_consistency_roundtrip() {
     let second_engine = vpack::consensus::SecondTechV3;
     let second_expected_id = second_engine
         .compute_vtxo_id(&second_tree, None)
-        .expect("compute Second Tech VTXO ID");
+        .expect("compute Second Tech VTXO ID")
+        .id;
 
     let second_header = Header {
         flags: FLAG_PROOF_COMPACT,
