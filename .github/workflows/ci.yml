@@ -35,7 +35,7 @@ jobs:
         run: cargo test --all
 
       - name: Sovereignty Check
-        run: cargo check --no-default-features
+        run: cargo check --no-default-features --features=wasm
 
   wasm_build:
     name: Web Engine Stability
