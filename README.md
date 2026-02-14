@@ -77,7 +77,9 @@ cd wasm-vpack && wasm-pack build --target web
 See the [Web Verifier Demo](https://vtxopack.org) for a live implementation.
 
 ## Project Roadmap
-- [x] **Phase 1-5:** Forensic Audit & Core Logic Implementation.
-- [ ] **Phase 6 (Current):** **The VTXO-Inspector** — A WASM web tool for browser-side auditing and visualization at `vtxopack.org`.
-- [ ] **Phase 7:** **Sovereign Recovery** — Tools to reconstruct and broadcast L1 exit chains via Mempool.space.
-- [ ] **Phase 8:** **Language Bindings** — UniFFI support for mobile wallet integration.
+- [x] **Phase 1-5: Forensic Audit & Core Logic.** Byte-level reconciliation of $nSequence$, Fee Anchors, and Identity Models.
+- [ ] **Phase 6 (Current): The VTXO-Inspector.** A WASM-powered "Sovereignty Path" visualizer at `vtxopack.org`. Enabling users to verify balances locally.
+- [ ] **Phase 7: The Fire Escape (Sovereign Recovery).** Transition from verifying IDs to generating and broadcasting fully-signed L1 transaction chains. Includes fee-rate awareness and Mempool.space API integration.
+- [ ] **Phase 8: The Sentinel (Weather Station).** Implementing automated "drift detection" in CI. Monitoring the Ark Labs and Second Tech codebases daily to ensure the V-PACK standard stays synchronized with divergent implementation changes.
+- [ ] **Phase 9: Universal Connect (Mobile Bindings).** Implementing UniFFI support to provide native Swift (iOS) and Kotlin (Android) bindings, allowing mobile wallets to integrate V-PACK verification as a standard feature.
+- [ ] **Phase 10: V-Nostr State Recovery.** Defining a standardized NIP for encrypted V-PACK backups on Nostr. This ensures that even if a user loses their device and the ASP is offline, their "Map" remains retrievable via their sovereign keys.

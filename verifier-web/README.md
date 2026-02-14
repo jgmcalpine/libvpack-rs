@@ -9,7 +9,7 @@ Live at: [vtxopack.org](https://vtxopack.org)
 The VTXO Inspector is built with two primary goals:
 
 1.  **Sovereign Tooling:** We provide the "Life Raft" for the Ark ecosystem. By allowing users to independently verify their Virtual UTXOs (VTXOs) and visualize their exit paths, we ensure that self-custody is a technical reality, not just a marketing promise. Even if your service provider (ASP) disappears, the data provided here gives you the blueprint to reclaim your funds on the Bitcoin mainnet.
-2.  **Visual Education:** For those new to Ark-style scaling, the protocol can feel like a "black box." Our **Sovereignty Path** visualizer uses a biological tree metaphor to demystify the hierarchy of off-chain transactions. By interacting with the "Roots" (L1), "Branches" (Intermediate links), and "Fruit" (your VTXO), users learn exactly how their money is secured by the blockchain.
+2.  **Visual Education:** For those new to Ark-style scaling, the protocol can feel like a "black box." Our **Sovereignty Path** visualizer attempts to demystify the hierarchy of off-chain transactions. By interacting with the "Roots" (L1), "Branches" (Intermediate links), and "Fruit" (your VTXO), users learn exactly how their money is secured by the blockchain.
 
 ## 2. Privacy First: The WASM Win
 
