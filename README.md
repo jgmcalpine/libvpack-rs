@@ -2,6 +2,7 @@
 
 **The Universal Life Raft for VTXOs. A `no_std` Rust reference library for sovereign Virtual UTXO verification and emergency recovery.**
 
+[![CI](https://github.com/jgmcalpine/libvpack-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/jgmcalpine/libvpack-rs/actions/workflows/ci.yml)
 [![Cargo](https://img.shields.io/badge/cargo-v1.0.0--RC.2-green)](https://crates.io/crates/vpack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Standard: V-BIP-01](https://img.shields.io/badge/Standard-V--PACK-blue)](docs/specs/01-vbip.md)

@@ -1,0 +1,55 @@
+# Sentinel Foundation — CI Pipeline
+# Ensures code quality, no_std compliance, and WASM build stability.
+# Structured for future scheduled (cron) trigger for repo-monitoring.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  # Sentinel groundwork: uncomment for automated drift detection
+  # schedule:
+  #   - cron: '0 0 * * *'  # Daily at midnight UTC
+
+jobs:
+  test_and_lint:
+    name: Core Library Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format Check
+        run: cargo fmt --all -- --check
+
+      - name: Lint Check
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Math Check
+        run: cargo test --all
+
+      - name: Sovereignty Check
+        run: cargo check --no-default-features
+
+  wasm_build:
+    name: Web Engine Stability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer.sh | sh
+
+      - name: Build Check
+        run: cd wasm-vpack && wasm-pack build --target web
