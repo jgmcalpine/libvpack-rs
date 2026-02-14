@@ -145,6 +145,10 @@ export interface PathDetail {
   exit_delta?: number;
   /** Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx). */
   tx_preimage_hex?: string;
+  /** Fully signed transaction hex (lowercase). Empty for anchor; populated for path and leaf. */
+  signed_tx_hex?: string;
+  /** nSequence value. 0 for anchor; path/leaf use genesis/leaf sequence. */
+  sequence?: number;
   /** Number of sibling outputs at this level (excluding fee anchor). Branch scaling factor = sibling_count + 1. */
   sibling_count?: number;
 }
@@ -154,4 +158,6 @@ export interface VerifyResult {
   status: string;
   reconstructed_tx_id: string;
   path_details?: PathDetail[];
+  /** Fully signed transaction hex strings (lowercase). One per path step plus leaf. */
+  signed_txs?: string[];
 }

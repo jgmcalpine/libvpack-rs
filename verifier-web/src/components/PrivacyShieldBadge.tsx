@@ -9,7 +9,7 @@ function PrivacyShieldBadge() {
       <Shield className="w-5 h-5 flex-shrink-0" />
       <span>
         Sovereign Audit: All verification math performed locally in your browser via WASM. Your data never leaves this
-        device.
+        device. Note: Broadcasting a transaction to the network is a public on-chain event.
       </span>
     </div>
   );

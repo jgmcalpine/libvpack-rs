@@ -20,11 +20,19 @@ const rawHexClasses = {
   pre: 'font-mono text-xs text-gray-900 dark:text-gray-100 break-all bg-gray-100 dark:bg-gray-900 p-3 rounded-lg overflow-x-auto max-h-32 overflow-y-auto',
   copyBtn:
     'mt-2 flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors',
+  copyBroadcastBtn:
+    'mt-2 flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold transition-colors',
+  warning: 'text-amber-600 dark:text-amber-400 text-xs mt-2',
 };
 
 const storyHeaderClasses = 'text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide mt-4 mb-2';
 
-function RawHexSection({ hex }: { hex: string }) {
+const RBF_SEQUENCE = 0xfffffffe;
+
+const unsignedTooltip =
+  'This transaction is missing signatures. It can be viewed in a decoder but cannot be broadcast until co-signed by your keys and the ASP.';
+
+function SignedHexSection({ hex, hasSignature }: { hex: string; hasSignature: boolean }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
     try {
@@ -36,29 +44,52 @@ function RawHexSection({ hex }: { hex: string }) {
     }
   }, [hex]);
 
+  const copyLabel = hasSignature ? 'Copy for Broadcast' : 'Copy Unsigned Template';
+  const sectionTitle = hasSignature ? 'Signed Transaction Hex' : 'Unsigned Transaction Hex';
+
   return (
     <div className={rawHexClasses.container}>
-      <h3 className={rawHexClasses.label}>Raw TX Preimage (Hex)</h3>
+      <h3 className={rawHexClasses.label}>{sectionTitle}</h3>
+      {hasSignature ? (
+        <p className={rawHexClasses.warning}>
+          ⚠️ This is a fully signed SegWit transaction. Broadcasting this to the network will initiate a unilateral exit.
+        </p>
+      ) : (
+        <p className={rawHexClasses.warning} title={unsignedTooltip}>
+          {unsignedTooltip}
+        </p>
+      )}
       <pre className={rawHexClasses.pre}>{hex}</pre>
-      <button type="button" onClick={handleCopy} className={rawHexClasses.copyBtn}>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className={hasSignature ? rawHexClasses.copyBroadcastBtn : rawHexClasses.copyBtn}
+        title={hasSignature ? undefined : unsignedTooltip}
+      >
         <Copy className="w-4 h-4" />
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? 'Copied' : copyLabel}
       </button>
     </div>
   );
 }
 
 function TechnicalDetailsAccordion({
-  hex,
+  signedTxHex,
+  hasSignature,
   vout,
+  sequence,
   showVout,
+  showSequence,
 }: {
-  hex: string | undefined;
+  signedTxHex: string | undefined;
+  hasSignature: boolean;
   vout: number;
+  sequence?: number;
   showVout: boolean;
+  showSequence: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const hasContent = (hex && hex.length > 0) || showVout;
+  const hasContent = (signedTxHex && signedTxHex.length > 0) || showVout || showSequence;
 
   if (!hasContent) return null;
 
@@ -74,7 +105,22 @@ function TechnicalDetailsAccordion({
       </button>
       {expanded && (
         <div className="mt-3 space-y-3">
-          {hex && hex.length > 0 && <RawHexSection hex={hex} />}
+          {showSequence && sequence !== undefined && (
+            <div>
+              <h3 className={rawHexClasses.label}>nSequence</h3>
+              <p className="text-sm text-gray-900 dark:text-gray-100 font-mono">
+                0x{sequence.toString(16).padStart(8, '0').toUpperCase()}
+              </p>
+              {sequence === RBF_SEQUENCE && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  RBF enabled for fee bumping.
+                </p>
+              )}
+            </div>
+          )}
+          {signedTxHex && signedTxHex.length > 0 && (
+            <SignedHexSection hex={signedTxHex} hasSignature={hasSignature} />
+          )}
           {showVout && (
             <div>
               <h3 className={rawHexClasses.label}>Vout</h3>
@@ -298,9 +344,12 @@ function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHei
 
           {/* Technical Details Accordion */}
           <TechnicalDetailsAccordion
-            hex={node.tx_preimage_hex}
+            signedTxHex={node.signed_tx_hex}
+            hasSignature={node.has_signature ?? false}
             vout={node.vout}
+            sequence={node.sequence}
             showVout={persona !== 'anchor'}
+            showSequence={persona !== 'anchor'}
           />
         </div>
       </div>

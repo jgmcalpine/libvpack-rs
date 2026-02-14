@@ -37,6 +37,10 @@ struct PathDetail {
     exit_delta: u16,
     /// Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx).
     tx_preimage_hex: String,
+    /// Fully signed transaction hex (lowercase). Empty for anchor; populated for path and leaf.
+    signed_tx_hex: String,
+    /// nSequence value. 0 for anchor; path/leaf use genesis/leaf sequence.
+    sequence: u32,
     /// Number of sibling outputs at this level (excluding fee anchor). Branch scaling factor = sibling_count + 1.
     sibling_count: u32,
 }
@@ -47,6 +51,8 @@ struct WasmVerifyResult {
     status: String,
     reconstructed_tx_id: String,
     path_details: Vec<PathDetail>,
+    /// Fully signed transaction hex strings (lowercase). One per path step plus leaf.
+    signed_txs: Vec<String>,
 }
 
 /// Parses anchor_value from JSON. Accepts string (decimal) or u64 for small values.
@@ -112,10 +118,12 @@ fn tree_output_sum(tree: &VPackTree) -> u64 {
 
 /// Extracts path details from a VPackTree (works for both ArkLabs and SecondTech variants).
 /// Returns a vector of PathDetail structs representing the sovereignty path.
+/// signed_txs: hex-encoded signed transactions; index i maps to path[i], index path.len() maps to leaf.
 fn extract_path_details(
     tree: &VPackTree,
     anchor_value: u64,
     variant: TxVariant,
+    signed_txs: &[Vec<u8>],
 ) -> Result<Vec<PathDetail>, JsValue> {
     let mut path_details = Vec::new();
 
@@ -133,8 +141,12 @@ fn extract_path_details(
         exit_weight_vb: estimate_exit_weight_vb(anchor_outputs),
         exit_delta: 0,
         tx_preimage_hex: String::new(), // L1 tx; no virtual preimage
+        signed_tx_hex: String::new(),   // L1 tx; no signed virtual tx
+        sequence: 0,
         sibling_count: 0,
     });
+
+    let mut signed_idx: usize = 0;
 
     // Traverse path (similar to consensus engine compute_vtxo_id)
     let mut current_prevout = tree.anchor;
@@ -207,6 +219,14 @@ fn extract_path_details(
             }
         };
 
+        let signed_hex = signed_txs
+            .get(signed_idx)
+            .map(|b| hex::encode(b))
+            .unwrap_or_default();
+        if signed_idx < signed_txs.len() {
+            signed_idx += 1;
+        }
+
         path_details.push(PathDetail {
             txid: txid_str,
             amount,
@@ -218,6 +238,8 @@ fn extract_path_details(
             exit_weight_vb: exit_weight,
             exit_delta: 0,
             tx_preimage_hex: hex::encode(&preimage_bytes),
+            signed_tx_hex: signed_hex,
+            sequence: genesis_item.sequence,
             sibling_count,
         });
 
@@ -281,6 +303,11 @@ fn extract_path_details(
     let leaf_txid = Txid::from_byte_array(leaf_txid_bytes);
     let leaf_txid_str = txid_to_string(&leaf_txid);
 
+    let leaf_signed_hex = signed_txs
+        .get(signed_idx)
+        .map(|b| hex::encode(b))
+        .unwrap_or_default();
+
     path_details.push(PathDetail {
         txid: leaf_txid_str,
         amount: tree.leaf.amount,
@@ -292,6 +319,8 @@ fn extract_path_details(
         exit_weight_vb: estimate_exit_weight_vb(leaf_outputs.len()),
         exit_delta: tree.leaf.exit_delta,
         tx_preimage_hex: hex::encode(&leaf_preimage),
+        signed_tx_hex: leaf_signed_hex,
+        sequence: tree.leaf.sequence,
         sibling_count: leaf_sibling_count,
     });
 
@@ -335,13 +364,24 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         let output = engine
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
-        let path_details =
-            extract_path_details(&tree, anchor_value, TxVariant::V3Anchored).map_err(|e| e)?;
+        let path_details = extract_path_details(
+            &tree,
+            anchor_value,
+            TxVariant::V3Anchored,
+            &output.signed_txs,
+        )
+        .map_err(|e| e)?;
+        let signed_txs_hex: Vec<String> = output
+            .signed_txs
+            .iter()
+            .map(|b| hex::encode(b))
+            .collect();
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x04".to_string(),
             status: "Success".to_string(),
             reconstructed_tx_id: output.id.to_string(),
             path_details,
+            signed_txs: signed_txs_hex,
         })?);
     }
 
@@ -357,12 +397,19 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         let path_details =
-            extract_path_details(&tree, anchor_value, TxVariant::V3Plain).map_err(|e| e)?;
+            extract_path_details(&tree, anchor_value, TxVariant::V3Plain, &output.signed_txs)
+                .map_err(|e| e)?;
+        let signed_txs_hex: Vec<String> = output
+            .signed_txs
+            .iter()
+            .map(|b| hex::encode(b))
+            .collect();
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x03".to_string(),
             status: "Success".to_string(),
             reconstructed_tx_id: output.id.to_string(),
             path_details,
+            signed_txs: signed_txs_hex,
         })?);
     }
 
@@ -760,12 +807,19 @@ pub fn wasm_verify_binary(
         TxVariant::V3Anchored => "0x04",
         TxVariant::V3Plain => "0x03",
     };
-    let path_details = extract_path_details(&tree, anchor_val, header.tx_variant)?;
+    let path_details =
+        extract_path_details(&tree, anchor_val, header.tx_variant, &output.signed_txs)?;
 
+    let signed_txs_hex: Vec<String> = output
+        .signed_txs
+        .iter()
+        .map(|b| hex::encode(b))
+        .collect();
     Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
         variant: variant_str.to_string(),
         status: "Success".to_string(),
         reconstructed_tx_id: expected_id.to_string(),
         path_details,
+        signed_txs: signed_txs_hex,
     })?)
 }

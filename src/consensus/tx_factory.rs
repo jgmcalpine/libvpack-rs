@@ -92,8 +92,9 @@ pub fn tx_preimage(
 // SegWit signed transaction serialization (BIP-141)
 // -----------------------------------------------------------------------------
 
-/// Builds the full SegWit wire-format signed transaction bytes.
-/// Layout: nVersion | Marker (0x00) | Flag (0x01) | vin | vout | witness | nLockTime.
+/// Builds the full transaction bytes in valid Bitcoin wire format.
+/// - **Case A (any signature present):** SegWit format: nVersion | Marker (0x00) | Flag (0x01) | vin | vout | witness | nLockTime.
+/// - **Case B (all None):** Legacy format: nVersion | vin | vout | nLockTime (no marker/flag; decodable by standard tools).
 /// Requires `signatures.len() == inputs.len()`; each input gets one witness stack (empty if None).
 pub fn tx_signed_hex(
     version: u32,
@@ -107,6 +108,13 @@ pub fn tx_signed_hex(
         inputs.len(),
         "signatures.len() must equal inputs.len()"
     );
+
+    // Case B: All unsigned — use legacy format (no SegWit marker/flag).
+    if !signatures.iter().any(Option::is_some) {
+        return tx_preimage(version, inputs, outputs, locktime);
+    }
+
+    // Case A: At least one signature — use SegWit format.
     let cap = estimate_signed_capacity(inputs, outputs, signatures);
     let mut out = Vec::with_capacity(cap);
 
@@ -334,38 +342,32 @@ mod tests {
         );
     }
 
-    /// Verification gate: empty witness (None) must emit exactly 0x00 (CompactSize for 0 items).
-    /// Bitcoin nodes expect a witness stack for every input in a SegWit transaction, even if empty.
+    /// Verification gate: when all signatures are None, output must be legacy format (no SegWit marker/flag).
+    /// This ensures unsigned transactions decode correctly in standard Bitcoin tools.
     #[test]
-    fn test_factory_empty_witness_emits_0x00() {
+    fn test_factory_unsigned_uses_legacy_format() {
         let input = TxInPreimage {
             prev_out_txid: [0u8; 32],
             prev_out_vout: 0,
             sequence: 0,
         };
-        let output = TxOutPreimage {
+        let script = [0x51u8];
+        let outputs = [TxOutPreimage {
             value: 1000,
-            script_pubkey: &[0x51], // OP_1
-        };
-        let result = tx_signed_hex(3, &[input], &[output], &[None], 0);
+            script_pubkey: script.as_slice(),
+        }];
+        let result = tx_signed_hex(3, &[input.clone()], &outputs, &[None], 0);
 
-        assert!(
-            result.starts_with(&[0x03, 0x00, 0x00, 0x00, 0x00, 0x01]),
-            "output must start with V3-Segwit pattern"
+        // Legacy format: version(4) + vin_count(1) + ... — no 0x00 0x01 after version.
+        assert_eq!(result[0..4], [0x03, 0x00, 0x00, 0x00], "version must be 3 LE");
+        assert_ne!(
+            result[4..6],
+            [0x00, 0x01],
+            "unsigned tx must NOT have SegWit marker+flag; bytes 4-5 must not be 0001"
         );
-
-        // Witness section: for 1 input with None, we write CompactSize(0) = 0x00
-        // Structure: version(4) + marker(1) + flag(1) + vin(1+41) + vout(1+8+1+1) + witness(1) + locktime(4)
-        // Witness is 1 byte (0x00) for empty stack. Last 5 bytes = witness(0x00) + locktime(0).
-        assert!(
-            result.len() >= 5,
-            "signed tx must have at least 5 bytes"
-        );
-        assert_eq!(
-            result[result.len() - 5],
-            0x00,
-            "empty witness must serialize as single 0x00 byte (CompactSize for 0 items)"
-        );
+        // Must match tx_preimage exactly.
+        let preimage = tx_preimage(3, &[input], &outputs, 0);
+        assert_eq!(result, preimage, "unsigned output must equal tx_preimage");
     }
 
     /// Parses the preimage buffer to return the first output's scriptPubKey bytes.

@@ -54,7 +54,7 @@ export function pathDetailsToTreeData(
     amountSats: p.amount,
     timelock: '24 hours',
     vBytes: p.exit_weight_vb,
-    hex: p.tx_preimage_hex ?? '',
+    hex: p.signed_tx_hex ?? p.tx_preimage_hex ?? '',
     status,
     pathDetail: p,
   }));
@@ -64,7 +64,7 @@ export function pathDetailsToTreeData(
     type: 'vtxo' as const,
     amountSats: leaf.amount,
     vBytes: leaf.exit_weight_vb,
-    hex: leaf.tx_preimage_hex ?? '',
+    hex: leaf.signed_tx_hex ?? leaf.tx_preimage_hex ?? '',
     status,
     pathDetail: leaf,
   };
