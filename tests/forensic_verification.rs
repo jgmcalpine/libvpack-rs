@@ -229,7 +229,7 @@ fn master_universal_verification() {
     let second_bytes = pack(&header, &second_tree).expect("pack Second Tech V-PACK");
 
     const ARK_ANCHOR: u64 = 1100;
-    const SECOND_ROUND_ANCHOR: u64 = 10_000;
+    const SECOND_ROUND_ANCHOR: u64 = 15_000;
     let ark_tree_result = vpack::verify(&ark_bytes, &ark_expected_id, ARK_ANCHOR)
         .expect("Ark Labs verification should succeed");
     let second_tree_result = vpack::verify(&second_bytes, &second_expected, SECOND_ROUND_ANCHOR)
