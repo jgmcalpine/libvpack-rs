@@ -692,17 +692,19 @@ mod tests {
             "signed_txs must have one entry per path step plus leaf"
         );
 
-        // Gold test: V3-Segwit pattern (version 3 LE + marker + flag)
-        let v3_segwit_prefix: [u8; 6] = [0x03, 0x00, 0x00, 0x00, 0x00, 0x01];
+        // Gold test: format depends on signatures. This test uses signature: None for all path
+        // items, so tx_factory produces legacy format (no SegWit marker/flag).
         assert!(
-            output.signed_txs[0].len() >= 6,
-            "first signed tx must have at least 6 bytes"
+            output.signed_txs[0].len() >= 5,
+            "first signed tx must have at least 5 bytes"
         );
+        let prefix = &output.signed_txs[0][..5];
         assert_eq!(
-            &output.signed_txs[0][..6],
-            &v3_segwit_prefix[..],
-            "first signed tx must start with V3-Segwit pattern (version 3 + marker + flag)"
+            prefix[0..4],
+            [0x03, 0x00, 0x00, 0x00],
+            "version must be 3 LE"
         );
+        assert_eq!(prefix[4], 0x01, "legacy format: vin count must be 1");
 
         // Verify it's an OutPoint (Second Tech format)
         match computed_id {
