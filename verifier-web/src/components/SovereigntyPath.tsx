@@ -260,14 +260,16 @@ function SovereigntyPath({
             </div>
           ))}
 
-          {branches.length > 0 && (
-            <PulsingLine
-              height={LINE_HEIGHT}
-              visible={lineToFruitVisible}
-              delay={0.1}
-              fillProgress={connectorBranchToLeafFillProgress}
-            />
-          )}
+          <PulsingLine
+            height={LINE_HEIGHT}
+            visible={
+              branches.length === 0
+                ? lineToFirstBranchVisible
+                : lineToFruitVisible
+            }
+            delay={0.1}
+            fillProgress={connectorBranchToLeafFillProgress}
+          />
 
           {/* Leaf (Top) - 50% width */}
           <GlassCard
