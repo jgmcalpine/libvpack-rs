@@ -170,7 +170,18 @@ function SovereigntyMap({ pathDetails, anchorTxid, finalVtxoId, variant, sibling
 
       {/* Modal */}
       {selectedNode && (
-        <NodeDetailModal node={selectedNode} variant={variant} onClose={() => setSelectedNode(null)} />
+        <NodeDetailModal
+          node={selectedNode}
+          variant={variant}
+          nodeType={
+            selectedNode === anchorNode
+              ? 'anchor'
+              : selectedNode === leafNode
+                ? 'vtxo'
+                : 'branch'
+          }
+          onClose={() => setSelectedNode(null)}
+        />
       )}
     </div>
   );

@@ -26,6 +26,8 @@ interface SovereigntyPathProps {
   onLoadComplete?: () => void;
 }
 
+type SelectedNodeInfo = { node: PathDetail; nodeType: 'anchor' | 'branch' | 'vtxo' };
+
 function SovereigntyPath({
   treeData,
   variant = '',
@@ -35,12 +37,12 @@ function SovereigntyPath({
 }: SovereigntyPathProps) {
   const [auditStep, setAuditStep] = useState(0);
   const [loadComplete, setLoadComplete] = useState(false);
-  const [selectedNode, setSelectedNode] = useState<PathDetail | null>(null);
+  const [selectedNodeInfo, setSelectedNodeInfo] = useState<SelectedNodeInfo | null>(null);
   const [exitPhase, setExitPhase] = useState(0);
   const [phaseStatus, setPhaseStatus] = useState<'idle' | 'confirming' | 'mined'>('idle');
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  const { branches, userVtxo } = treeData;
+  const { l1Anchor, branches, userVtxo } = treeData;
   const auditTotalSteps = 2 + branches.length * 2 + 2;
   const maxAuditStep = auditTotalSteps - 1;
   const exitStepCount = 2 + branches.length;
@@ -97,7 +99,7 @@ function SovereigntyPath({
   }, [exitStepCount]);
 
   const openNodeModal = useCallback((node: ArkNode) => {
-    setSelectedNode(node.pathDetail);
+    setSelectedNodeInfo({ node: node.pathDetail, nodeType: node.type });
   }, []);
 
   const rootVisible = auditStep >= 0;
@@ -167,6 +169,7 @@ function SovereigntyPath({
           <GlassCard
             delay={0}
             visible={rootVisible}
+            onClick={() => openNodeModal(l1Anchor)}
             className={`relative w-full p-6 bg-slate-800/60 border-slate-600/40 transition-all duration-300 ${
               rootDimmed ? 'opacity-50' : ''
             } ${rootHighlighted ? 'ring-2 ring-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.3)]' : ''}`}
@@ -340,11 +343,14 @@ function SovereigntyPath({
         )}
       </div>
 
-      {selectedNode && (
+      {selectedNodeInfo && (
         <NodeDetailModal
-          node={selectedNode}
+          node={selectedNodeInfo.node}
           variant={variant}
-          onClose={() => setSelectedNode(null)}
+          nodeType={selectedNodeInfo.nodeType}
+          network={network}
+          blockHeight={blockHeight}
+          onClose={() => setSelectedNodeInfo(null)}
         />
       )}
     </div>

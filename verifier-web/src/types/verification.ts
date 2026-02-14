@@ -136,6 +136,7 @@ export interface PathDetail {
   txid: string;
   amount: number;
   is_leaf: boolean;
+  is_anchor?: boolean;
   vout: number;
   has_signature: boolean;
   has_fee_anchor: boolean;
@@ -144,6 +145,8 @@ export interface PathDetail {
   exit_delta?: number;
   /** Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx). */
   tx_preimage_hex?: string;
+  /** Number of sibling outputs at this level (excluding fee anchor). Branch scaling factor = sibling_count + 1. */
+  sibling_count?: number;
 }
 
 export interface VerifyResult {

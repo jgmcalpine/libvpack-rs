@@ -28,6 +28,7 @@ struct PathDetail {
     txid: String,
     amount: u64,
     is_leaf: bool,
+    is_anchor: bool,
     vout: u32,
     has_signature: bool,
     has_fee_anchor: bool,
@@ -36,6 +37,8 @@ struct PathDetail {
     exit_delta: u16,
     /// Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx).
     tx_preimage_hex: String,
+    /// Number of sibling outputs at this level (excluding fee anchor). Branch scaling factor = sibling_count + 1.
+    sibling_count: u32,
 }
 
 #[derive(Serialize)]
@@ -119,12 +122,14 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         txid: anchor_txid,
         amount: anchor_value,
         is_leaf: false,
+        is_anchor: true,
         vout: tree.anchor.vout,
         has_signature: false,
         has_fee_anchor: false,
         exit_weight_vb: estimate_exit_weight_vb(anchor_outputs),
         exit_delta: 0,
         tx_preimage_hex: String::new(), // L1 tx; no virtual preimage
+        sibling_count: 0,
     });
     
     // Traverse path (similar to consensus engine compute_vtxo_id)
@@ -144,6 +149,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         
         // Add sibling outputs
         let mut has_fee_anchor = false;
+        let mut sibling_count: u32 = 0;
         for sibling in &genesis_item.siblings {
             match sibling {
                 SiblingNode::Compact { value, script, .. } => {
@@ -151,9 +157,10 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                         value: *value,
                         script_pubkey: script.as_slice(),
                     });
-                    // Check if this is the fee anchor script
                     if script == &tree.fee_anchor_script {
                         has_fee_anchor = true;
+                    } else {
+                        sibling_count += 1;
                     }
                 }
                 SiblingNode::Full(_) => return Err(JsValue::from_str("Full sibling nodes not supported")),
@@ -198,12 +205,14 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
             txid: txid_str,
             amount,
             is_leaf: false,
+            is_anchor: false,
             vout,
             has_signature: genesis_item.signature.is_some(),
             has_fee_anchor,
             exit_weight_vb: exit_weight,
             exit_delta: 0,
             tx_preimage_hex: hex::encode(&preimage_bytes),
+            sibling_count,
         });
         
         // Update for next iteration - determine which output index to use
@@ -226,6 +235,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
     // Add leaf node
     let num_leaf_outputs = 1 + tree.leaf_siblings.len();
     let mut leaf_has_fee_anchor = false;
+    let mut leaf_sibling_count: u32 = 0;
     let mut leaf_outputs = Vec::new();
     leaf_outputs.push(TxOutPreimage {
         value: tree.leaf.amount,
@@ -240,6 +250,8 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                 });
                 if script == &tree.fee_anchor_script {
                     leaf_has_fee_anchor = true;
+                } else {
+                    leaf_sibling_count += 1;
                 }
             }
             SiblingNode::Full(_) => return Err(JsValue::from_str("Full sibling nodes not supported")),
@@ -262,12 +274,14 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         txid: leaf_txid_str,
         amount: tree.leaf.amount,
         is_leaf: true,
+        is_anchor: false,
         vout: tree.leaf.vout,
         has_signature: false,
         has_fee_anchor: leaf_has_fee_anchor,
         exit_weight_vb: estimate_exit_weight_vb(leaf_outputs.len()),
         exit_delta: tree.leaf.exit_delta,
         tx_preimage_hex: hex::encode(&leaf_preimage),
+        sibling_count: leaf_sibling_count,
     });
     
     Ok(path_details)

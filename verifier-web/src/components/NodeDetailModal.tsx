@@ -1,6 +1,18 @@
 import { useCallback, useState } from 'react';
-import { X, CheckCircle2, Shield, Scale, Copy } from 'lucide-react';
+import { X, Landmark, GitBranch, User, Shield, Scale, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import type { PathDetail } from '../types/verification';
+
+type NodePersona = 'anchor' | 'branch' | 'leaf';
+
+function resolvePersona(node: PathDetail, nodeType?: 'anchor' | 'branch' | 'vtxo'): NodePersona {
+  if (nodeType === 'anchor') return 'anchor';
+  if (nodeType === 'vtxo') return 'leaf';
+  if (nodeType === 'branch') return 'branch';
+  if (node.is_anchor === true) return 'anchor';
+  if (node.is_leaf) return 'leaf';
+  if (!node.tx_preimage_hex?.length && !node.is_leaf) return 'anchor';
+  return 'branch';
+}
 
 const rawHexClasses = {
   container: 'pt-4 border-t border-gray-200 dark:border-gray-700',
@@ -9,6 +21,8 @@ const rawHexClasses = {
   copyBtn:
     'mt-2 flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors',
 };
+
+const storyHeaderClasses = 'text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide mt-4 mb-2';
 
 function RawHexSection({ hex }: { hex: string }) {
   const [copied, setCopied] = useState(false);
@@ -34,15 +48,95 @@ function RawHexSection({ hex }: { hex: string }) {
   );
 }
 
+function TechnicalDetailsAccordion({
+  hex,
+  vout,
+  showVout,
+}: {
+  hex: string | undefined;
+  vout: number;
+  showVout: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasContent = (hex && hex.length > 0) || showVout;
+
+  if (!hasContent) return null;
+
+  return (
+    <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+      >
+        {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        Show Technical Details
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          {hex && hex.length > 0 && <RawHexSection hex={hex} />}
+          {showVout && (
+            <div>
+              <h3 className={rawHexClasses.label}>Vout</h3>
+              <p className="text-sm text-gray-900 dark:text-gray-100">{vout}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface NodeDetailModalProps {
   node: PathDetail;
   variant: string;
   onClose: () => void;
+  network?: string;
+  blockHeight?: number;
+  /** Override when path_details lack is_anchor (e.g. from ArkNode.type) */
+  nodeType?: 'anchor' | 'branch' | 'vtxo';
 }
 
-function NodeDetailModal({ node, variant, onClose }: NodeDetailModalProps) {
+function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHeight, nodeType }: NodeDetailModalProps) {
+  const persona = resolvePersona(node, nodeType);
+  const siblingCount = node.sibling_count ?? 0;
   const isV3Anchored = variant === '0x04';
-  const topologyText = isV3Anchored ? 'V3/TRUC Anchored transaction' : 'V3/TRUC Plain transaction';
+  const scalingFactor = siblingCount + 1;
+
+  const mempoolTxUrl =
+    network === 'Signet'
+      ? `https://mempool.space/signet/tx/${node.txid}`
+      : `https://mempool.space/tx/${node.txid}`;
+
+  const exitWeightLabel = persona === 'anchor' ? 'Cost to Open' : 'Cost to Exit this level';
+  const exitWeightText =
+    persona === 'anchor'
+      ? `~${node.exit_weight_vb} vB. This is the on-chain transaction that opens the vault.`
+      : `~${node.exit_weight_vb} vB. Each level requires one Bitcoin transaction to exit.`;
+
+  const personaConfig = {
+    anchor: {
+      title: 'L1 Root Anchor',
+      icon: Landmark,
+      iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+      iconColor: 'text-amber-600 dark:text-amber-400',
+    },
+    branch: {
+      title: 'Virtual Branch',
+      icon: GitBranch,
+      iconBg: 'bg-blue-100 dark:bg-blue-900/40',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+    },
+    leaf: {
+      title: 'Your Sovereign Leaf',
+      icon: User,
+      iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+    },
+  };
+
+  const config = personaConfig[persona];
+  const IconComponent = config.icon;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70" onClick={onClose}>
@@ -51,7 +145,12 @@ function NodeDetailModal({ node, variant, onClose }: NodeDetailModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Node Details</h2>
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-lg ${config.iconBg} ${config.iconColor}`}>
+              <IconComponent className="w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{config.title}</h2>
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -61,81 +160,148 @@ function NodeDetailModal({ node, variant, onClose }: NodeDetailModalProps) {
           </button>
         </div>
 
-        <div className="space-y-6">
-          {/* Transaction ID */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Transaction ID</h3>
-            <p className="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">{node.txid}</p>
-          </div>
+        <div className="space-y-4">
+          {/* What is this? */}
+          <h3 className={storyHeaderClasses}>What is this?</h3>
+          {persona === 'anchor' && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              This is the &quot;Soil.&quot; It is a physical transaction recorded on the Bitcoin blockchain. It acts as
+              the communal vault that secures every coin in this tree.
+            </p>
+          )}
+          {persona === 'branch' && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              This is a &quot;Hallway&quot; inside the vault. It is a virtual transaction signed by the ASP that splits
+              the larger pool into smaller segments.
+            </p>
+          )}
+          {persona === 'leaf' && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              This is the &quot;Fruit.&quot; It is the final output that belongs exclusively to your private key.
+            </p>
+          )}
 
-          {/* Topology */}
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Topology</h3>
+          {/* Why is it secure? */}
+          <h3 className={storyHeaderClasses}>Why is it secure?</h3>
+          {persona === 'anchor' && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Proof of Work secures the Bitcoin blockchain. Once buried in a block, the anchor is immutable.
+            </p>
+          )}
+          {persona === 'branch' && (
+            <div className="space-y-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                This is a {topologyText}. {isV3Anchored && 'It includes a mandatory Fee Anchor for pinning protection.'}
+                Signed by ASP. V3/TRUC protection ensures cryptographic authenticity.
               </p>
-            </div>
-          </div>
-
-          {/* Security */}
-          {node.has_fee_anchor && (
-            <div className="flex items-start gap-3">
-              <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Security</h3>
+              {node.has_fee_anchor && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Fee Anchor present. Provides pinning protection during unilateral exit.
+                </p>
+              )}
+            </div>
+          )}
+          {persona === 'leaf' && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Only your key can spend this output. The exit path is verifiable and time-locked.
+            </p>
+          )}
+
+          {/* Key Data */}
+          <h3 className={storyHeaderClasses}>Key Data</h3>
+
+          {persona === 'anchor' && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">On-Chain TxID</h4>
+                <a
+                  href={mempoolTxUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                >
+                  {node.txid}
+                </a>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Total Vault Value</h4>
+                <p className="text-sm text-gray-900 dark:text-gray-100">{node.amount.toLocaleString()} sats</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Status</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {blockHeight !== undefined
+                    ? `Buried in Block #${blockHeight.toLocaleString()}`
+                    : 'Proof of Work'}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Auth */}
-          {node.has_signature && (
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+          {persona === 'branch' && (
+            <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Auth</h3>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Virtual TxID</h4>
+                <p className="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">{node.txid}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Scaling Factor</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Signature verified via k256 (Pure-Rust Schnorr). This transaction is cryptographically authenticated.
+                  This branch supports <strong>{scalingFactor}</strong> user{scalingFactor !== 1 ? 's' : ''}.
                 </p>
               </div>
+              <div className="flex items-start gap-3">
+                <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Signed by ASP. {isV3Anchored ? 'V3/TRUC Anchored' : 'V3/TRUC Plain'} protection.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {persona === 'leaf' && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">VTXO ID</h4>
+                <p className="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">
+                  {node.txid}:{node.vout}
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Your Balance</h4>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {node.amount.toLocaleString()} sats
+                </p>
+              </div>
+              {(node.exit_delta ?? 0) > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">The Fire Escape</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Time to Exit: <strong>{node.exit_delta}</strong> blocks.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
           {/* Exit Weight */}
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 pt-2">
             <Scale className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Exit Weight</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Exit Weight: ~{node.exit_weight_vb} vB. Each level requires one Bitcoin transaction to exit.
-              </p>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">{exitWeightLabel}</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                <strong>Trade-off:</strong> Deeper trees provide more privacy/scale but increase sovereignty cost (more
-                transactions = more fees). This node is level {node.is_leaf ? 'leaf' : 'intermediate'} in your path.
+                {exitWeightText}
               </p>
             </div>
           </div>
 
-          {/* Raw TX Preimage (Hex) */}
-          {node.tx_preimage_hex && node.tx_preimage_hex.length > 0 && (
-            <RawHexSection hex={node.tx_preimage_hex} />
-          )}
-
-          {/* Amount and Vout */}
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Amount</h3>
-              <p className="text-sm text-gray-900 dark:text-gray-100">{node.amount.toLocaleString()} sats</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Vout</h3>
-              <p className="text-sm text-gray-900 dark:text-gray-100">{node.vout}</p>
-            </div>
-          </div>
+          {/* Technical Details Accordion */}
+          <TechnicalDetailsAccordion
+            hex={node.tx_preimage_hex}
+            vout={node.vout}
+            showVout={persona !== 'anchor'}
+          />
         </div>
       </div>
     </div>
