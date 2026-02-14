@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use crate::types::{OutPoint, TxOut};
+use alloc::vec::Vec;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 /// The Fully Parsed V-PACK Tree.

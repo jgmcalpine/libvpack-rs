@@ -26,7 +26,8 @@ impl LogicAdapter for ArkLabsAdapter {
             .as_str()
             .or_else(|| json["anchor_outpoint"].as_str())
             .ok_or(VPackError::InvalidVtxoIdFormat)?;
-        let anchor_id = VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
+        let anchor_id =
+            VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
         let anchor = match anchor_id {
             VtxoId::OutPoint(op) => op,
             VtxoId::Raw(_) => return Err(VPackError::InvalidVtxoIdFormat),
@@ -181,13 +182,16 @@ impl LogicAdapter for SecondTechAdapter {
             .as_str()
             .or_else(|| json["parent_outpoint"].as_str())
             .ok_or(VPackError::InvalidVtxoIdFormat)?;
-        let anchor_id = VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
+        let anchor_id =
+            VtxoId::from_str(anchor_str).map_err(|_| VPackError::InvalidVtxoIdFormat)?;
         let anchor = match anchor_id {
             VtxoId::OutPoint(op) => op,
             VtxoId::Raw(_) => return Err(VPackError::InvalidVtxoIdFormat),
         };
 
-        let path_array = json["path"].as_array().or_else(|| json["genesis"].as_array());
+        let path_array = json["path"]
+            .as_array()
+            .or_else(|| json["genesis"].as_array());
         let path = if let Some(steps) = path_array {
             steps
                 .iter()
@@ -278,12 +282,16 @@ pub fn tree_from_ingredients(
         }
         TxVariant::V3Plain => {
             if reconstruction_ingredients.get("amount").is_some()
-                && (reconstruction_ingredients.get("script_pubkey_hex").is_some()
+                && (reconstruction_ingredients
+                    .get("script_pubkey_hex")
+                    .is_some()
                     || reconstruction_ingredients.get("script").is_some())
                 && (reconstruction_ingredients.get("anchor_outpoint").is_some()
                     || reconstruction_ingredients.get("parent_outpoint").is_some())
             {
-                Some(SecondTechAdapter::map_ingredients(reconstruction_ingredients))
+                Some(SecondTechAdapter::map_ingredients(
+                    reconstruction_ingredients,
+                ))
             } else {
                 None
             }

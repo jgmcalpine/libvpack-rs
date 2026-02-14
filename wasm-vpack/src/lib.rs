@@ -5,17 +5,17 @@ use core::str::FromStr;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use vpack::{
-    create_vpack_from_tree, verify, ArkLabsAdapter, ArkLabsV3, ConsensusEngine, LogicAdapter,
-    SecondTechAdapter, SecondTechV3, TxVariant, VtxoId, VPackTree,
-};
-use vpack::header::{Header, MAGIC_BYTES, HEADER_SIZE};
+use vpack::consensus::{tx_preimage, TxInPreimage, TxOutPreimage};
+use vpack::header::{Header, HEADER_SIZE, MAGIC_BYTES};
 use vpack::payload::reader::BoundedReader;
 use vpack::payload::tree::{GenesisItem, SiblingNode};
 use vpack::payload::validate_invariants;
-use vpack::consensus::{tx_preimage, TxInPreimage, TxOutPreimage};
-use vpack::types::hashes::{Hash, sha256d};
+use vpack::types::hashes::{sha256d, Hash};
 use vpack::types::{OutPoint, Txid};
+use vpack::{
+    create_vpack_from_tree, verify, ArkLabsAdapter, ArkLabsV3, ConsensusEngine, LogicAdapter,
+    SecondTechAdapter, SecondTechV3, TxVariant, VPackTree, VtxoId,
+};
 
 /// Set the panic hook so Rust panics show up as readable errors in the browser console.
 #[wasm_bindgen]
@@ -87,7 +87,8 @@ fn txid_to_string(txid: &Txid) -> String {
 fn tree_output_sum(tree: &VPackTree) -> u64 {
     if tree.path.is_empty() {
         let leaf_sum = tree.leaf.amount
-            + tree.leaf_siblings
+            + tree
+                .leaf_siblings
                 .iter()
                 .filter_map(|s| match s {
                     SiblingNode::Compact { value, .. } => Some(*value),
@@ -111,10 +112,13 @@ fn tree_output_sum(tree: &VPackTree) -> u64 {
 
 /// Extracts path details from a VPackTree (works for both ArkLabs and SecondTech variants).
 /// Returns a vector of PathDetail structs representing the sovereignty path.
-fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant) -> Result<Vec<PathDetail>, JsValue> {
-    
+fn extract_path_details(
+    tree: &VPackTree,
+    anchor_value: u64,
+    variant: TxVariant,
+) -> Result<Vec<PathDetail>, JsValue> {
     let mut path_details = Vec::new();
-    
+
     // Add anchor node (L1 transaction)
     let anchor_txid = txid_to_string(&tree.anchor.txid);
     let anchor_outputs = 1; // Anchor typically has 1 output
@@ -131,14 +135,14 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         tx_preimage_hex: String::new(), // L1 tx; no virtual preimage
         sibling_count: 0,
     });
-    
+
     // Traverse path (similar to consensus engine compute_vtxo_id)
     let mut current_prevout = tree.anchor;
     let mut input_amount: Option<u64> = Some(anchor_value);
-    
+
     for (idx, genesis_item) in tree.path.iter().enumerate() {
         let mut outputs = Vec::new();
-        
+
         // Add child output if present
         if !genesis_item.child_script_pubkey.is_empty() {
             outputs.push(TxOutPreimage {
@@ -146,7 +150,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                 script_pubkey: genesis_item.child_script_pubkey.as_slice(),
             });
         }
-        
+
         // Add sibling outputs
         let mut has_fee_anchor = false;
         let mut sibling_count: u32 = 0;
@@ -163,30 +167,32 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                         sibling_count += 1;
                     }
                 }
-                SiblingNode::Full(_) => return Err(JsValue::from_str("Full sibling nodes not supported")),
+                SiblingNode::Full(_) => {
+                    return Err(JsValue::from_str("Full sibling nodes not supported"))
+                }
             }
         }
-        
+
         // Build input
         let input = TxInPreimage {
             prev_out_txid: current_prevout.txid.to_byte_array(),
             prev_out_vout: current_prevout.vout,
             sequence: genesis_item.sequence,
         };
-        
+
         // Compute transaction ID
         let preimage_bytes = tx_preimage(3, &[input], &outputs, 0);
         let hash = sha256d::Hash::hash(&preimage_bytes);
         let txid_bytes = hash.to_byte_array();
         let txid = Txid::from_byte_array(txid_bytes);
         let txid_str = txid_to_string(&txid);
-        
+
         // Get amount (child amount or first output value)
         let amount = genesis_item.child_amount;
-        
+
         // Calculate exit weight
         let exit_weight = estimate_exit_weight_vb(outputs.len());
-        
+
         // Determine vout based on variant
         // For display purposes, we show the vout that would be used for the next transaction
         let vout = match variant {
@@ -200,7 +206,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                 }
             }
         };
-        
+
         path_details.push(PathDetail {
             txid: txid_str,
             amount,
@@ -214,7 +220,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
             tx_preimage_hex: hex::encode(&preimage_bytes),
             sibling_count,
         });
-        
+
         // Update for next iteration - determine which output index to use
         let next_vout = match variant {
             TxVariant::V3Anchored => 0,
@@ -227,11 +233,14 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                 }
             }
         };
-        current_prevout = OutPoint { txid, vout: next_vout };
+        current_prevout = OutPoint {
+            txid,
+            vout: next_vout,
+        };
         // Get the amount from the output at the next_vout index
         input_amount = outputs.get(next_vout as usize).map(|o| o.value);
     }
-    
+
     // Add leaf node
     let num_leaf_outputs = 1 + tree.leaf_siblings.len();
     let mut leaf_has_fee_anchor = false;
@@ -254,10 +263,12 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
                     leaf_sibling_count += 1;
                 }
             }
-            SiblingNode::Full(_) => return Err(JsValue::from_str("Full sibling nodes not supported")),
+            SiblingNode::Full(_) => {
+                return Err(JsValue::from_str("Full sibling nodes not supported"))
+            }
         }
     }
-    
+
     // Compute leaf transaction ID
     let leaf_input = TxInPreimage {
         prev_out_txid: current_prevout.txid.to_byte_array(),
@@ -269,7 +280,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
     let leaf_txid_bytes = leaf_hash.to_byte_array();
     let leaf_txid = Txid::from_byte_array(leaf_txid_bytes);
     let leaf_txid_str = txid_to_string(&leaf_txid);
-    
+
     path_details.push(PathDetail {
         txid: leaf_txid_str,
         amount: tree.leaf.amount,
@@ -283,7 +294,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         tx_preimage_hex: hex::encode(&leaf_preimage),
         sibling_count: leaf_sibling_count,
     });
-    
+
     Ok(path_details)
 }
 
@@ -294,8 +305,8 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
 /// Response: { variant, status: "Success"|"Failure", reconstructed_tx_id }.
 #[wasm_bindgen]
 pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
-    let value: serde_json::Value = serde_json::from_str(json_input)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let value: serde_json::Value =
+        serde_json::from_str(json_input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let expected_id_str = value["raw_evidence"]["expected_vtxo_id"]
         .as_str()
@@ -309,9 +320,9 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         .ok_or_else(|| JsValue::from_str("missing anchor_value (L1 UTXO value in sats); use string for 64-bit, e.g. \"anchor_value\": \"1100\""))
         .and_then(parse_anchor_value)?;
 
-    let ri = value.get("reconstruction_ingredients").ok_or_else(|| {
-        JsValue::from_str("missing reconstruction_ingredients")
-    })?;
+    let ri = value
+        .get("reconstruction_ingredients")
+        .ok_or_else(|| JsValue::from_str("missing reconstruction_ingredients"))?;
 
     // Try ArkLabs (V3Anchored) first
     if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
@@ -324,8 +335,8 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         let reconstructed = engine
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
-        let path_details = extract_path_details(&tree, anchor_value, TxVariant::V3Anchored)
-            .map_err(|e| e)?;
+        let path_details =
+            extract_path_details(&tree, anchor_value, TxVariant::V3Anchored).map_err(|e| e)?;
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x04".to_string(),
             status: "Success".to_string(),
@@ -345,8 +356,8 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
         let reconstructed = engine
             .compute_vtxo_id(&tree, None)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
-        let path_details = extract_path_details(&tree, anchor_value, TxVariant::V3Plain)
-            .map_err(|e| e)?;
+        let path_details =
+            extract_path_details(&tree, anchor_value, TxVariant::V3Plain).map_err(|e| e)?;
         return Ok(serde_wasm_bindgen::to_value(&WasmVerifyResult {
             variant: "0x03".to_string(),
             status: "Success".to_string(),
@@ -371,8 +382,8 @@ struct WasmComputeVtxoIdResult {
 /// Returns { variant, reconstructed_tx_id } or throws.
 #[wasm_bindgen]
 pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
-    let value: serde_json::Value = serde_json::from_str(json_input)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let value: serde_json::Value =
+        serde_json::from_str(json_input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let ri = value
         .get("reconstruction_ingredients")
@@ -409,8 +420,8 @@ pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
 /// Returns raw bytes as Uint8Array, or throws on parse/encoding error.
 #[wasm_bindgen]
 pub fn wasm_export_to_vpack(json_input: &str) -> Result<Vec<u8>, JsValue> {
-    let value: serde_json::Value = serde_json::from_str(json_input)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let value: serde_json::Value =
+        serde_json::from_str(json_input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let ri = value
         .get("reconstruction_ingredients")
@@ -445,11 +456,18 @@ struct WasmParseHeaderResult {
 #[wasm_bindgen]
 pub fn wasm_parse_vpack_header(vpack_bytes: Vec<u8>) -> Result<JsValue, JsValue> {
     if vpack_bytes.len() < HEADER_SIZE {
-        return Err(JsValue::from_str("Error: Not a valid V-PACK file. Expected 'VPK' magic bytes."));
+        return Err(JsValue::from_str(
+            "Error: Not a valid V-PACK file. Expected 'VPK' magic bytes.",
+        ));
     }
 
-    if vpack_bytes[0] != MAGIC_BYTES[0] || vpack_bytes[1] != MAGIC_BYTES[1] || vpack_bytes[2] != MAGIC_BYTES[2] {
-        return Err(JsValue::from_str("Error: Not a valid V-PACK file. Expected 'VPK' magic bytes."));
+    if vpack_bytes[0] != MAGIC_BYTES[0]
+        || vpack_bytes[1] != MAGIC_BYTES[1]
+        || vpack_bytes[2] != MAGIC_BYTES[2]
+    {
+        return Err(JsValue::from_str(
+            "Error: Not a valid V-PACK file. Expected 'VPK' magic bytes.",
+        ));
     }
 
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])
@@ -491,11 +509,18 @@ pub fn wasm_parse_vpack_header(vpack_bytes: Vec<u8>) -> Result<JsValue, JsValue>
 #[wasm_bindgen]
 pub fn wasm_unpack_to_json(vpack_bytes: Vec<u8>) -> Result<String, JsValue> {
     if vpack_bytes.len() < HEADER_SIZE {
-        return Err(JsValue::from_str("Error: Not a valid V-PACK file. Expected 'VPK' magic bytes."));
+        return Err(JsValue::from_str(
+            "Error: Not a valid V-PACK file. Expected 'VPK' magic bytes.",
+        ));
     }
 
-    if vpack_bytes[0] != MAGIC_BYTES[0] || vpack_bytes[1] != MAGIC_BYTES[1] || vpack_bytes[2] != MAGIC_BYTES[2] {
-        return Err(JsValue::from_str("Error: Not a valid V-PACK file. Expected 'VPK' magic bytes."));
+    if vpack_bytes[0] != MAGIC_BYTES[0]
+        || vpack_bytes[1] != MAGIC_BYTES[1]
+        || vpack_bytes[2] != MAGIC_BYTES[2]
+    {
+        return Err(JsValue::from_str(
+            "Error: Not a valid V-PACK file. Expected 'VPK' magic bytes.",
+        ));
     }
 
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])
@@ -508,14 +533,14 @@ pub fn wasm_unpack_to_json(vpack_bytes: Vec<u8>) -> Result<String, JsValue> {
     }
     let payload = &payload[..payload_len];
 
-    header.verify_checksum(payload)
+    header
+        .verify_checksum(payload)
         .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
     let tree = BoundedReader::parse(&header, payload)
         .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
-    validate_invariants(&header, &tree)
-        .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+    validate_invariants(&header, &tree).map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
     let expected_id = match header.tx_variant {
         TxVariant::V3Anchored => ArkLabsV3
@@ -578,7 +603,14 @@ fn tree_to_ark_labs_json(tree: &VPackTree, fee_hex: &str) -> serde_json::Value {
             .siblings
             .iter()
             .filter_map(|s| {
-                let SiblingNode::Compact { hash, value, script } = s else { return None };
+                let SiblingNode::Compact {
+                    hash,
+                    value,
+                    script,
+                } = s
+                else {
+                    return None;
+                };
                 if script.as_slice() == tree.fee_anchor_script.as_slice() && *value == 0 {
                     return None;
                 }
@@ -614,7 +646,14 @@ fn tree_to_second_tech_json(tree: &VPackTree, fee_hex: &str) -> serde_json::Valu
                 .siblings
                 .iter()
                 .filter_map(|s| {
-                    let SiblingNode::Compact { hash, value, script } = s else { return None };
+                    let SiblingNode::Compact {
+                        hash,
+                        value,
+                        script,
+                    } = s
+                    else {
+                        return None;
+                    };
                     if script.as_slice() == tree.fee_anchor_script.as_slice() && *value == 0 {
                         return None;
                     }
@@ -652,13 +691,23 @@ fn tree_to_second_tech_json(tree: &VPackTree, fee_hex: &str) -> serde_json::Valu
 /// Calls core vpack::verify() with bytes already in standard format.
 /// anchor_value: Some(sats) for L1 verification; None for Test Mode (uses output sum).
 #[wasm_bindgen]
-pub fn wasm_verify_binary(vpack_bytes: Vec<u8>, anchor_value: Option<u64>) -> Result<JsValue, JsValue> {
+pub fn wasm_verify_binary(
+    vpack_bytes: Vec<u8>,
+    anchor_value: Option<u64>,
+) -> Result<JsValue, JsValue> {
     if vpack_bytes.len() < HEADER_SIZE {
-        return Err(JsValue::from_str("Error: Not a valid V-PACK file. Expected 'VPK' magic bytes."));
+        return Err(JsValue::from_str(
+            "Error: Not a valid V-PACK file. Expected 'VPK' magic bytes.",
+        ));
     }
 
-    if vpack_bytes[0] != MAGIC_BYTES[0] || vpack_bytes[1] != MAGIC_BYTES[1] || vpack_bytes[2] != MAGIC_BYTES[2] {
-        return Err(JsValue::from_str("Error: Not a valid V-PACK file. Expected 'VPK' magic bytes."));
+    if vpack_bytes[0] != MAGIC_BYTES[0]
+        || vpack_bytes[1] != MAGIC_BYTES[1]
+        || vpack_bytes[2] != MAGIC_BYTES[2]
+    {
+        return Err(JsValue::from_str(
+            "Error: Not a valid V-PACK file. Expected 'VPK' magic bytes.",
+        ));
     }
 
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])
@@ -671,14 +720,14 @@ pub fn wasm_verify_binary(vpack_bytes: Vec<u8>, anchor_value: Option<u64>) -> Re
     }
     let payload = &payload[..payload_len];
 
-    header.verify_checksum(payload)
+    header
+        .verify_checksum(payload)
         .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
     let tree = BoundedReader::parse(&header, payload)
         .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
-    validate_invariants(&header, &tree)
-        .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+    validate_invariants(&header, &tree).map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
 
     let expected_id = match header.tx_variant {
         TxVariant::V3Anchored => ArkLabsV3

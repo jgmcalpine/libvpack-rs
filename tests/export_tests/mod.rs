@@ -21,7 +21,9 @@ fn export_ark_labs_parity() {
         }
         let contents = fs::read_to_string(&path).expect("read");
         let value: serde_json::Value = serde_json::from_str(&contents).expect("parse");
-        let raw = value.get("raw_evidence").and_then(|r| r.get("expected_vtxo_id"));
+        let raw = value
+            .get("raw_evidence")
+            .and_then(|r| r.get("expected_vtxo_id"));
         let expected_str = match raw.and_then(|v| v.as_str()) {
             Some(s) if s != "COMPUTE_FROM_HEX" && s != "PLACEHOLDER" => s,
             _ => continue,
@@ -59,7 +61,9 @@ fn export_second_tech_parity() {
         }
         let contents = fs::read_to_string(&path).expect("read");
         let value: serde_json::Value = serde_json::from_str(&contents).expect("parse");
-        let raw = value.get("raw_evidence").and_then(|r| r.get("expected_vtxo_id"));
+        let raw = value
+            .get("raw_evidence")
+            .and_then(|r| r.get("expected_vtxo_id"));
         let expected_str = match raw.and_then(|v| v.as_str()) {
             Some(s) if s != "COMPUTE_FROM_HEX" && s != "PLACEHOLDER" => s,
             _ => continue,
@@ -75,7 +79,13 @@ fn export_second_tech_parity() {
         let anchor_value = path
             .file_name()
             .and_then(|p| p.to_str())
-            .map(|n| if n == "round_v3_borsh.json" { 15_000u64 } else { 10_000u64 })
+            .map(|n| {
+                if n == "round_v3_borsh.json" {
+                    15_000u64
+                } else {
+                    10_000u64
+                }
+            })
             .unwrap_or(10_000);
         vpack::verify(&bytes, &expected_id, anchor_value).expect("verify");
     }

@@ -6,14 +6,16 @@
 
 use alloc::vec::Vec;
 
-use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
+use crate::types::{hashes::sha256d, hashes::Hash, OutPoint, Txid};
 
 use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
 use crate::payload::tree::{SiblingNode, VPackTree};
 
 #[cfg(feature = "schnorr-verify")]
-use crate::consensus::taproot_sighash::{extract_verify_key, taproot_sighash, verify_schnorr_bip340};
+use crate::consensus::taproot_sighash::{
+    extract_verify_key, taproot_sighash, verify_schnorr_bip340,
+};
 
 /// Ark Labs V3-Anchored consensus engine (Variant 0x04).
 ///
@@ -102,9 +104,12 @@ impl ConsensusEngine for ArkLabsV3 {
                             }
                         });
                     let verify_key = verify_key.ok_or(VPackError::InvalidSignature)?;
-                    let vals = prev_output_values.as_ref().ok_or(VPackError::EncodingError)?;
-                    let scripts =
-                        prev_output_scripts.as_ref().ok_or(VPackError::EncodingError)?;
+                    let vals = prev_output_values
+                        .as_ref()
+                        .ok_or(VPackError::EncodingError)?;
+                    let scripts = prev_output_scripts
+                        .as_ref()
+                        .ok_or(VPackError::EncodingError)?;
                     let idx = current_prevout.vout as usize;
                     if idx >= vals.len() || idx >= scripts.len() {
                         return Err(VPackError::InvalidVout(current_prevout.vout));
@@ -125,12 +130,7 @@ impl ConsensusEngine for ArkLabsV3 {
             last_txid_bytes = Some(txid_bytes);
 
             prev_output_values = Some(outputs.iter().map(|o| o.value).collect());
-            prev_output_scripts = Some(
-                outputs
-                    .iter()
-                    .map(|o| o.script_pubkey.to_vec())
-                    .collect(),
-            );
+            prev_output_scripts = Some(outputs.iter().map(|o| o.script_pubkey.to_vec()).collect());
 
             // Hand-off: Convert to OutPoint for next step (always vout 0 for Ark Labs)
             current_prevout = OutPoint { txid, vout: 0 };
@@ -322,7 +322,9 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
 
         assert_eq!(
             computed_id, expected_vtxo_id,
@@ -436,7 +438,9 @@ mod tests {
 
         let anchor_value = 1100u64; // round_leaf_v3 input amount
         let engine = ArkLabsV3;
-        let expected_id = engine.compute_vtxo_id(&tree, Some(anchor_value)).expect("good tree");
+        let expected_id = engine
+            .compute_vtxo_id(&tree, Some(anchor_value))
+            .expect("good tree");
         let result = engine.verify(&tree_sabotaged, &expected_id, anchor_value);
         assert!(
             matches!(result, Err(VPackError::IdMismatch)),
@@ -533,7 +537,9 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
 
         assert_eq!(
             computed_id, expected_vtxo_id,
@@ -658,7 +664,9 @@ mod tests {
         };
 
         let engine = ArkLabsV3;
-        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
 
         // Verify it's a Raw hash (Ark Labs format)
         match computed_id {

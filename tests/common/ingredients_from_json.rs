@@ -26,7 +26,9 @@ fn decode_hex_32(hex_str: &str) -> Result<[u8; 32], String> {
 
 /// Build ArkLabsIngredients from gold-standard reconstruction_ingredients JSON.
 #[allow(dead_code)]
-pub fn ark_labs_ingredients_from_json(json: &serde_json::Value) -> Result<ArkLabsIngredients, String> {
+pub fn ark_labs_ingredients_from_json(
+    json: &serde_json::Value,
+) -> Result<ArkLabsIngredients, String> {
     let anchor_str = json["parent_outpoint"]
         .as_str()
         .or_else(|| json["anchor_outpoint"].as_str())
@@ -35,9 +37,7 @@ pub fn ark_labs_ingredients_from_json(json: &serde_json::Value) -> Result<ArkLab
         .as_str()
         .unwrap_or(FEE_ANCHOR_SCRIPT_HEX);
     let fee_anchor_script = decode_hex_to_vec(fee_hex)?;
-    let n_sequence = json["nSequence"]
-        .as_u64()
-        .ok_or("missing nSequence")? as u32;
+    let n_sequence = json["nSequence"].as_u64().ok_or("missing nSequence")? as u32;
 
     let outputs: Vec<ArkLabsOutput> = if let Some(arr) = json["outputs"].as_array() {
         arr.iter()
@@ -74,7 +74,11 @@ pub fn ark_labs_ingredients_from_json(json: &serde_json::Value) -> Result<ArkLab
             let hash = decode_hex_32(hash_hex)?;
             let value = s["value"].as_u64().ok_or("sibling missing value")?;
             let script = decode_hex_to_vec(s["script"].as_str().ok_or("sibling missing script")?)?;
-            list.push(ArkLabsSibling { hash, value, script });
+            list.push(ArkLabsSibling {
+                hash,
+                value,
+                script,
+            });
         }
         if list.is_empty() {
             None
@@ -127,7 +131,9 @@ pub fn second_tech_ingredients_from_json(
     let vout = json["vout"].as_u64().unwrap_or(0) as u32;
     let expiry_height = json["expiry_height"].as_u64().unwrap_or(0) as u32;
 
-    let path_array = json["path"].as_array().or_else(|| json["genesis"].as_array());
+    let path_array = json["path"]
+        .as_array()
+        .or_else(|| json["genesis"].as_array());
     let path = if let Some(steps) = path_array {
         steps
             .iter()
@@ -138,10 +144,13 @@ pub fn second_tech_ingredients_from_json(
                     .map(|s| {
                         let hash = decode_hex_32(s["hash"].as_str().ok_or("sibling hash")?)?;
                         let value = s["value"].as_u64().ok_or("sibling value")?;
-                        let script = decode_hex_to_vec(
-                            s["script"].as_str().ok_or("sibling script")?,
-                        )?;
-                        Ok(SecondTechSibling { hash, value, script })
+                        let script =
+                            decode_hex_to_vec(s["script"].as_str().ok_or("sibling script")?)?;
+                        Ok(SecondTechSibling {
+                            hash,
+                            value,
+                            script,
+                        })
                     })
                     .collect::<Result<Vec<_>, String>>()?;
                 let parent_index = step["parent_index"].as_u64().unwrap_or(0) as u32;

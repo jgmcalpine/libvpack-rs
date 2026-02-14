@@ -83,7 +83,10 @@ fn serialize_payload(header: &Header, tree: &VPackTree) -> Result<Vec<u8>, VPack
     serialize_payload_inner(tree, header.has_asset_id())
 }
 
-fn serialize_payload_inner(tree: &VPackTree, include_asset_id: bool) -> Result<Vec<u8>, VPackError> {
+fn serialize_payload_inner(
+    tree: &VPackTree,
+    include_asset_id: bool,
+) -> Result<Vec<u8>, VPackError> {
     let mut out = Vec::new();
 
     // Prefix: Asset ID (optional)

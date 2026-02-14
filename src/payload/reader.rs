@@ -6,8 +6,8 @@
 use crate::error::VPackError;
 use crate::header::{Header, TxVariant};
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
-use alloc::vec::Vec;
 use crate::types::{decode_outpoint, Amount, ScriptBuf, TxOut};
+use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
 
 /// The Bounded Reader.
@@ -223,117 +223,117 @@ impl BoundedReader {
         let mut siblings = Vec::with_capacity(len);
         for _ in 0..len {
             let sibling = if header.is_compact() {
-                    // COMPACT MODE:
-                    // 1. 32-byte hash
-                    // 2. 8-byte value (u64 LE)
-                    // 3. Borsh Vec<u8> script (u32 len + bytes)
+                // COMPACT MODE:
+                // 1. 32-byte hash
+                // 2. 8-byte value (u64 LE)
+                // 3. Borsh Vec<u8> script (u32 len + bytes)
 
-                    // 1. Read Hash (32B)
-                    if data.len() < 32 {
+                // 1. Read Hash (32B)
+                if data.len() < 32 {
+                    return Err(VPackError::IncompleteData);
+                }
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(&data[..32]);
+                *data = &data[32..];
+
+                // 2. Read Value (8B LE)
+                if data.len() < 8 {
+                    return Err(VPackError::IncompleteData);
+                }
+                let value = LittleEndian::read_u64(&data[..8]);
+                *data = &data[8..];
+
+                // 3. Script (Borsh Vec<u8>: u32 len + bytes)
+                if data.len() < 4 {
+                    return Err(VPackError::IncompleteData);
+                }
+                let script_len = LittleEndian::read_u32(&data[0..4]) as usize;
+                let (_, rest) = data.split_at(4);
+                *data = rest;
+                if data.len() < script_len {
+                    return Err(VPackError::IncompleteData);
+                }
+                let (script_slice, rest) = data.split_at(script_len);
+                *data = rest;
+                let script = script_slice.to_vec();
+
+                SiblingNode::Compact {
+                    hash,
+                    value,
+                    script,
+                }
+            } else {
+                // FULL MODE: Bitcoin TxOut (Consensus Decode)
+                // Format: [8-byte Value LE] [VarInt ScriptLen] [Script Bytes]
+                // We must manually parse to explicitly advance the cursor
+
+                // 1. Read value (8 bytes)
+                if data.len() < 8 {
+                    return Err(VPackError::IncompleteData);
+                }
+                let value = LittleEndian::read_u64(&data[..8]);
+                let mut cursor = &data[8..];
+
+                // 2. Read VarInt script length
+                let script_len = if cursor.is_empty() {
+                    return Err(VPackError::IncompleteData);
+                } else if cursor[0] < 0xfd {
+                    let len = cursor[0] as u64;
+                    cursor = &cursor[1..];
+                    len
+                } else if cursor[0] == 0xfd {
+                    if cursor.len() < 3 {
                         return Err(VPackError::IncompleteData);
                     }
-                    let mut hash = [0u8; 32];
-                    hash.copy_from_slice(&data[..32]);
-                    *data = &data[32..];
-
-                    // 2. Read Value (8B LE)
-                    if data.len() < 8 {
+                    let len = LittleEndian::read_u16(&cursor[1..3]) as u64;
+                    cursor = &cursor[3..];
+                    len
+                } else if cursor[0] == 0xfe {
+                    if cursor.len() < 5 {
                         return Err(VPackError::IncompleteData);
                     }
-                    let value = LittleEndian::read_u64(&data[..8]);
-                    *data = &data[8..];
-
-                    // 3. Script (Borsh Vec<u8>: u32 len + bytes)
-                    if data.len() < 4 {
-                        return Err(VPackError::IncompleteData);
-                    }
-                    let script_len = LittleEndian::read_u32(&data[0..4]) as usize;
-                    let (_, rest) = data.split_at(4);
-                    *data = rest;
-                    if data.len() < script_len {
-                        return Err(VPackError::IncompleteData);
-                    }
-                    let (script_slice, rest) = data.split_at(script_len);
-                    *data = rest;
-                    let script = script_slice.to_vec();
-
-                    SiblingNode::Compact {
-                        hash,
-                        value,
-                        script,
-                    }
+                    let len = LittleEndian::read_u32(&cursor[1..5]) as u64;
+                    cursor = &cursor[5..];
+                    len
                 } else {
-                    // FULL MODE: Bitcoin TxOut (Consensus Decode)
-                    // Format: [8-byte Value LE] [VarInt ScriptLen] [Script Bytes]
-                    // We must manually parse to explicitly advance the cursor
-
-                    // 1. Read value (8 bytes)
-                    if data.len() < 8 {
+                    if cursor.len() < 9 {
                         return Err(VPackError::IncompleteData);
                     }
-                    let value = LittleEndian::read_u64(&data[..8]);
-                    let mut cursor = &data[8..];
-
-                    // 2. Read VarInt script length
-                    let script_len = if cursor.is_empty() {
-                        return Err(VPackError::IncompleteData);
-                    } else if cursor[0] < 0xfd {
-                        let len = cursor[0] as u64;
-                        cursor = &cursor[1..];
-                        len
-                    } else if cursor[0] == 0xfd {
-                        if cursor.len() < 3 {
-                            return Err(VPackError::IncompleteData);
-                        }
-                        let len = LittleEndian::read_u16(&cursor[1..3]) as u64;
-                        cursor = &cursor[3..];
-                        len
-                    } else if cursor[0] == 0xfe {
-                        if cursor.len() < 5 {
-                            return Err(VPackError::IncompleteData);
-                        }
-                        let len = LittleEndian::read_u32(&cursor[1..5]) as u64;
-                        cursor = &cursor[5..];
-                        len
-                    } else {
-                        if cursor.len() < 9 {
-                            return Err(VPackError::IncompleteData);
-                        }
-                        let len = LittleEndian::read_u64(&cursor[1..9]);
-                        cursor = &cursor[9..];
-                        len
-                    };
-
-                    // 3. Read script bytes
-                    let script_len_usize = script_len as usize;
-                    if cursor.len() < script_len_usize {
-                        return Err(VPackError::IncompleteData);
-                    }
-                    let script_bytes = &cursor[..script_len_usize];
-
-                    // 4. Reconstruct TxOut and advance data slice
-                    let txout = TxOut {
-                        value: Amount::from_sat(value),
-                        script_pubkey: ScriptBuf::from_bytes(script_bytes.to_vec()),
-                    };
-
-                    // Calculate total consumed: 8 (value) + VarInt bytes + script bytes
-                    let varint_bytes = if script_len < 0xfd {
-                        1
-                    } else if script_len < 0x1_0000 {
-                        3
-                    } else if script_len < 0x1_0000_0000 {
-                        5
-                    } else {
-                        9
-                    };
-                    let total_consumed = 8 + varint_bytes + script_len_usize;
-                    *data = &data[total_consumed..]; // EXPLICITLY ADVANCE THE SLICE
-
-                    SiblingNode::Full(txout)
+                    let len = LittleEndian::read_u64(&cursor[1..9]);
+                    cursor = &cursor[9..];
+                    len
                 };
-                siblings.push(sibling);
-            }
+
+                // 3. Read script bytes
+                let script_len_usize = script_len as usize;
+                if cursor.len() < script_len_usize {
+                    return Err(VPackError::IncompleteData);
+                }
+                let script_bytes = &cursor[..script_len_usize];
+
+                // 4. Reconstruct TxOut and advance data slice
+                let txout = TxOut {
+                    value: Amount::from_sat(value),
+                    script_pubkey: ScriptBuf::from_bytes(script_bytes.to_vec()),
+                };
+
+                // Calculate total consumed: 8 (value) + VarInt bytes + script bytes
+                let varint_bytes = if script_len < 0xfd {
+                    1
+                } else if script_len < 0x1_0000 {
+                    3
+                } else if script_len < 0x1_0000_0000 {
+                    5
+                } else {
+                    9
+                };
+                let total_consumed = 8 + varint_bytes + script_len_usize;
+                *data = &data[total_consumed..]; // EXPLICITLY ADVANCE THE SLICE
+
+                SiblingNode::Full(txout)
+            };
+            siblings.push(sibling);
+        }
         Ok(siblings)
     }
 }

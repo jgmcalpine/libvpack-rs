@@ -230,8 +230,8 @@ fn master_universal_verification() {
 
     const ARK_ANCHOR: u64 = 1100;
     const SECOND_ROUND_ANCHOR: u64 = 10_000;
-    let ark_tree_result =
-        vpack::verify(&ark_bytes, &ark_expected_id, ARK_ANCHOR).expect("Ark Labs verification should succeed");
+    let ark_tree_result = vpack::verify(&ark_bytes, &ark_expected_id, ARK_ANCHOR)
+        .expect("Ark Labs verification should succeed");
     let second_tree_result = vpack::verify(&second_bytes, &second_expected, SECOND_ROUND_ANCHOR)
         .expect("Second Tech verification should succeed");
 
@@ -301,10 +301,9 @@ fn test_sabotage_invalid_signature() {
         signature: None,
     };
 
-    let intermediate_script = hex::decode(
-        "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
-    )
-    .expect("decode intermediate script");
+    let intermediate_script =
+        hex::decode("5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3")
+            .expect("decode intermediate script");
 
     let step1_siblings = vec![
         SiblingNode::Compact {

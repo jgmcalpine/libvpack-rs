@@ -100,13 +100,13 @@ pub struct SecondTechIngredients {
 /// Builds a header from the tree so arity, depth, and node_count match the payload.
 fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, VPackError> {
     let tree_depth = tree.path.len() as u32;
-    let (node_count, tree_arity) = tree
-        .path
-        .iter()
-        .fold((0u32, 0u32), |(count, max_arity), item| {
-            let n = item.siblings.len() as u32;
-            (count + n, core::cmp::max(max_arity, n))
-        });
+    let (node_count, tree_arity) =
+        tree.path
+            .iter()
+            .fold((0u32, 0u32), |(count, max_arity), item| {
+                let n = item.siblings.len() as u32;
+                (count + n, core::cmp::max(max_arity, n))
+            });
     let tree_arity = if tree_depth == 0 {
         core::cmp::max(2, tree_arity)
     } else {
@@ -114,7 +114,10 @@ fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, V
     };
     let tree_depth = core::cmp::min(tree_depth, MAX_TREE_DEPTH as u32) as u16;
     let tree_arity = core::cmp::min(tree_arity, MAX_TREE_ARITY as u32) as u16;
-    let node_count = core::cmp::min(node_count, (MAX_TREE_DEPTH as u32) * (MAX_TREE_ARITY as u32)) as u16;
+    let node_count = core::cmp::min(
+        node_count,
+        (MAX_TREE_DEPTH as u32) * (MAX_TREE_ARITY as u32),
+    ) as u16;
 
     let payload = pack::serialize_payload_for_header(tree)?;
     let payload_len = payload.len();
@@ -156,7 +159,9 @@ fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, V
 // Ark Labs: ingredients -> tree
 // -----------------------------------------------------------------------------
 
-fn tree_from_ark_labs_ingredients(ingredients: &ArkLabsIngredients) -> Result<VPackTree, VPackError> {
+fn tree_from_ark_labs_ingredients(
+    ingredients: &ArkLabsIngredients,
+) -> Result<VPackTree, VPackError> {
     let anchor_id = VtxoId::from_str(ingredients.anchor_outpoint.trim())
         .map_err(|_| VPackError::InvalidVtxoIdFormat)?;
     let anchor = match anchor_id {

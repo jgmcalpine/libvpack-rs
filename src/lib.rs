@@ -22,7 +22,7 @@ pub mod types;
 pub mod ingredients;
 
 #[cfg(any(feature = "adapter", feature = "wasm"))]
-pub use ingredients::{ArkLabsAdapter, LogicAdapter, SecondTechAdapter, tree_from_ingredients};
+pub use ingredients::{tree_from_ingredients, ArkLabsAdapter, LogicAdapter, SecondTechAdapter};
 
 pub use consensus::{ArkLabsV3, ConsensusEngine, SecondTechV3, VtxoId};
 pub use export::{
@@ -120,19 +120,20 @@ mod wasm_auto_inference_test {
         let expected_id_str = value["raw_evidence"]["expected_vtxo_id"]
             .as_str()
             .ok_or("missing expected_vtxo_id")?;
-        let expected_id =
-            VtxoId::from_str(expected_id_str).map_err(|_| "invalid expected_vtxo_id".to_string())?;
+        let expected_id = VtxoId::from_str(expected_id_str)
+            .map_err(|_| "invalid expected_vtxo_id".to_string())?;
         let ri = value
             .get("reconstruction_ingredients")
             .ok_or("missing reconstruction_ingredients")?;
 
         if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
-            let bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored)
-                .map_err(|e| e.to_string())?;
+            let bytes =
+                create_vpack_from_tree(&tree, TxVariant::V3Anchored).map_err(|e| e.to_string())?;
             let anchor_value = value["anchor_value"].as_u64().unwrap_or(1100u64);
             verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
-            let reconstructed =
-                ArkLabsV3.compute_vtxo_id(&tree, None).map_err(|e| e.to_string())?;
+            let reconstructed = ArkLabsV3
+                .compute_vtxo_id(&tree, None)
+                .map_err(|e| e.to_string())?;
             return Ok(("0x04".into(), reconstructed.to_string()));
         }
 
@@ -141,8 +142,9 @@ mod wasm_auto_inference_test {
                 create_vpack_from_tree(&tree, TxVariant::V3Plain).map_err(|e| e.to_string())?;
             let anchor_value = value["anchor_value"].as_u64().unwrap_or(10_000u64);
             verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
-            let reconstructed =
-                SecondTechV3.compute_vtxo_id(&tree, None).map_err(|e| e.to_string())?;
+            let reconstructed = SecondTechV3
+                .compute_vtxo_id(&tree, None)
+                .map_err(|e| e.to_string())?;
             return Ok(("0x03".into(), reconstructed.to_string()));
         }
 
@@ -151,8 +153,9 @@ mod wasm_auto_inference_test {
 
     #[test]
     fn wasm_verify_auto_inference_ark_labs_round_leaf_v3() {
-        let (variant, _tx_id) = run_auto_inference("tests/conformance/vectors/ark_labs/round_leaf_v3.json")
-            .expect("ark_labs round_leaf_v3 should verify");
+        let (variant, _tx_id) =
+            run_auto_inference("tests/conformance/vectors/ark_labs/round_leaf_v3.json")
+                .expect("ark_labs round_leaf_v3 should verify");
         assert_eq!(variant, "0x04");
     }
 

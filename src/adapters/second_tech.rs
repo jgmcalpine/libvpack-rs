@@ -4,8 +4,8 @@
 //! vector length, Bitcoin consensus OutPoints, and a policy enum. This module parses the
 //! shadow layout and maps to VPackTree.
 
-use alloc::vec::Vec;
 use crate::types::{decode_outpoint, OutPoint};
+use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
 
 use crate::compact_size::read_compact_size;

@@ -6,7 +6,7 @@
 use core::fmt;
 use core::str::FromStr;
 
-use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
+use crate::types::{hashes::sha256d, hashes::Hash, OutPoint, Txid};
 
 use crate::error::VPackError;
 use crate::payload::tree::VPackTree;

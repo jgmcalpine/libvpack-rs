@@ -104,8 +104,7 @@ mod wasm_shim {
         }
         let value = LittleEndian::read_u64(&data[..8]);
         *data = &data[8..];
-        let (script_len, varint_len) =
-            read_compact_size(*data).ok_or(VPackError::EncodingError)?;
+        let (script_len, varint_len) = read_compact_size(*data).ok_or(VPackError::EncodingError)?;
         let script_len = script_len as usize;
         *data = &data[varint_len..];
         if data.len() < script_len {
@@ -118,7 +117,6 @@ mod wasm_shim {
             script_pubkey,
         })
     }
-
 }
 
 // When both features are enabled (e.g. workspace build from wasm-vpack), prefer wasm so only one shim is active.

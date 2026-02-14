@@ -7,14 +7,16 @@
 
 use alloc::vec::Vec;
 
-use crate::types::{hashes::Hash, hashes::sha256d, OutPoint, Txid};
+use crate::types::{hashes::sha256d, hashes::Hash, OutPoint, Txid};
 
 use crate::consensus::{tx_preimage, ConsensusEngine, TxInPreimage, TxOutPreimage, VtxoId};
 use crate::error::VPackError;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree};
 
 #[cfg(feature = "schnorr-verify")]
-use crate::consensus::taproot_sighash::{extract_verify_key, taproot_sighash, verify_schnorr_bip340};
+use crate::consensus::taproot_sighash::{
+    extract_verify_key, taproot_sighash, verify_schnorr_bip340,
+};
 
 /// Second Tech V3-Plain consensus engine (Variant 0x03).
 ///
@@ -84,9 +86,12 @@ impl ConsensusEngine for SecondTechV3 {
                             }
                         });
                     let verify_key = verify_key.ok_or(VPackError::InvalidSignature)?;
-                    let vals = prev_output_values.as_ref().ok_or(VPackError::EncodingError)?;
-                    let scripts =
-                        prev_output_scripts.as_ref().ok_or(VPackError::EncodingError)?;
+                    let vals = prev_output_values
+                        .as_ref()
+                        .ok_or(VPackError::EncodingError)?;
+                    let scripts = prev_output_scripts
+                        .as_ref()
+                        .ok_or(VPackError::EncodingError)?;
                     let idx = current_prevout.vout as usize;
                     if idx >= vals.len() || idx >= scripts.len() {
                         return Err(VPackError::InvalidVout(current_prevout.vout));
@@ -114,12 +119,7 @@ impl ConsensusEngine for SecondTechV3 {
             last_outpoint = Some(OutPoint { txid, vout });
 
             prev_output_values = Some(outputs.iter().map(|o| o.value).collect());
-            prev_output_scripts = Some(
-                outputs
-                    .iter()
-                    .map(|o| o.script_pubkey.to_vec())
-                    .collect(),
-            );
+            prev_output_scripts = Some(outputs.iter().map(|o| o.script_pubkey.to_vec()).collect());
 
             // Hand-off: Convert to OutPoint for next step
             current_prevout = OutPoint { txid, vout };
@@ -173,11 +173,12 @@ impl SecondTechV3 {
         for sibling in &tree.leaf_siblings {
             let (value, script) = match sibling {
                 SiblingNode::Compact { value, script, .. } => (*value, script.as_slice()),
-                SiblingNode::Full(txout) => {
-                    (txout.value.to_sat(), txout.script_pubkey.as_bytes())
-                }
+                SiblingNode::Full(txout) => (txout.value.to_sat(), txout.script_pubkey.as_bytes()),
             };
-            outputs.push(TxOutPreimage { value, script_pubkey: script });
+            outputs.push(TxOutPreimage {
+                value,
+                script_pubkey: script,
+            });
         }
 
         if let Some(expected) = input_amount {
@@ -381,7 +382,9 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
 
         let expected_str = j["expected_vtxo_id"].as_str().expect("expected_vtxo_id");
         let expected_id = VtxoId::from_str(expected_str).expect("parse expected VTXO ID");
@@ -516,9 +519,10 @@ mod tests {
 
         let engine = SecondTechV3;
         // Input amount = sum of outputs: child + N siblings at sibling_value + fee anchor 0
-        let anchor_value =
-            child_amount + ((good_siblings.len() - 1) as u64 * sibling_value) + 0u64;
-        let expected_id = engine.compute_vtxo_id(&good_tree, Some(anchor_value)).expect("good tree");
+        let anchor_value = child_amount + ((good_siblings.len() - 1) as u64 * sibling_value) + 0u64;
+        let expected_id = engine
+            .compute_vtxo_id(&good_tree, Some(anchor_value))
+            .expect("good tree");
         let result = engine.verify(&bad_tree, &expected_id, anchor_value);
         assert!(
             matches!(result, Err(VPackError::IdMismatch)),
@@ -645,7 +649,9 @@ mod tests {
         };
 
         let engine = SecondTechV3;
-        let computed_id = engine.compute_vtxo_id(&tree, None).expect("compute VTXO ID");
+        let computed_id = engine
+            .compute_vtxo_id(&tree, None)
+            .expect("compute VTXO ID");
 
         // Verify it's an OutPoint (Second Tech format)
         match computed_id {

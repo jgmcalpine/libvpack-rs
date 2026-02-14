@@ -22,8 +22,12 @@ pub fn validate_invariants(header: &Header, tree: &VPackTree) -> Result<(), VPac
     {
         let has_fee_anchor = |siblings: &[SiblingNode]| {
             siblings.iter().any(|s| match s {
-                SiblingNode::Compact { script, .. } => script.as_slice() == tree.fee_anchor_script.as_slice(),
-                SiblingNode::Full(txout) => txout.script_pubkey.as_bytes() == tree.fee_anchor_script.as_slice(),
+                SiblingNode::Compact { script, .. } => {
+                    script.as_slice() == tree.fee_anchor_script.as_slice()
+                }
+                SiblingNode::Full(txout) => {
+                    txout.script_pubkey.as_bytes() == tree.fee_anchor_script.as_slice()
+                }
             })
         };
         for item in &tree.path {
