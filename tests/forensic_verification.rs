@@ -70,7 +70,7 @@ fn naked_hash_ark_labs_branch_version_2_vs_3() {
         "Ark Labs Round Branch expected ID f259... should match V3 preimage"
     );
     assert!(
-        !(hash_v2 == EXPECTED_BRANCH_ID),
+        hash_v2 != EXPECTED_BRANCH_ID,
         "Ark Labs Round Branch should NOT match V2 preimage"
     );
 }
@@ -93,7 +93,7 @@ fn naked_hash_ark_labs_oor_version_2_vs_3() {
         "Ark Labs OOR Forfeit must match as V3"
     );
     assert!(
-        !(hash_v2 == expected_oor_txid),
+        hash_v2 != expected_oor_txid,
         "Ark Labs OOR Forfeit must NOT match as V2"
     );
 }

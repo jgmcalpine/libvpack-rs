@@ -22,7 +22,7 @@ use crate::consensus::taproot_sighash::{
 /// Reconstructs VTXO identity by building a Bitcoin V3 transaction with:
 /// - Leaf nodes: 2 outputs (user + fee anchor)
 /// - Branch nodes: N+1 outputs (N children + fee anchor)
-/// Then computes Double-SHA256 hash to produce `VtxoId::Raw`.
+///   Then computes Double-SHA256 hash to produce `VtxoId::Raw`.
 pub struct ArkLabsV3;
 
 impl ConsensusEngine for ArkLabsV3 {
@@ -82,7 +82,7 @@ impl ConsensusEngine for ArkLabsV3 {
                     Some(s) if s != expected => return Err(VPackError::ValueMismatch),
                     Some(_) => {}
                 }
-                input_amount = outputs.get(0).map(|o| o.value);
+                input_amount = outputs.first().map(|o| o.value);
             }
 
             // Build input spending current_prevout
@@ -677,14 +677,11 @@ mod tests {
         }
 
         // Verify the ID is non-zero (sanity check)
-        match computed_id {
-            VtxoId::Raw(bytes) => {
-                assert!(
-                    !bytes.iter().all(|&b| b == 0),
-                    "VTXO ID should not be all zeros"
-                );
-            }
-            _ => {}
+        if let VtxoId::Raw(bytes) = computed_id {
+            assert!(
+                !bytes.iter().all(|&b| b == 0),
+                "VTXO ID should not be all zeros"
+            );
         }
     }
 }

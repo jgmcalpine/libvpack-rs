@@ -226,13 +226,13 @@ fn run_integrity_sabotage(path: &Path) {
         let good_bytes = create_vpack_ark_labs(ingredients).expect("pack");
         let mut tree =
             vpack::verify(&good_bytes, &expected_id, anchor_value).expect("verify good bytes");
-        if let Some(sibling) = tree.path.first_mut().and_then(|p| p.siblings.first_mut()) {
-            if let vpack::payload::tree::SiblingNode::Compact { ref mut script, .. } = sibling {
-                if script.is_empty() {
-                    script.push(0x00);
-                } else {
-                    script[0] = script[0].wrapping_add(1);
-                }
+        if let Some(vpack::payload::tree::SiblingNode::Compact { ref mut script, .. }) =
+            tree.path.first_mut().and_then(|p| p.siblings.first_mut())
+        {
+            if script.is_empty() {
+                script.push(0x00);
+            } else {
+                script[0] = script[0].wrapping_add(1);
             }
         }
         let bad_bytes =
@@ -564,8 +564,7 @@ fn print_round_v3_borsh_5step_path() {
     // Step 3 child=11000. Step 3 out=12000. Step 2 child=12000. Step 2 out=13000. Step 1 child=13000. Step 1 out=14000. Step 0 child=14000. Anchor=15000.
     let child_amounts = [14000u64, 13000, 12000, 11000, 10000];
     let mut path_items = Vec::new();
-    for i in 0..5 {
-        let child_amount = child_amounts[i];
+    for child_amount in child_amounts {
         // Only user sibling; fee anchor is added by adapter/export
         let step_siblings = vec![SiblingNode::Compact {
             hash: hash_sibling_birth_tx(1000, &sibling_script),

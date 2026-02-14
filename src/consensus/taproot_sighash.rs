@@ -1,8 +1,6 @@
 //! BIP-341 Taproot Sighash (SigMsg + TapSighash tagged hash).
 //! no_std; single-input SIGHASH_DEFAULT only. Used for GenesisItem Schnorr verification.
 
-#![cfg(feature = "schnorr-verify")]
-
 use alloc::vec::Vec;
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -41,8 +39,7 @@ pub fn sign_sighash_for_test(sighash: &[u8; 32]) -> ([u8; 64], [u8; 32]) {
     use k256::schnorr::signature::hazmat::PrehashSigner;
     use k256::schnorr::SigningKey;
     let key_bytes = [0x42u8; 32];
-    let signing_key =
-        SigningKey::from_bytes((&key_bytes[..]).into()).expect("fixed test key is valid");
+    let signing_key = SigningKey::from_bytes(&key_bytes[..]).expect("fixed test key is valid");
     let sig = signing_key.sign_prehash(sighash).expect("sign");
     let pk = signing_key.verifying_key().to_bytes();
     (sig.to_bytes(), pk.into())

@@ -107,11 +107,7 @@ fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, V
                 let n = item.siblings.len() as u32;
                 (count + n, core::cmp::max(max_arity, n))
             });
-    let tree_arity = if tree_depth == 0 {
-        core::cmp::max(2, tree_arity)
-    } else {
-        core::cmp::max(2, tree_arity)
-    };
+    let tree_arity = core::cmp::max(2, tree_arity);
     let tree_depth = core::cmp::min(tree_depth, MAX_TREE_DEPTH as u32) as u16;
     let tree_arity = core::cmp::min(tree_arity, MAX_TREE_ARITY as u32) as u16;
     let node_count = core::cmp::min(

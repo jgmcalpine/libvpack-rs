@@ -252,8 +252,7 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         script_pubkey: server_pubkey,
     };
 
-    let mut leaf_siblings = Vec::new();
-    leaf_siblings.push(fee_anchor_sibling);
+    let leaf_siblings = Vec::from([fee_anchor_sibling]);
 
     Ok(VPackTree {
         leaf,

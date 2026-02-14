@@ -143,14 +143,14 @@ fn serialize_payload_inner(
         .serialize(&mut out)
         .map_err(|_| VPackError::EncodingError)?;
 
-    for (_item_idx, item) in tree.path.iter().enumerate() {
+    for item in tree.path.iter() {
         // siblings_len (Borsh u32)
         let siblings_len = item.siblings.len() as u32;
         siblings_len
             .serialize(&mut out)
             .map_err(|_| VPackError::EncodingError)?;
 
-        for (_sibling_idx, sibling) in item.siblings.iter().enumerate() {
+        for sibling in item.siblings.iter() {
             match sibling {
                 SiblingNode::Compact {
                     hash,
@@ -197,7 +197,7 @@ fn serialize_payload_inner(
 /// `TxOut::consensus_decode` in the reader. Both use Bitcoin VarInt format:
 /// - Writer: `write_compact_size(out, script.len())` → VarInt
 /// - Reader: `TxOut::consensus_decode(&mut data)` → reads VarInt script_len
-/// This ensures perfect symmetry for SiblingNode::Full.
+///   This ensures perfect symmetry for SiblingNode::Full.
 fn encode_txout(txout: &TxOut, out: &mut Vec<u8>) -> Result<(), VPackError> {
     let value = txout.value.to_sat();
     let mut val_buf = [0u8; 8];

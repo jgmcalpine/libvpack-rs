@@ -519,7 +519,7 @@ mod tests {
 
         let engine = SecondTechV3;
         // Input amount = sum of outputs: child + N siblings at sibling_value + fee anchor 0
-        let anchor_value = child_amount + ((good_siblings.len() - 1) as u64 * sibling_value) + 0u64;
+        let anchor_value = child_amount + ((good_siblings.len() - 1) as u64 * sibling_value);
         let expected_id = engine
             .compute_vtxo_id(&good_tree, Some(anchor_value))
             .expect("good tree");

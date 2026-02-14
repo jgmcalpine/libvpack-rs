@@ -59,10 +59,10 @@ impl LogicAdapter for ArkLabsAdapter {
         let value = first.and_then(|o| o["value"].as_u64()).unwrap_or(0);
         let script_hex = first.and_then(|o| o["script"].as_str());
         let script_pubkey = script_hex
-            .map(|h| hex::decode(h))
+            .map(hex::decode)
             .transpose()
             .map_err(|_| VPackError::EncodingError)?
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         // Optional: one GenesisItem from "siblings" (branch case).
         let (path, leaf, leaf_siblings) = if let Some(siblings) = json["siblings"].as_array() {
@@ -156,7 +156,7 @@ impl LogicAdapter for ArkLabsAdapter {
                         })
                         .collect()
                 })
-                .unwrap_or_else(Vec::new);
+                .unwrap_or_default();
             (vec![], leaf, leaf_siblings)
         };
 
