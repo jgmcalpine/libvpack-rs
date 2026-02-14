@@ -140,6 +140,8 @@ export interface PathDetail {
   has_signature: boolean;
   has_fee_anchor: boolean;
   exit_weight_vb: number; // Estimated vbytes for exit transaction
+  /** Relative timelock in blocks (user must wait before exit). Leaf only; 0 for anchor/branches. */
+  exit_delta?: number;
   /** Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx). */
   tx_preimage_hex?: string;
 }

@@ -1,5 +1,35 @@
 const MEMPOOL_API_BASE = 'https://mempool.space/api';
 
+const DEFAULT_FEE_RATE_SATS_VB = 20;
+
+interface MempoolFeesRecommended {
+  fastestFee: number;
+  halfHourFee: number;
+  hourFee: number;
+  economyFee: number;
+  minimumFee: number;
+}
+
+/**
+ * Fetches recommended fee rates from mempool.space.
+ * Returns the "Fast" rate (halfHourFee) or null if the API is unavailable.
+ */
+export async function fetchRecommendedFee(): Promise<number | null> {
+  const url = `${MEMPOOL_API_BASE}/v1/fees/recommended`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    const data = (await response.json()) as MempoolFeesRecommended;
+    return data.halfHourFee ?? data.fastestFee ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export { DEFAULT_FEE_RATE_SATS_VB };
+
 interface MempoolVout {
   value: number;
   [key: string]: unknown;

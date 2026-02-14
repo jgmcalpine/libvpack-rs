@@ -32,6 +32,8 @@ struct PathDetail {
     has_signature: bool,
     has_fee_anchor: bool,
     exit_weight_vb: u32,
+    /// Relative timelock in blocks (user must wait before exit). Leaf only; 0 for anchor/branches.
+    exit_delta: u16,
     /// Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx).
     tx_preimage_hex: String,
 }
@@ -121,6 +123,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         has_signature: false,
         has_fee_anchor: false,
         exit_weight_vb: estimate_exit_weight_vb(anchor_outputs),
+        exit_delta: 0,
         tx_preimage_hex: String::new(), // L1 tx; no virtual preimage
     });
     
@@ -199,6 +202,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
             has_signature: genesis_item.signature.is_some(),
             has_fee_anchor,
             exit_weight_vb: exit_weight,
+            exit_delta: 0,
             tx_preimage_hex: hex::encode(&preimage_bytes),
         });
         
@@ -262,6 +266,7 @@ fn extract_path_details(tree: &VPackTree, anchor_value: u64, variant: TxVariant)
         has_signature: false,
         has_fee_anchor: leaf_has_fee_anchor,
         exit_weight_vb: estimate_exit_weight_vb(leaf_outputs.len()),
+        exit_delta: tree.leaf.exit_delta,
         tx_preimage_hex: hex::encode(&leaf_preimage),
     });
     

@@ -12,6 +12,7 @@ import VTXOInput from './components/VTXOInput';
 import VectorPillGroup from './components/VectorPillGroup';
 import ProgressiveVerificationBadge from './components/ProgressiveVerificationBadge';
 import SovereigntyPath from './components/SovereigntyPath';
+import ExitData from './components/ExitData';
 import PrivacyShieldBadge from './components/PrivacyShieldBadge';
 import MockDataBadge from './components/MockDataBadge';
 import { ARK_LABS_VECTORS, SECOND_VECTORS } from './constants/vectors';
@@ -356,9 +357,6 @@ function AppContent() {
             VTXO Inspector
           </h1>
           <div className="flex items-center justify-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4">
-            <span>
-              VTXO Engine: <span className="font-semibold">{engineStatus}</span>
-            </span>
             {isTestMode && <MockDataBadge />}
           </div>
           {/* Test Mode Toggle */}
@@ -561,6 +559,10 @@ function AppContent() {
                     variant={verifyResult.variant}
                     network={isTestMode ? 'Signet' : 'Mainnet'}
                     blockHeight={isTestMode ? 850_000 : undefined}
+                  />
+                  <ExitData
+                    pathDetails={pathDetailsArray}
+                    isTestMode={isTestMode}
                   />
                 </div>
               ) : (
