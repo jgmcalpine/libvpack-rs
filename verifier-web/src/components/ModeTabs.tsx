@@ -43,7 +43,8 @@ function ModeTabs({
           onClick={() => onModeChange('demo')}
           className={`${TAB_BASE} ${mode === 'demo' ? TAB_DEMO_ACTIVE : TAB_INACTIVE}`}
         >
-          Try the Demo (Testnet Data)
+          <span className="md:hidden">Demo Mode</span>
+          <span className="hidden md:inline">Try the Demo (Testnet Data)</span>
         </button>
         <button
           type="button"

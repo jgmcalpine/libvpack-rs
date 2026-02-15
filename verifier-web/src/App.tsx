@@ -16,7 +16,6 @@ import ZeroStateCard from './components/ZeroStateCard';
 import ScenarioPicker from './components/ScenarioPicker';
 import SecureInput from './components/SecureInput';
 import SovereigntyPath from './components/SovereigntyPath';
-import { ARK_LABS_VECTORS, SECOND_VECTORS } from './constants/vectors';
 import type { VectorEntry } from './constants/vectors';
 import { TestModeProvider, useTestMode } from './contexts/TestModeContext';
 import useTypingEffect from './hooks/useTypingEffect';
@@ -37,19 +36,6 @@ import {
 import { pathDetailsToTreeData } from './types/arkTree';
 
 type EngineStatus = 'Loading' | 'Ready' | 'Error';
-
-const SCENARIO_GROUPS = [
-  {
-    title: 'Ark Labs',
-    vectors: ARK_LABS_VECTORS,
-    accentColor: 'arkLabs' as const,
-  },
-  {
-    title: 'Second Tech',
-    vectors: SECOND_VECTORS,
-    accentColor: 'secondTech' as const,
-  },
-];
 
 /** Pass anchor as string to WASM to avoid JS 53-bit integer precision issues. */
 function injectAnchorValue(json: string, anchorValue: number | string): string {
@@ -459,7 +445,6 @@ function AppContent() {
       </AnimatePresence>
       <div className={!selectedVectorId ? 'order-2 md:order-1' : undefined}>
         <ScenarioPicker
-          scenarioGroups={SCENARIO_GROUPS}
           selectedVectorId={selectedVectorId}
           onSelectVector={handleVectorSelect}
         />

@@ -14,9 +14,9 @@ function ZeroStateCard() {
         <MousePointer className={ICON_CLASSES} aria-hidden />
         <h4 className={HEADLINE_CLASSES}>Ready to Audit</h4>
         <p className={BODY_CLASSES}>
-          Select a button above (like <strong>Round Leaf</strong>) to load its V-PACK.
-          This will populate the inspector with real cryptographic proofs so you can
-          verify the exit path.
+          Select <strong>The Merkle Tree</strong> or <strong>The Connector Chain</strong> above
+          to load a V-PACK. This will populate the inspector with real cryptographic proofs
+          so you can verify the exit path.
         </p>
       </div>
     </>
