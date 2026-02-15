@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Shield } from 'lucide-react';
 import initWasm, {
   init as setPanicHook,
   wasm_compute_vtxo_id,
@@ -487,6 +488,11 @@ function AppContent() {
               >
                 <span>Generate Sovereignty Map</span>
               </button>
+              <p className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" role="status">
+                <Shield className="w-4 h-4 shrink-0 text-violet-500 dark:text-violet-400" aria-hidden />
+                Sovereign Audit: All verification math performed locally in your browser via WASM. Your data never
+                leaves this device.
+              </p>
             </div>
           </motion.div>
         ) : null}
@@ -619,6 +625,11 @@ function AppContent() {
           >
             <span>Generate Sovereignty Map</span>
           </button>
+          <p className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" role="status">
+            <Shield className="w-4 h-4 shrink-0 text-emerald-500 dark:text-emerald-400" aria-hidden />
+            Sovereign Audit: All verification math performed locally in your browser via WASM. Your data never leaves
+            this device.
+          </p>
       </div>
       {phase === 'error' && verificationError && (
         <div

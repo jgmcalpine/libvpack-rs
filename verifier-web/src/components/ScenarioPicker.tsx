@@ -49,10 +49,10 @@ function ScenarioPicker({
         {merkleTreeVector && (
           <ArchetypeHeroCard
             kind="tree"
-            title="The Merkle Tree"
-            subtitle="Ark Labs Implementation"
-            body="Optimized for massive scaling. A wide, fanned-out structure where one root supports many users."
-            techBadge="ID: TxID (32B)"
+            title="The Fanned-out Tree"
+            subtitle="ARK LABS IMPLEMENTATION"
+            body="Optimized for massive scaling. A wide, fanned-out structure where one root supports many users simultaneously."
+            techBadge="Identity: TxID (32B)"
             isSelected={selectedVectorId === MERKLE_TREE_VECTOR_ID}
             onSelect={() => onSelectVector(merkleTreeVector)}
           />
@@ -60,10 +60,10 @@ function ScenarioPicker({
         {connectorChainVector && (
           <ArchetypeHeroCard
             kind="chain"
-            title="The Connector Chain"
-            subtitle="Second Tech Implementation"
-            body="Optimized for agility. A recursive, vertical chain of transactions handling sequential history."
-            techBadge="ID: OutPoint (36B)"
+            title="The Sequential Chain"
+            subtitle="SECOND TECH IMPLEMENTATION"
+            body="Optimized for agility. A recursive, vertical chain of transactions designed for sequential history and individual updates."
+            techBadge="Identity: OutPoint (36B)"
             isSelected={selectedVectorId === CONNECTOR_CHAIN_VECTOR_ID}
             onSelect={() => onSelectVector(connectorChainVector)}
           />

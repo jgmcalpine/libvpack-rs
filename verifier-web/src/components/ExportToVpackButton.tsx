@@ -8,6 +8,9 @@ const PRIMARY_ENABLED =
 const PRIMARY_DISABLED =
   'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed';
 
+const V_PACK_TOOLTIP =
+  "A V-PACK is a universal map of your Bitcoin. While wallets manage your keys, V-PACK ensures you possess the 'fire escape' data required to exit to L1 independently if your provider goes offline.";
+
 export interface ExportToVpackButtonProps {
   disabled: boolean;
   onExport: () => void;
@@ -35,6 +38,7 @@ function ExportToVpackButton({
       disabled={disabled}
       className={isGhost ? buttonClassName : `sm:max-w-[250px] ${buttonClassName}`}
       aria-label={ariaLabel}
+      title={V_PACK_TOOLTIP}
     >
       Export to V-PACK
     </button>

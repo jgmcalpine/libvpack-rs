@@ -28,6 +28,8 @@ const rawHexClasses = {
 const storyHeaderClasses = 'text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide mt-4 mb-2';
 
 const RBF_SEQUENCE = 0xfffffffe;
+const SEQUENCE_ZERO = 0x00000000;
+const SEQUENCE_MAX = 0xffffffff;
 
 const unsignedTooltip =
   'This transaction is missing signatures. It can be viewed in a decoder but cannot be broadcast until co-signed by your keys and the ASP.';
@@ -86,6 +88,7 @@ function TechnicalDetailsAccordion({
   sequence,
   showVout,
   showSequence,
+  variant,
 }: {
   signedTxHex: string | undefined;
   hasSignature: boolean;
@@ -93,6 +96,7 @@ function TechnicalDetailsAccordion({
   sequence?: number;
   showVout: boolean;
   showSequence: boolean;
+  variant: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasContent = (signedTxHex && signedTxHex.length > 0) || showVout || showSequence;
@@ -120,6 +124,16 @@ function TechnicalDetailsAccordion({
               {sequence === RBF_SEQUENCE && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                   RBF enabled for fee bumping.
+                </p>
+              )}
+              {variant === '0x03' && sequence === SEQUENCE_ZERO && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Sequence: ZERO (Timelocks enabled for exit safety).
+                </p>
+              )}
+              {variant === '0x04' && sequence === SEQUENCE_MAX && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Sequence: MAX (Industry default, replacements disabled).
                 </p>
               )}
             </div>
@@ -229,7 +243,11 @@ function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHei
           )}
           {persona === 'leaf' && (
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              This is the &quot;Fruit.&quot; It is the final output that belongs exclusively to your private key.
+              {variant === '0x03'
+                ? 'This is a V3/TRUC Sequential Chain link. The final output that belongs exclusively to your private key.'
+                : variant === '0x04'
+                  ? 'This is a V3/TRUC Fanned-out Tree node. The final output that belongs exclusively to your private key.'
+                  : 'This is the &quot;Fruit.&quot; It is the final output that belongs exclusively to your private key.'}
             </p>
           )}
 
@@ -243,7 +261,11 @@ function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHei
           {persona === 'branch' && (
             <div className="space-y-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Signed by ASP. V3/TRUC protection ensures cryptographic authenticity.
+                {variant === '0x03'
+                  ? 'This is a V3/TRUC Sequential Chain link.'
+                  : variant === '0x04'
+                    ? 'This is a V3/TRUC Fanned-out Tree node.'
+                    : 'Signed by ASP. V3/TRUC protection ensures cryptographic authenticity.'}
               </p>
               {node.has_fee_anchor && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -301,6 +323,23 @@ function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHei
                   This branch supports <strong>{scalingFactor}</strong> user{scalingFactor !== 1 ? 's' : ''}.
                 </p>
               </div>
+              {variant === '0x03' && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Identity Model</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    OutPoint (32-byte TxID + 4-byte Index). Used to uniquely identify individual outputs in batched
+                    transactions.
+                  </p>
+                </div>
+              )}
+              {variant === '0x04' && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Identity Model</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    32-byte Hash (TxID). The unique fingerprint of this specific virtual transaction.
+                  </p>
+                </div>
+              )}
               <div className="flex items-start gap-3">
                 <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                 <div>
@@ -320,6 +359,23 @@ function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHei
                   {node.txid}:{node.vout}
                 </p>
               </div>
+              {variant === '0x03' && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Identity Model</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    OutPoint (32-byte TxID + 4-byte Index). Used to uniquely identify individual outputs in batched
+                    transactions.
+                  </p>
+                </div>
+              )}
+              {variant === '0x04' && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Identity Model</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    32-byte Hash (TxID). The unique fingerprint of this specific virtual transaction.
+                  </p>
+                </div>
+              )}
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Your Balance</h4>
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
@@ -356,6 +412,7 @@ function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHei
             sequence={node.sequence}
             showVout={persona !== 'anchor'}
             showSequence={persona !== 'anchor'}
+            variant={variant}
           />
         </div>
       </div>
