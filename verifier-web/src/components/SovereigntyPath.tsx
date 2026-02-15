@@ -5,13 +5,14 @@ import {
   Landmark,
   Waypoints,
   ShieldCheck,
-  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import type { TreeData, ArkNode } from '../types/arkTree';
 import GlassCard from './GlassCard';
 import PulsingLine from './PulsingLine';
 import AnimatedGrid from './AnimatedGrid';
 import NodeDetailModal from './NodeDetailModal';
+import ExitData from './ExitData';
 import type { PathDetail } from '../types/verification';
 
 const AUDIT_STEP_DURATION_MS = 600;
@@ -20,6 +21,8 @@ const EXIT_PHASE_DURATION_MS = 3000;
 
 interface SovereigntyPathProps {
   treeData: TreeData;
+  pathDetails: PathDetail[];
+  isTestMode: boolean;
   variant?: string;
   network?: string;
   blockHeight?: number;
@@ -30,6 +33,8 @@ type SelectedNodeInfo = { node: PathDetail; nodeType: 'anchor' | 'branch' | 'vtx
 
 function SovereigntyPath({
   treeData,
+  pathDetails,
+  isTestMode,
   variant = '',
   network = 'Mainnet',
   blockHeight,
@@ -40,17 +45,15 @@ function SovereigntyPath({
   const [selectedNodeInfo, setSelectedNodeInfo] = useState<SelectedNodeInfo | null>(null);
   const [exitPhase, setExitPhase] = useState(0);
   const [phaseStatus, setPhaseStatus] = useState<'idle' | 'confirming' | 'mined'>('idle');
-  const timelineRef = useRef<HTMLDivElement>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [hasCompletedSimulation, setHasCompletedSimulation] = useState(false);
+  const isSimulatingRef = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const { l1Anchor, branches, userVtxo } = treeData;
   const auditTotalSteps = 2 + branches.length * 2 + 2;
   const maxAuditStep = auditTotalSteps - 1;
   const exitStepCount = 2 + branches.length;
-
-  const runAudit = useCallback(() => {
-    setLoadComplete(false);
-    setAuditStep(0);
-  }, []);
 
   useEffect(() => {
     if (auditStep >= maxAuditStep) {
@@ -67,13 +70,10 @@ function SovereigntyPath({
     return () => clearTimeout(t);
   }, [auditStep, maxAuditStep, onLoadComplete]);
 
-  useEffect(() => {
-    if (exitPhase === 1) {
-      timelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  }, [exitPhase]);
-
   const handleSimulateExit = useCallback(() => {
+    if (isSimulatingRef.current) return;
+    isSimulatingRef.current = true;
+    setIsSimulating(true);
     const timeouts: ReturnType<typeof setTimeout>[] = [];
     for (let step = 1; step <= exitStepCount; step += 1) {
       const enterAt = EXIT_PHASE_DURATION_MS * (step - 1);
@@ -91,10 +91,14 @@ function SovereigntyPath({
       setTimeout(() => {
         setExitPhase(0);
         setPhaseStatus('idle');
+        isSimulatingRef.current = false;
+        setIsSimulating(false);
+        setHasCompletedSimulation(true);
       }, EXIT_PHASE_DURATION_MS * exitStepCount)
     );
     setExitPhase(1);
     setPhaseStatus('confirming');
+    rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return () => timeouts.forEach(clearTimeout);
   }, [exitStepCount]);
 
@@ -132,11 +136,11 @@ function SovereigntyPath({
     <div className="relative min-h-[480px] rounded-2xl overflow-hidden bg-gradient-to-b from-slate-900 to-black">
       <AnimatedGrid />
 
-      <div className="relative z-10 p-4 sm:p-8 flex flex-col items-center">
-        <div className="w-full max-w-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <div className="relative z-10 p-4 sm:p-8 pt-40 pb-64 flex flex-col items-center">
+        <div className="w-full max-w-2xl text-center mb-6">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <h2 className="text-xl sm:text-2xl font-bold text-white">
-              Your Sovereignty Path
+              Custody Map
             </h2>
             {loadComplete && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-sm font-medium">
@@ -144,35 +148,23 @@ function SovereigntyPath({
                 Verified by L1
               </span>
             )}
-            {loadComplete && (
-              <button
-                type="button"
-                onClick={runAudit}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors hidden md:block"
-                aria-label="Re-verify path"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            )}
           </div>
-          <button
-            type="button"
-            onClick={handleSimulateExit}
-            className="w-full sm:w-auto px-4 py-2 bg-cyan-600/80 hover:bg-cyan-500 text-white rounded-lg font-medium text-sm transition-colors backdrop-blur-sm shrink-0"
-          >
-            Simulate Exit
-          </button>
+          <p className="text-sm text-slate-400 mt-2">
+            Visualizing the link between your funds and the Bitcoin blockchain.
+          </p>
         </div>
 
-        <div className="w-full max-w-2xl flex flex-col-reverse items-center gap-0 px-4 sm:px-0">
-          {/* Root (Bottom) - 100% width, foundation */}
+        <div className="w-full max-w-3xl">
+          <div className="flex flex-col-reverse items-center gap-0 px-4 sm:px-0">
+          {/* Root (Bottom) - full width, foundation */}
+          <div ref={rootRef} className="w-full max-w-3xl">
           <GlassCard
             delay={0}
             visible={rootVisible}
             onClick={() => openNodeModal(l1Anchor)}
             className={`relative w-full p-6 bg-slate-800/60 border-slate-600/40 transition-all duration-300 ${
               rootDimmed ? 'opacity-50' : ''
-            } ${rootHighlighted ? 'ring-2 ring-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.3)]' : ''}`}
+            } ${rootHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_24px_rgba(20,184,166,0.3)]' : ''}`}
           >
             <div className="flex items-center gap-4">
               <div className="p-2.5 rounded-lg bg-slate-700/50">
@@ -205,27 +197,41 @@ function SovereigntyPath({
               )}
             </div>
           </GlassCard>
+          </div>
 
-          {/* Branches (Middle) - 75% width */}
+          {/* Protocol zone separator: gap with dashed line and labels */}
+          <div className="relative w-full h-12 flex items-center justify-center">
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px border-t border-dashed border-slate-500/60" />
+            <span className="absolute right-4 bottom-[100%] mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Off-Chain (Ark VTXO)
+            </span>
+            <span className="absolute right-4 top-[100%] mt-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              On-Chain (Bitcoin L1)
+            </span>
+          </div>
+
+          {/* Branches (Middle) - medium width */}
           {branches.map((branch, i) => (
             <div key={branch.id} className="flex flex-col-reverse items-center w-full">
-              <PulsingLine
-                height={LINE_HEIGHT}
-                visible={
-                  i === 0
-                    ? lineToFirstBranchVisible
-                    : lineBetweenBranchesVisible(i - 1)
-                }
-                delay={0.1}
-                fillProgress={connectorFillProgress(i + 1)}
-              />
+              <div className="relative w-full flex justify-center -mb-1">
+                <PulsingLine
+                  height={LINE_HEIGHT}
+                  visible={
+                    i === 0
+                      ? lineToFirstBranchVisible
+                      : lineBetweenBranchesVisible(i - 1)
+                  }
+                  delay={0.1}
+                  fillProgress={connectorFillProgress(i + 1)}
+                />
+              </div>
               <GlassCard
                 delay={0.1 * (i + 1)}
                 visible={branchVisible(i)}
                 onClick={() => openNodeModal(branch)}
-                className={`relative w-full md:w-[75%] p-4 transition-all duration-300 ${
+                className={`relative w-full max-w-lg p-4 transition-all duration-300 ${
                   branchDimmed(i) ? 'opacity-50' : ''
-                } ${branchHighlighted(i) ? 'ring-2 ring-blue-400 shadow-[0_0_24px_rgba(59,130,246,0.3)]' : ''}`}
+                } ${branchHighlighted(i) ? 'ring-2 ring-teal-400 shadow-[0_0_24px_rgba(20,184,166,0.3)]' : ''}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -240,7 +246,7 @@ function SovereigntyPath({
                         Timelock: {branch.timelock ?? '24h'}
                       </p>
                       {branchHighlighted(i) && (
-                        <p className="text-blue-400 text-sm mt-1 font-medium">
+                        <p className="text-teal-400 text-sm mt-1 font-medium">
                           {phaseStatus === 'confirming' ? 'Confirming...' : 'Mined.'}
                         </p>
                       )}
@@ -260,26 +266,36 @@ function SovereigntyPath({
             </div>
           ))}
 
-          <PulsingLine
-            height={LINE_HEIGHT}
-            visible={
-              branches.length === 0
-                ? lineToFirstBranchVisible
-                : lineToFruitVisible
-            }
-            delay={0.1}
-            fillProgress={connectorBranchToLeafFillProgress}
-          />
+          {branches.length === 0 ? (
+            <div className="w-full flex justify-center -mb-1">
+              <PulsingLine
+                height={LINE_HEIGHT}
+                visible={lineToFirstBranchVisible}
+                delay={0.1}
+                fillProgress={connectorBranchToLeafFillProgress}
+              />
+            </div>
+          ) : (
+            <div className="w-full flex justify-center -mb-1">
+              <PulsingLine
+                height={LINE_HEIGHT}
+                visible={lineToFruitVisible}
+                delay={0.1}
+                fillProgress={connectorBranchToLeafFillProgress}
+              />
+            </div>
+          )}
 
-          {/* Leaf (Top) - 50% width */}
+          {/* Leaf (Top) - narrow width */}
+          <div className="w-full max-w-xs">
           <GlassCard
             delay={0.2}
             visible={fruitVisible}
             onClick={() => openNodeModal(userVtxo)}
-            className={`relative w-full md:w-[50%] p-5 border-emerald-500/30 transition-all duration-300 ${
+            className={`relative w-full p-5 border-emerald-500/30 transition-all duration-300 ${
               leafDimmed ? 'opacity-50' : ''
-            } ${leafHighlighted ? 'ring-2 ring-emerald-400 shadow-[0_0_32px_rgba(16,185,129,0.4)]' : 'shadow-[0_0_24px_rgba(16,185,129,0.15)]'}
-            ${isChainComplete ? 'shadow-[0_0_32px_rgba(16,185,129,0.4)]' : ''}`}
+            } ${leafHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_32px_rgba(20,184,166,0.4)]' : 'shadow-[0_0_24px_rgba(16,185,129,0.15)]'}
+            ${isChainComplete ? 'shadow-[0_0_32px_rgba(20,184,166,0.4)]' : ''}`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -312,35 +328,63 @@ function SovereigntyPath({
               )}
             </div>
           </GlassCard>
+          </div>
+          </div>
         </div>
+
+        <ExitData
+          pathDetails={pathDetails}
+          isTestMode={isTestMode}
+          sticky
+          trailingContent={
+            <button
+              type="button"
+              onClick={handleSimulateExit}
+              disabled={isSimulating}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+                isSimulating
+                  ? 'border border-slate-600 bg-slate-700/50 text-slate-400 cursor-not-allowed'
+                  : 'border border-cyan-400/50 bg-transparent text-cyan-400 hover:bg-cyan-400/10 hover:border-cyan-400/70'
+              }`}
+            >
+              {isSimulating ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Simulating Step {exitPhase}...
+                </span>
+              ) : (
+                <>▶ {hasCompletedSimulation ? 'Replay' : 'Preview'} Claim Process</>
+              )}
+            </button>
+          }
+        />
 
         {exitPhase > 0 && (
           <motion.div
-            ref={timelineRef}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-8 p-4 w-full max-w-md rounded-xl bg-slate-800/60 border border-slate-600/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed bottom-[80px] left-4 right-4 md:left-auto md:right-6 md:w-80 z-40 p-4 rounded-xl bg-slate-800/95 border border-slate-600/40 shadow-xl"
           >
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-cyan-400 font-semibold text-sm">
-                Step {exitPhase} of {exitStepCount}
-              </span>
-            </div>
-            <p className="text-sm text-slate-300">
-              Step {exitPhase}: {getStepLabel(exitPhase)}
-            </p>
-            <p className="text-slate-500 text-xs mt-2">
-              Each transaction must be broadcast and confirmed on-chain before the next step.
-            </p>
-            {phaseStatus === 'confirming' && (
-              <p className="text-amber-400 text-xs mt-1">Confirming...</p>
-            )}
-            {phaseStatus === 'mined' && exitPhase < exitStepCount && (
-              <p className="text-emerald-400 text-xs mt-1">Mined. Proceeding to next step.</p>
-            )}
-            {phaseStatus === 'mined' && exitPhase === exitStepCount && (
-              <p className="text-emerald-400 text-xs mt-1">Funds fully realized on-chain.</p>
-            )}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-cyan-400 font-semibold text-sm">
+                  Step {exitPhase} of {exitStepCount}
+                </span>
+              </div>
+              <p className="text-sm text-slate-300">
+                Step {exitPhase}: {getStepLabel(exitPhase)}
+              </p>
+              <p className="text-slate-500 text-xs mt-2">
+                Each transaction must be broadcast and confirmed on-chain before the next step.
+              </p>
+              {phaseStatus === 'confirming' && (
+                <p className="text-amber-400 text-xs mt-1">Confirming...</p>
+              )}
+              {phaseStatus === 'mined' && exitPhase < exitStepCount && (
+                <p className="text-emerald-400 text-xs mt-1">Mined. Proceeding to next step.</p>
+              )}
+              {phaseStatus === 'mined' && exitPhase === exitStepCount && (
+                <p className="text-emerald-400 text-xs mt-1">Funds fully realized on-chain.</p>
+              )}
           </motion.div>
         )}
       </div>

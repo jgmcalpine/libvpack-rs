@@ -16,7 +16,6 @@ import ZeroStateCard from './components/ZeroStateCard';
 import ScenarioPicker from './components/ScenarioPicker';
 import SecureInput from './components/SecureInput';
 import SovereigntyPath from './components/SovereigntyPath';
-import ExitData from './components/ExitData';
 import { ARK_LABS_VECTORS, SECOND_VECTORS } from './constants/vectors';
 import type { VectorEntry } from './constants/vectors';
 import { TestModeProvider, useTestMode } from './contexts/TestModeContext';
@@ -486,13 +485,13 @@ function AppContent() {
                 type="button"
                 onClick={handleVisualizePath}
                 disabled={!canVisualize}
-                className={`w-full py-3.5 rounded-lg font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 ${
+                className={`w-full py-3.5 rounded-lg font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 flex flex-col items-center gap-1 ${
                   canVisualize
                     ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/25 cursor-pointer visualize-pulse-violet'
                     : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                 }`}
               >
-                Visualize Path
+                <span>Generate Sovereignty Map</span>
               </button>
             </div>
           </motion.div>
@@ -617,13 +616,13 @@ function AppContent() {
             type="button"
             onClick={handleVisualizePath}
             disabled={!canVisualize}
-            className={`w-full py-3.5 rounded-lg font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+            className={`w-full py-3.5 rounded-lg font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 flex flex-col items-center gap-1 ${
               canVisualize
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25 cursor-pointer visualize-pulse-emerald'
                 : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
             }`}
           >
-            Visualize Path
+            <span>Generate Sovereignty Map</span>
           </button>
       </div>
       {phase === 'error' && verificationError && (
@@ -755,13 +754,11 @@ function AppContent() {
                   <div className="space-y-4">
                     <SovereigntyPath
                       treeData={treeData}
+                      pathDetails={pathDetailsArray}
+                      isTestMode={isTestMode}
                       variant={verifyResult.variant}
                       network={isTestMode ? 'Signet' : 'Mainnet'}
                       blockHeight={isTestMode ? 850_000 : undefined}
-                    />
-                    <ExitData
-                      pathDetails={pathDetailsArray}
-                      isTestMode={isTestMode}
                     />
                   </div>
                 ) : (

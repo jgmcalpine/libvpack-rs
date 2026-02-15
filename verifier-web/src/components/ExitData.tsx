@@ -12,6 +12,10 @@ import {
 interface ExitDataProps {
   pathDetails: PathDetail[];
   isTestMode: boolean;
+  /** Optional content to render on the far right (e.g. Preview Claim Process button). */
+  trailingContent?: React.ReactNode;
+  /** When true, pins the bar to the bottom of the viewport as a sticky HUD. */
+  sticky?: boolean;
 }
 
 function computeExitAggregates(pathDetails: PathDetail[]): {
@@ -33,7 +37,7 @@ function computeExitAggregates(pathDetails: PathDetail[]): {
 const SECTION_BASE_CLASSES =
   'flex items-center gap-3 px-4 py-3 flex-1 min-w-0 justify-center';
 
-function ExitData({ pathDetails, isTestMode }: ExitDataProps) {
+function ExitData({ pathDetails, isTestMode, trailingContent, sticky = false }: ExitDataProps) {
   const [fetchedFeeRate, setFetchedFeeRate] = useState<number | null>(null);
   const feeRateSatsVb = isTestMode ? DEFAULT_FEE_RATE_SATS_VB : (fetchedFeeRate ?? DEFAULT_FEE_RATE_SATS_VB);
 
@@ -60,8 +64,15 @@ function ExitData({ pathDetails, isTestMode }: ExitDataProps) {
     return null;
   }
 
-  return (
-    <div className="w-full flex flex-col sm:flex-row gap-0 rounded-xl overflow-hidden bg-slate-800/80 border border-slate-600/50">
+  const containerClasses = [
+    'flex flex-col sm:flex-row gap-0 overflow-hidden bg-slate-800/80 border-slate-600/50',
+    sticky
+      ? 'fixed bottom-0 left-0 right-0 z-50 backdrop-blur-md border-t border-slate-700 rounded-t-xl'
+      : 'w-full rounded-xl border',
+  ].join(' ');
+
+  const inner = (
+    <>
       <div className={`${SECTION_BASE_CLASSES} border-b last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 border-slate-600/50`}>
         <BoxSelect className="w-5 h-5 text-cyan-400 shrink-0" />
         <span className="text-slate-200 text-sm font-medium truncate">
@@ -83,6 +94,17 @@ function ExitData({ pathDetails, isTestMode }: ExitDataProps) {
           Wait: {exitDeltaBlocks} blocks ({formatBlocksAsDays(exitDeltaBlocks)})
         </span>
       </div>
+      {trailingContent && (
+        <div className="flex items-center justify-end px-4 py-3 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-600/50">
+          {trailingContent}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className={containerClasses}>
+      {sticky ? <div className="max-w-6xl mx-auto w-full flex flex-col sm:flex-row">{inner}</div> : inner}
     </div>
   );
 }

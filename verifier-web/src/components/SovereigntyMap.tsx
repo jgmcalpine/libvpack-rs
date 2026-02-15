@@ -30,7 +30,12 @@ function SovereigntyMap({ pathDetails, anchorTxid, finalVtxoId, variant, sibling
     <div className="w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Your Sovereignty Path</h2>
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Custody Map</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Visualizing the link between your funds and the Bitcoin blockchain.
+          </p>
+        </div>
         {siblingCount !== undefined && siblingCount > 0 && (
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
             <Ghost className="w-5 h-5" />
