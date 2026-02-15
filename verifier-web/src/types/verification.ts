@@ -143,6 +143,8 @@ export interface PathDetail {
   exit_weight_vb: number; // Estimated vbytes for exit transaction
   /** Relative timelock in blocks (user must wait before exit). Leaf only; 0 for anchor/branches. */
   exit_delta?: number;
+  /** CamelCase alias from some serializers; prefer exit_delta (WASM snake_case). */
+  exitDelta?: number;
   /** Raw Bitcoin transaction preimage hex (BIP-431/TRUC). Empty for anchor (L1 tx). */
   tx_preimage_hex?: string;
   /** Fully signed transaction hex (lowercase). Empty for anchor; populated for path and leaf. */

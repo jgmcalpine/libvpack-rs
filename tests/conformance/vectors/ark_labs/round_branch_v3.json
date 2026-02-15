@@ -30,8 +30,9 @@
     "reconstruction_ingredients": {
       "topology": "Tree",
       "tx_version": 3,
-      "nSequence": 4294967295,
-      "fee_anchor_script": "51024e73",
+    "nSequence": 4294967295,
+    "exit_delta": 432,
+    "fee_anchor_script": "51024e73",
       "id_type": "Hash",
       "anchor_outpoint": "f60017a41c1fb808202c2781bfefc2d57b1aa85e6a473f2873d7c3b7cef2514e:0",
       "siblings": [

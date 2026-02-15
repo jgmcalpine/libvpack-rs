@@ -52,6 +52,17 @@ impl LogicAdapter for ArkLabsAdapter {
             .map_err(|_| VPackError::EncodingError)?
             .unwrap_or_else(Vec::new);
 
+        let exit_delta = json["exit_delta"]
+            .as_u64()
+            .map(|v| v as u16)
+            .unwrap_or_else(|| {
+                if json["topology"].as_str() == Some("SingleSpend") {
+                    144 // OOR: 24 hours
+                } else {
+                    512 // Round: > 3 days
+                }
+            });
+
         let (path, leaf, leaf_siblings) = if let Some(siblings) = json["siblings"].as_array() {
             let child_output = json["child_output"].as_object().or_else(|| {
                 json["outputs"]
@@ -108,7 +119,7 @@ impl LogicAdapter for ArkLabsAdapter {
                 vout: 0,
                 sequence,
                 expiry: 0,
-                exit_delta: 0,
+                exit_delta,
                 script_pubkey: child_script_pubkey,
             };
             let leaf_siblings = vec![SiblingNode::Compact {
@@ -126,7 +137,7 @@ impl LogicAdapter for ArkLabsAdapter {
                 vout: 0,
                 sequence,
                 expiry: 0,
-                exit_delta: 0,
+                exit_delta,
                 script_pubkey,
             };
             // Leaf-only: leaf_siblings from outputs in exact order (outputs[1..] = fee anchor etc.).

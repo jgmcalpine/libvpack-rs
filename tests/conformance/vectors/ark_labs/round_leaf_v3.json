@@ -10,6 +10,7 @@
     "topology": "Tree",
     "tx_version": 3,
     "nSequence": 4294967295,
+    "exit_delta": 432,
     "parent_outpoint": "ecdeb06aa5a707d7d91177fd56dae8119d4e1b7505d197a765890ff346e6e3a4:0",
     "fee_anchor_script": "51024e73",
     "id_type": "Hash",

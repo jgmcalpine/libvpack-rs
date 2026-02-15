@@ -18,6 +18,13 @@ interface ExitDataProps {
   sticky?: boolean;
 }
 
+/** Extracts exit_delta from a PathDetail. Supports snake_case (WASM) and camelCase. */
+function getExitDelta(p: PathDetail | undefined): number {
+  if (!p) return 0;
+  const v = p.exit_delta ?? p.exitDelta;
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
 function computeExitAggregates(pathDetails: PathDetail[]): {
   txCount: number;
   totalWeightVb: number;
@@ -28,8 +35,8 @@ function computeExitAggregates(pathDetails: PathDetail[]): {
   }
   const pathWeightVb = pathDetails.reduce((sum, p) => sum + (p.exit_weight_vb ?? 0), 0);
   const totalWeightVb = pathWeightVb + SWEEP_TX_WEIGHT;
-  const leaf = pathDetails[pathDetails.length - 1];
-  const exitDeltaBlocks = leaf?.exit_delta ?? 0;
+  const leaf = pathDetails.find((p) => p.is_leaf === true) ?? pathDetails[pathDetails.length - 1];
+  const exitDeltaBlocks = getExitDelta(leaf);
   const txCount = pathDetails.length;
   return { txCount, totalWeightVb, exitDeltaBlocks };
 }
