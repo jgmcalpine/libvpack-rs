@@ -6,6 +6,7 @@ interface GlassCardProps {
   className?: string;
   delay?: number;
   visible?: boolean;
+  innerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const glassStyles = 'backdrop-blur-md bg-white/5 border border-white/10 rounded-xl';
@@ -16,9 +17,11 @@ function GlassCard({
   className = '',
   delay = 0,
   visible = true,
+  innerRef,
 }: GlassCardProps) {
   return (
     <motion.div
+      ref={innerRef}
       initial={{ opacity: 0, y: 12 }}
       animate={visible ? { opacity: 1, y: 0 } : { opacity: 0.5, y: 0 }}
       transition={{ duration: 0.4, delay }}

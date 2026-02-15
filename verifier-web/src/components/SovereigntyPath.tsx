@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
+  Bitcoin,
   CheckCircle2,
   Landmark,
   Waypoints,
   ShieldCheck,
   Loader2,
+  X,
 } from 'lucide-react';
 import type { TreeData, ArkNode } from '../types/arkTree';
 import GlassCard from './GlassCard';
@@ -13,11 +15,15 @@ import PulsingLine from './PulsingLine';
 import AnimatedGrid from './AnimatedGrid';
 import NodeDetailModal from './NodeDetailModal';
 import ExitData from './ExitData';
+import SettlementToken from './SettlementToken';
 import type { PathDetail } from '../types/verification';
 
 const AUDIT_STEP_DURATION_MS = 600;
 const LINE_HEIGHT = 48;
 const EXIT_PHASE_DURATION_MS = 3000;
+const DETACHMENT_DELAY_MS = 500;
+
+type SimulationPhase = 'idle' | 'verifying_up' | 'settling_down' | 'completed';
 
 interface SovereigntyPathProps {
   treeData: TreeData;
@@ -45,10 +51,21 @@ function SovereigntyPath({
   const [selectedNodeInfo, setSelectedNodeInfo] = useState<SelectedNodeInfo | null>(null);
   const [exitPhase, setExitPhase] = useState(0);
   const [phaseStatus, setPhaseStatus] = useState<'idle' | 'confirming' | 'mined'>('idle');
+  const [simulationPhase, setSimulationPhase] = useState<SimulationPhase>('idle');
   const [isSimulating, setIsSimulating] = useState(false);
   const [hasCompletedSimulation, setHasCompletedSimulation] = useState(false);
+  const [settlementPositions, setSettlementPositions] = useState<{
+    startY: number;
+    endY: number;
+    containerWidth: number;
+  } | null>(null);
+  const [hudDismissed, setHudDismissed] = useState(false);
   const isSimulatingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const rootCardRef = useRef<HTMLDivElement>(null);
+  const rootContentRef = useRef<HTMLDivElement>(null);
+  const leafRef = useRef<HTMLDivElement>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
 
   const { l1Anchor, branches, userVtxo } = treeData;
   const auditTotalSteps = 2 + branches.length * 2 + 2;
@@ -70,10 +87,24 @@ function SovereigntyPath({
     return () => clearTimeout(t);
   }, [auditStep, maxAuditStep, onLoadComplete]);
 
+  const handleSettlementComplete = useCallback(() => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate([50, 30, 50]);
+    }
+    setSimulationPhase('completed');
+    isSimulatingRef.current = false;
+    setIsSimulating(false);
+    setHasCompletedSimulation(true);
+  }, []);
+
   const handleSimulateExit = useCallback(() => {
     if (isSimulatingRef.current) return;
     isSimulatingRef.current = true;
     setIsSimulating(true);
+    setSimulationPhase('verifying_up');
+    setSettlementPositions(null);
+    setHudDismissed(false);
+
     const timeouts: ReturnType<typeof setTimeout>[] = [];
     for (let step = 1; step <= exitStepCount; step += 1) {
       const enterAt = EXIT_PHASE_DURATION_MS * (step - 1);
@@ -87,20 +118,36 @@ function SovereigntyPath({
         setTimeout(() => setPhaseStatus('mined'), enterAt + 800)
       );
     }
+
+    const leafMinedAt = EXIT_PHASE_DURATION_MS * (exitStepCount - 1) + 800;
     timeouts.push(
       setTimeout(() => {
-        setExitPhase(0);
-        setPhaseStatus('idle');
-        isSimulatingRef.current = false;
-        setIsSimulating(false);
-        setHasCompletedSimulation(true);
-      }, EXIT_PHASE_DURATION_MS * exitStepCount)
+        setSimulationPhase('settling_down');
+      }, leafMinedAt + DETACHMENT_DELAY_MS)
     );
+
     setExitPhase(1);
     setPhaseStatus('confirming');
     rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return () => timeouts.forEach(clearTimeout);
   }, [exitStepCount]);
+
+  useLayoutEffect(() => {
+    const rootMeasureEl = rootContentRef.current ?? rootCardRef.current ?? rootRef.current;
+    if (simulationPhase !== 'settling_down' || !leafRef.current || !rootMeasureEl || !treeContainerRef.current) {
+      return;
+    }
+    const containerRect = treeContainerRef.current.getBoundingClientRect();
+    const leafRect = leafRef.current.getBoundingClientRect();
+    const rootRect = rootMeasureEl.getBoundingClientRect();
+    const startY = leafRect.top + leafRect.height / 2 - containerRect.top;
+    const endY = rootRect.top + rootRect.height / 2 - containerRect.top;
+    setSettlementPositions({
+      startY,
+      endY,
+      containerWidth: containerRect.width,
+    });
+  }, [simulationPhase]);
 
   const openNodeModal = useCallback((node: ArkNode) => {
     setSelectedNodeInfo({ node: node.pathDetail, nodeType: node.type });
@@ -114,11 +161,13 @@ function SovereigntyPath({
   const fruitVisible = auditStep >= maxAuditStep;
 
   const rootHighlighted = exitPhase === 1;
-  const rootDimmed = exitPhase > 1;
+  const rootDimmed = exitPhase > 1 && simulationPhase !== 'settling_down';
+  const rootSettled = simulationPhase === 'completed';
   const branchHighlighted = (i: number) => exitPhase === 2 + i;
   const branchDimmed = (i: number) => exitPhase !== 2 + i && exitPhase > 0;
-  const leafHighlighted = exitPhase === exitStepCount;
-  const leafDimmed = exitPhase < exitStepCount && exitPhase > 0;
+  const leafHighlighted = exitPhase === exitStepCount && simulationPhase !== 'settling_down';
+  const leafDimmed =
+    (exitPhase < exitStepCount && exitPhase > 0) || simulationPhase === 'settling_down';
 
   const connectorFillProgress = (connectorIndex: number) =>
     exitPhase === 0 ? 1 : exitPhase >= connectorIndex + 2 ? 1 : 0;
@@ -154,7 +203,7 @@ function SovereigntyPath({
           </p>
         </div>
 
-        <div className="w-full max-w-3xl">
+        <div ref={treeContainerRef} className="relative w-full max-w-3xl">
           <div className="flex flex-col-reverse items-center gap-0 px-4 sm:px-0">
           {/* Root (Bottom) - full width, foundation */}
           <div ref={rootRef} className="w-full max-w-3xl">
@@ -162,11 +211,33 @@ function SovereigntyPath({
             delay={0}
             visible={rootVisible}
             onClick={() => openNodeModal(l1Anchor)}
+            innerRef={rootCardRef}
             className={`relative w-full p-6 bg-slate-800/60 border-slate-600/40 transition-all duration-300 ${
               rootDimmed ? 'opacity-50' : ''
-            } ${rootHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_24px_rgba(20,184,166,0.3)]' : ''}`}
+            } ${rootHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_24px_rgba(20,184,166,0.3)]' : ''            } ${
+              rootSettled
+                ? 'ring-2 ring-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.5)]'
+                : ''
+            }`}
           >
-            <div className="flex items-center gap-4">
+            {rootSettled && (
+              <div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                aria-hidden
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.08, 1] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{
+                    filter:
+                      'drop-shadow(0 0 12px rgba(245,158,11,0.9)) drop-shadow(0 0 24px rgba(251,191,36,0.6))',
+                  }}
+                >
+                  <Bitcoin className="w-10 h-10 text-amber-400" strokeWidth={1.5} />
+                </motion.div>
+              </div>
+            )}
+            <div ref={rootContentRef} className="flex items-center gap-4 relative z-0">
               <div className="p-2.5 rounded-lg bg-slate-700/50">
                 <Landmark className="w-7 h-7 text-amber-400" />
               </div>
@@ -287,7 +358,7 @@ function SovereigntyPath({
           )}
 
           {/* Leaf (Top) - narrow width */}
-          <div className="w-full max-w-xs">
+          <div ref={leafRef} className="w-full max-w-xs">
           <GlassCard
             delay={0.2}
             visible={fruitVisible}
@@ -330,6 +401,18 @@ function SovereigntyPath({
           </GlassCard>
           </div>
           </div>
+
+          {settlementPositions && (
+            <SettlementToken
+              startY={settlementPositions.startY}
+              endY={settlementPositions.endY}
+              containerWidth={settlementPositions.containerWidth}
+              nodeCount={2 + branches.length}
+              onComplete={handleSettlementComplete}
+              isActive={simulationPhase === 'settling_down' || simulationPhase === 'completed'}
+              hasArrived={simulationPhase === 'completed'}
+            />
+          )}
         </div>
 
         <ExitData
@@ -349,8 +432,14 @@ function SovereigntyPath({
             >
               {isSimulating ? (
                 <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Simulating Step {exitPhase}...
+                  {simulationPhase === 'settling_down' ? (
+                    <>Settling to L1...</>
+                  ) : (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Simulating Step {exitPhase}...
+                    </>
+                  )}
                 </span>
               ) : (
                 <>▶ {hasCompletedSimulation ? 'Replay' : 'Preview'} Claim Process</>
@@ -359,32 +448,70 @@ function SovereigntyPath({
           }
         />
 
-        {exitPhase > 0 && (
+        {((simulationPhase === 'verifying_up' && exitPhase > 0) ||
+          simulationPhase === 'settling_down' ||
+          (simulationPhase === 'completed' && !hudDismissed)) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="fixed bottom-[80px] left-4 right-4 md:left-auto md:right-6 md:w-80 z-40 p-4 rounded-xl bg-slate-800/95 border border-slate-600/40 shadow-xl"
           >
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-cyan-400 font-semibold text-sm">
-                  Step {exitPhase} of {exitStepCount}
-                </span>
-              </div>
-              <p className="text-sm text-slate-300">
-                Step {exitPhase}: {getStepLabel(exitPhase)}
-              </p>
-              <p className="text-slate-500 text-xs mt-2">
-                Each transaction must be broadcast and confirmed on-chain before the next step.
-              </p>
-              {phaseStatus === 'confirming' && (
-                <p className="text-amber-400 text-xs mt-1">Confirming...</p>
-              )}
-              {phaseStatus === 'mined' && exitPhase < exitStepCount && (
-                <p className="text-emerald-400 text-xs mt-1">Mined. Proceeding to next step.</p>
-              )}
-              {phaseStatus === 'mined' && exitPhase === exitStepCount && (
-                <p className="text-emerald-400 text-xs mt-1">Funds fully realized on-chain.</p>
-              )}
+            {simulationPhase === 'settling_down' && (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-amber-400 font-semibold text-sm">
+                    Settling Funds...
+                  </span>
+                </div>
+                <p className="text-sm text-slate-300">
+                  The VTXO is claimed. Value is moving from the ephemeral Ark layer back to the Bitcoin L1 blockchain.
+                </p>
+              </>
+            )}
+            {simulationPhase === 'completed' && (
+              <>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="text-amber-400 font-semibold text-sm">
+                    Unilateral Exit Complete
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHudDismissed(true)}
+                    className="p-1 rounded hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-sm text-slate-300">
+                  Your {userVtxo.amountSats?.toLocaleString() ?? '—'} sats are now confirmed in a standard Bitcoin UTXO on the Main Chain. You have full custody.
+                </p>
+              </>
+            )}
+            {simulationPhase === 'verifying_up' && exitPhase > 0 && (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-cyan-400 font-semibold text-sm">
+                    Step {exitPhase} of {exitStepCount}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-300">
+                  Step {exitPhase}: {getStepLabel(exitPhase)}
+                </p>
+                <p className="text-slate-500 text-xs mt-2">
+                  Each transaction must be broadcast and confirmed on-chain before the next step.
+                </p>
+                {phaseStatus === 'confirming' && (
+                  <p className="text-amber-400 text-xs mt-1">Confirming...</p>
+                )}
+                {phaseStatus === 'mined' && exitPhase < exitStepCount && (
+                  <p className="text-emerald-400 text-xs mt-1">Mined. Proceeding to next step.</p>
+                )}
+                {phaseStatus === 'mined' && exitPhase === exitStepCount && (
+                  <p className="text-emerald-400 text-xs mt-1">Funds fully realized on-chain.</p>
+                )}
+              </>
+            )}
           </motion.div>
         )}
       </div>
