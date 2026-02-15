@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { CheckCircle2, AlertCircle, ChevronRight, ChevronDown } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import VpackHelpTooltip from './VpackHelpTooltip';
 
 type ValidationState = 'idle' | 'valid' | 'invalid';
@@ -17,6 +17,8 @@ interface SecureInputProps {
   secondaryActions?: React.ReactNode;
   /** When true, shows a (?) help icon next to the accordion toggle. */
   showHelpIcon?: boolean;
+  /** When true, shows a subtle loading indicator where Data Loaded would appear. */
+  isDataLoading?: boolean;
 }
 
 const BASE_INPUT_CLASSES =
@@ -54,6 +56,7 @@ function SecureInput({
   collapsible = false,
   secondaryActions,
   showHelpIcon = false,
+  isDataLoading = false,
 }: SecureInputProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -131,6 +134,16 @@ function SecureInput({
         >
           <CheckCircle2 className="h-4 w-4" />
           Data Loaded
+        </span>
+      )}
+      {!hasValidData && isDataLoading && (
+        <span
+          className="text-gray-400 dark:text-gray-500"
+          role="status"
+          aria-live="polite"
+          title="Loading data..."
+        >
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
         </span>
       )}
     </span>

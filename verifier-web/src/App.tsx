@@ -74,6 +74,8 @@ function AppContent() {
 
   const isTestMode = mode === 'demo';
   const effectiveVtxoData = mode === 'demo' && typingTarget ? typedDisplay : vtxoData;
+  const isDataLoading =
+    mode === 'demo' && !!typingTarget && typedDisplay !== typingTarget;
 
   useEffect(() => {
     setTestMode(isTestMode);
@@ -470,6 +472,7 @@ function AppContent() {
               collapsible
               secondaryActions={demoSecondaryActions}
               showHelpIcon
+              isDataLoading={isDataLoading}
             />
             <div className="space-y-3">
               <button
@@ -601,6 +604,7 @@ function AppContent() {
         collapsible
         secondaryActions={auditSecondaryActions}
         showHelpIcon
+        isDataLoading={isDataLoading}
       />
       <div className="space-y-3">
         <button
