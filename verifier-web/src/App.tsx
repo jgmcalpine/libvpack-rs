@@ -96,11 +96,15 @@ function AppContent() {
 
   useEffect(() => {
     if (mode === 'demo' && selectedVectorId) {
-      setVerificationStatus('verifying');
-      const t = setTimeout(() => setVerificationStatus('verified'), 600);
-      return () => clearTimeout(t);
+      const t1 = setTimeout(() => setVerificationStatus('verifying'), 0);
+      const t2 = setTimeout(() => setVerificationStatus('verified'), 600);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
     }
-    setVerificationStatus('idle');
+    const t = setTimeout(() => setVerificationStatus('idle'), 0);
+    return () => clearTimeout(t);
   }, [mode, selectedVectorId]);
 
   useEffect(() => {

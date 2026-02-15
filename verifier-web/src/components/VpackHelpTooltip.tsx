@@ -28,23 +28,38 @@ function VpackHelpTooltip({ children, className = '', iconOnly = false }: VpackH
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isVisible]);
 
-  const iconButton = (
-    <button
-      type="button"
-      onClick={() => setIsVisible((prev) => !prev)}
+  const handleIconClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsVisible((prev) => !prev);
+  };
+
+  const handleIconKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsVisible((prev) => !prev);
+    }
+  };
+
+  const iconTrigger = (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={handleIconClick}
+      onKeyDown={handleIconKeyDown}
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
-      className="p-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 shrink-0"
+      className="p-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 shrink-0 cursor-pointer inline-flex"
       aria-label="What is a V-PACK?"
     >
       <HelpCircle className="h-4 w-4" />
-    </button>
+    </span>
   );
 
   if (iconOnly) {
     return (
       <div ref={containerRef} className={`relative inline-flex ${className}`}>
-        {iconButton}
+        {iconTrigger}
         {isVisible && (
           <div
             className="absolute left-0 top-full mt-2 z-50 w-72 p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg text-sm text-gray-700 dark:text-gray-300"
@@ -61,7 +76,7 @@ function VpackHelpTooltip({ children, className = '', iconOnly = false }: VpackH
     <div ref={containerRef} className={`relative flex items-stretch w-full ${className}`}>
       <div className="flex items-center gap-2 w-full">
         <div className="flex-1 min-w-0">{children}</div>
-        {iconButton}
+        {iconTrigger}
       </div>
       {isVisible && (
         <div

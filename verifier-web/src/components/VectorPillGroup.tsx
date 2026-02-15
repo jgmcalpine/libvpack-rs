@@ -1,3 +1,4 @@
+import { FlaskConical, Cpu } from 'lucide-react';
 import type { VectorEntry } from '../constants/vectors';
 import VectorPill from './VectorPill';
 
@@ -11,21 +12,17 @@ interface VectorPillGroupProps {
   onSelectVector: (vector: VectorEntry) => void;
 }
 
-const GROUP_STYLES: Record<AccentColor, { container: string; title: string }> = {
-  arkLabs: {
-    container:
-      'rounded-lg border-2 border-[#381993] p-2.5 bg-[#f0eef8] dark:bg-[#e8e4f5]',
-    title: 'text-[10px] font-medium uppercase tracking-wide text-[#381993]/70 dark:text-[#381993]/80',
-  },
-  secondTech: {
-    container:
-      'rounded-lg border-2 border-gray-200 dark:border-white p-2.5 bg-white text-black',
-    title:
-      'text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400',
-  },
-};
+const CONTAINER_CLASSES =
+  'rounded-xl border border-slate-300 dark:border-slate-700 p-2.5 bg-transparent';
 
-const SUBTITLE_CLASSES = 'text-[9px] font-normal normal-case text-gray-400 dark:text-gray-500 mt-0.5';
+const TITLE_CLASSES =
+  'text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500';
+const ICON_CLASSES = 'h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0';
+
+const GROUP_ICONS: Record<AccentColor, React.ReactNode> = {
+  arkLabs: <FlaskConical className={ICON_CLASSES} aria-hidden />,
+  secondTech: <Cpu className={ICON_CLASSES} aria-hidden />,
+};
 
 function VectorPillGroup({
   title,
@@ -34,15 +31,15 @@ function VectorPillGroup({
   selectedVectorId,
   onSelectVector,
 }: VectorPillGroupProps) {
-  const groupStyles = GROUP_STYLES[accentColor];
+  const icon = GROUP_ICONS[accentColor];
 
   return (
-    <div className={groupStyles.container}>
+    <div className={CONTAINER_CLASSES}>
       <div className="mb-2">
-        <h3 className={groupStyles.title}>
+        <h3 className={`${TITLE_CLASSES} flex items-center gap-2`}>
+          {icon}
           {title}
         </h3>
-        <p className={SUBTITLE_CLASSES}>Reference Implementation</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {vectors.map((vector) => (
@@ -50,7 +47,6 @@ function VectorPillGroup({
             key={vector.id}
             vector={vector}
             isSelected={selectedVectorId === vector.id}
-            accentColor={accentColor}
             onSelect={() => onSelectVector(vector)}
           />
         ))}

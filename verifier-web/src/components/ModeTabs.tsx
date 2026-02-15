@@ -10,7 +10,7 @@ interface ModeTabsProps {
 }
 
 const TAB_BASE =
-  'px-6 py-3 font-medium text-sm transition-colors border-b-2 -mb-px';
+  'px-6 py-3 font-bold text-base transition-colors border-b-2 -mb-px';
 
 const TAB_INACTIVE =
   'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600';

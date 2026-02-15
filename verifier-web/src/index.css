@@ -72,15 +72,3 @@
   }
 }
 
-.pill-border-pulse-second {
-  animation: pill-border-pulse-second 2s ease-in-out infinite;
-}
-
-@keyframes pill-border-pulse-second {
-  0%, 100% {
-    box-shadow: 0 0 0 2px rgb(107 114 128 / 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgb(107 114 128 / 0.6);
-  }
-}
