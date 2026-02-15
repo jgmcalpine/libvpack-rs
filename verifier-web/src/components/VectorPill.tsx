@@ -1,25 +1,32 @@
+import { Check } from 'lucide-react';
 import type { VectorEntry } from '../constants/vectors';
+
+type AccentColor = 'arkLabs' | 'secondTech';
 
 interface VectorPillProps {
   vector: VectorEntry;
   isSelected: boolean;
-  accentColor: 'blue' | 'purple';
+  accentColor: AccentColor;
   onSelect: () => void;
 }
 
 const ACCENT_STYLES: Record<
-  'blue' | 'purple',
-  { base: string; selected: string; hover: string }
+  AccentColor,
+  { base: string; selected: string; hover: string; focusRing: string }
 > = {
-  blue: {
-    base: 'border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300',
-    selected: 'bg-blue-100 dark:bg-blue-900/40 border-blue-500 dark:border-blue-400 ring-2 ring-blue-400/50',
-    hover: 'hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400',
+  arkLabs: {
+    base: 'bg-white dark:bg-gray-800 border-2 border-purple-500 text-gray-900 dark:text-gray-100',
+    selected:
+      'bg-purple-700 text-white border-[3px] border-purple-800 dark:border-purple-600',
+    hover: 'hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-600',
+    focusRing: 'focus:ring-purple-500',
   },
-  purple: {
-    base: 'border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300',
-    selected: 'bg-purple-100 dark:bg-purple-900/40 border-purple-500 dark:border-purple-400 ring-2 ring-purple-400/50',
-    hover: 'hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-400',
+  secondTech: {
+    base: 'border-2 border-gray-300 dark:border-gray-500 text-black dark:text-white bg-white dark:bg-gray-800',
+    selected:
+      'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 border-[3px] border-gray-800 dark:border-gray-200',
+    hover: 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400',
+    focusRing: 'focus:ring-gray-500',
   },
 };
 
@@ -36,12 +43,17 @@ function VectorPill({ vector, isSelected, accentColor, onSelect }: VectorPillPro
         focus:outline-none focus:ring-2 focus:ring-offset-2
         ${styles.base}
         ${isSelected ? styles.selected : styles.hover}
-        ${accentColor === 'blue' ? 'focus:ring-blue-500' : 'focus:ring-purple-500'}
+        ${isSelected && accentColor === 'arkLabs' ? 'pill-border-pulse' : ''}
+        ${isSelected && accentColor === 'secondTech' ? 'pill-border-pulse-second' : ''}
+        ${styles.focusRing}
       `}
       aria-pressed={isSelected}
       aria-label={`${vector.label}: ${vector.description}`}
     >
-      {vector.label}
+      <span className="inline-flex items-center gap-2">
+        {isSelected && <Check className="h-4 w-4 shrink-0" strokeWidth={3} />}
+        {vector.label}
+      </span>
     </button>
   );
 }

@@ -1,13 +1,31 @@
 import type { VectorEntry } from '../constants/vectors';
 import VectorPill from './VectorPill';
 
+type AccentColor = 'arkLabs' | 'secondTech';
+
 interface VectorPillGroupProps {
   title: string;
   vectors: VectorEntry[];
-  accentColor: 'blue' | 'purple';
+  accentColor: AccentColor;
   selectedVectorId: string | null;
   onSelectVector: (vector: VectorEntry) => void;
 }
+
+const GROUP_STYLES: Record<AccentColor, { container: string; title: string }> = {
+  arkLabs: {
+    container:
+      'rounded-lg border-2 border-[#381993] p-2.5 bg-[#f0eef8] dark:bg-[#e8e4f5]',
+    title: 'text-[10px] font-medium uppercase tracking-wide text-[#381993]/70 dark:text-[#381993]/80',
+  },
+  secondTech: {
+    container:
+      'rounded-lg border-2 border-gray-200 dark:border-white p-2.5 bg-white text-black',
+    title:
+      'text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400',
+  },
+};
+
+const SUBTITLE_CLASSES = 'text-[9px] font-normal normal-case text-gray-400 dark:text-gray-500 mt-0.5';
 
 function VectorPillGroup({
   title,
@@ -16,24 +34,17 @@ function VectorPillGroup({
   selectedVectorId,
   onSelectVector,
 }: VectorPillGroupProps) {
+  const groupStyles = GROUP_STYLES[accentColor];
+
   return (
-    <div
-      className={`rounded-lg border-2 p-4 ${
-        accentColor === 'blue'
-          ? 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10'
-          : 'border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10'
-      }`}
-    >
-      <h3
-        className={`text-sm font-semibold uppercase tracking-wide mb-3 ${
-          accentColor === 'blue'
-            ? 'text-blue-800 dark:text-blue-200'
-            : 'text-purple-800 dark:text-purple-200'
-        }`}
-      >
-        {title}
-      </h3>
-      <div className="flex flex-wrap gap-2">
+    <div className={groupStyles.container}>
+      <div className="mb-2">
+        <h3 className={groupStyles.title}>
+          {title}
+        </h3>
+        <p className={SUBTITLE_CLASSES}>Reference Implementation</p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
         {vectors.map((vector) => (
           <VectorPill
             key={vector.id}

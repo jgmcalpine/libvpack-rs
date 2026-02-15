@@ -32,6 +32,11 @@ const RBF_SEQUENCE = 0xfffffffe;
 const unsignedTooltip =
   'This transaction is missing signatures. It can be viewed in a decoder but cannot be broadcast until co-signed by your keys and the ASP.';
 
+function truncateHexDisplay(hex: string): string {
+  if (hex.length <= 24) return hex;
+  return `${hex.slice(0, 12)}...${hex.slice(-12)}`;
+}
+
 function SignedHexSection({ hex, hasSignature }: { hex: string; hasSignature: boolean }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
@@ -46,6 +51,7 @@ function SignedHexSection({ hex, hasSignature }: { hex: string; hasSignature: bo
 
   const copyLabel = hasSignature ? 'Copy for Broadcast' : 'Copy Unsigned Template';
   const sectionTitle = hasSignature ? 'Signed Transaction Hex' : 'Unsigned Transaction Hex';
+  const displayHex = hasSignature ? hex : truncateHexDisplay(hex);
 
   return (
     <div className={rawHexClasses.container}>
@@ -59,7 +65,7 @@ function SignedHexSection({ hex, hasSignature }: { hex: string; hasSignature: bo
           {unsignedTooltip}
         </p>
       )}
-      <pre className={rawHexClasses.pre}>{hex}</pre>
+      <pre className={rawHexClasses.pre}>{displayHex}</pre>
       <button
         type="button"
         onClick={handleCopy}

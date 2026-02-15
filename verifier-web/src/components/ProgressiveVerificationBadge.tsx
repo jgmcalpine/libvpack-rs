@@ -77,7 +77,13 @@ function ProgressiveVerificationBadge({
           <span>{config.label}</span>
         </div>
         {issuerLabel && phase === 'sovereign_complete' && (
-          <div className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
+          <div
+            className={`px-3 py-2 rounded-lg text-sm font-medium border ${
+              issuer === '0x04'
+                ? 'bg-[#f0eef8] dark:bg-[#e8e4f5] text-[#381993] border-[#381993]'
+                : 'bg-white text-black border-gray-300 dark:border-gray-500'
+            }`}
+          >
             Issuer: {issuerLabel}
           </div>
         )}
