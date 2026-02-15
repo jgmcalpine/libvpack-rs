@@ -32,29 +32,37 @@ const FEATURES: FeatureItem[] = [
   },
 ];
 
+const FEATURE_CARD_BASE =
+  'flex items-center gap-2 shrink-0 snap-center rounded-lg px-3 py-2 bg-gray-100/80 dark:bg-gray-800/80';
+
+const FEATURE_ROW_MOBILE =
+  'flex flex-row overflow-x-auto gap-4 snap-x snap-mandatory pb-1 -mx-4 px-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden';
+
+const FEATURE_ROW_DESKTOP = 'md:flex-wrap md:justify-center md:overflow-visible md:snap-none md:gap-10';
+
 function HeroHeader({ title, subtitle, features = FEATURES }: HeroHeaderProps) {
   return (
-    <header className="text-center mb-8">
-      <h1 className="text-4xl md:text-5xl font-bold mb-3 text-gray-900 dark:text-white tracking-tight">
+    <header className="text-center mb-4 md:mb-8">
+      <h1 className="text-2xl md:text-5xl font-bold mb-2 md:mb-3 text-gray-900 dark:text-white tracking-tight">
         {title}
       </h1>
-      <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+      <p className="text-sm md:text-lg text-gray-600 dark:text-gray-400 mb-4 md:mb-8 max-w-2xl mx-auto line-clamp-2 md:line-clamp-none">
         {subtitle}
       </p>
-      <div className="flex flex-wrap justify-center gap-6 md:gap-10">
+      <div className={`${FEATURE_ROW_MOBILE} ${FEATURE_ROW_DESKTOP}`}>
         {features.map(({ icon, title: featTitle, description }) => (
           <div
             key={featTitle}
-            className="flex items-center gap-3 text-left"
+            className={`${FEATURE_CARD_BASE} md:px-0 md:py-0 md:gap-3 md:bg-transparent dark:md:bg-transparent`}
           >
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-200/60 dark:bg-gray-700/60">
+            <div className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-lg bg-gray-200/60 dark:bg-gray-700/60 shrink-0">
               {icon}
             </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm font-semibold text-gray-800 dark:text-gray-200">
                 {featTitle}
               </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
+              <p className="text-[10px] md:text-xs text-gray-600 dark:text-gray-400 hidden md:block">
                 {description}
               </p>
             </div>

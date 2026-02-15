@@ -22,10 +22,10 @@ function ScenarioPicker({
 }: ScenarioPickerProps) {
   return (
     <div>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1.5 md:mb-2">
         Choose a transaction type below to simulate a specific exit path using testnet data.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
         {scenarioGroups.map(({ title, vectors, accentColor }) => (
           <VectorPillGroup
             key={title}

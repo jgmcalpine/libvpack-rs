@@ -443,23 +443,29 @@ function AppContent() {
   );
 
   const demoContent = (
-    <div className="space-y-4">
-      <ScenarioPicker
-        scenarioGroups={SCENARIO_GROUPS}
-        selectedVectorId={selectedVectorId}
-        onSelectVector={handleVectorSelect}
-      />
+    <div className="flex flex-col gap-3 md:gap-4">
       <AnimatePresence mode="wait">
-        {!selectedVectorId ? (
+        {!selectedVectorId && (
           <motion.div
             key="zero-state"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
+            className="order-1 md:order-2"
           >
             <ZeroStateCard />
           </motion.div>
-        ) : (
+        )}
+      </AnimatePresence>
+      <div className={!selectedVectorId ? 'order-2 md:order-1' : undefined}>
+        <ScenarioPicker
+          scenarioGroups={SCENARIO_GROUPS}
+          selectedVectorId={selectedVectorId}
+          onSelectVector={handleVectorSelect}
+        />
+      </div>
+      <AnimatePresence mode="wait">
+        {selectedVectorId ? (
           <motion.div
             key="content"
             initial={{ opacity: 0 }}
@@ -495,7 +501,7 @@ function AppContent() {
               </button>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
       {phase === 'error' && verificationError && (
         <div
@@ -697,7 +703,7 @@ function AppContent() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-4 md:py-8 px-4">
       <input
         ref={fileInputRef}
         type="file"
@@ -709,11 +715,11 @@ function AppContent() {
       <div className="max-w-6xl mx-auto">
         <HeroHeader
           title="Ark Sovereign Audit"
-          subtitle="Verify your off-chain Bitcoin. Simulate your exit path. Trust code, not providers."
+          subtitle="Verify your off-chain Bitcoin. Simulate your exit path. Trust math, not providers."
         />
 
         <div
-          className={`rounded-lg shadow-lg p-6 space-y-6 mb-6 transition-colors ${
+          className={`rounded-lg shadow-lg p-4 md:p-6 space-y-4 md:space-y-6 mb-4 md:mb-6 transition-colors ${
             mode === 'demo'
               ? 'bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50'
               : 'bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/50'

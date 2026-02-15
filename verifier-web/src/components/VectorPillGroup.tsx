@@ -13,7 +13,7 @@ interface VectorPillGroupProps {
 }
 
 const CONTAINER_CLASSES =
-  'rounded-xl border border-slate-300 dark:border-slate-700 p-2.5 bg-transparent';
+  'rounded-xl md:border md:border-slate-300 dark:md:border-slate-700 p-2 md:p-2.5 bg-transparent';
 
 const TITLE_CLASSES =
   'text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500';
@@ -35,13 +35,13 @@ function VectorPillGroup({
 
   return (
     <div className={CONTAINER_CLASSES}>
-      <div className="mb-2">
+      <div className="mb-1.5 md:mb-2">
         <h3 className={`${TITLE_CLASSES} flex items-center gap-2`}>
           {icon}
           {title}
         </h3>
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="grid grid-cols-2 md:flex md:flex-wrap gap-1.5">
         {vectors.map((vector) => (
           <VectorPill
             key={vector.id}
