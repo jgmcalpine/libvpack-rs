@@ -10,6 +10,8 @@ import {
   X,
 } from 'lucide-react';
 import type { TreeData, ArkNode } from '../types/arkTree';
+import type { Network } from '../types/network';
+import { NETWORK_LABELS } from '../types/network';
 import GlassCard from './GlassCard';
 import PulsingLine from './PulsingLine';
 import AnimatedGrid from './AnimatedGrid';
@@ -30,8 +32,9 @@ interface SovereigntyPathProps {
   pathDetails: PathDetail[];
   isTestMode: boolean;
   variant?: string;
-  network?: string;
+  network?: Network;
   blockHeight?: number;
+  l1Broken?: boolean;
   onLoadComplete?: () => void;
 }
 
@@ -42,8 +45,9 @@ function SovereigntyPath({
   pathDetails,
   isTestMode,
   variant = '',
-  network = 'Mainnet',
+  network = 'bitcoin',
   blockHeight,
+  l1Broken = false,
   onLoadComplete,
 }: SovereigntyPathProps) {
   const [auditStep, setAuditStep] = useState(0);
@@ -214,11 +218,11 @@ function SovereigntyPath({
             innerRef={rootCardRef}
             className={`relative w-full p-6 bg-slate-800/60 border-slate-600/40 transition-all duration-300 ${
               rootDimmed ? 'opacity-50' : ''
-            } ${rootHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_24px_rgba(20,184,166,0.3)]' : ''            } ${
+            } ${rootHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_24px_rgba(20,184,166,0.3)]' : ''} ${
               rootSettled
                 ? 'ring-2 ring-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.5)]'
                 : ''
-            }`}
+            } ${l1Broken ? 'ring-2 ring-red-500 border-red-500/50' : ''}`}
           >
             {rootSettled && (
               <div
@@ -243,7 +247,7 @@ function SovereigntyPath({
               </div>
               <div>
                 <p className="text-lg font-semibold text-white">
-                  Bitcoin L1 ({network})
+                  Bitcoin L1 ({NETWORK_LABELS[network]})
                 </p>
                 {blockHeight !== undefined && (
                   <p className="text-slate-400 text-base mt-0.5 font-mono">
@@ -418,6 +422,7 @@ function SovereigntyPath({
         <ExitData
           pathDetails={pathDetails}
           isTestMode={isTestMode}
+          network={network}
           sticky
           trailingContent={
             <button

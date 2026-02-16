@@ -13,7 +13,8 @@ use byteorder::{ByteOrder, LittleEndian};
 use crate::consensus::hash_sibling_birth_tx;
 use crate::error::VPackError;
 use crate::header::{
-    Header, TxVariant, FLAG_PROOF_COMPACT, MAX_PAYLOAD_SIZE, MAX_TREE_ARITY, MAX_TREE_DEPTH,
+    Header, TxVariant, FLAG_PROOF_COMPACT, FLAG_TESTNET, MAX_PAYLOAD_SIZE, MAX_TREE_ARITY,
+    MAX_TREE_DEPTH,
 };
 use crate::pack;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
@@ -98,7 +99,11 @@ pub struct SecondTechIngredients {
 // -----------------------------------------------------------------------------
 
 /// Builds a header from the tree so arity, depth, and node_count match the payload.
-fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, VPackError> {
+fn header_from_tree(
+    tx_variant: TxVariant,
+    tree: &VPackTree,
+    is_testnet: bool,
+) -> Result<Header, VPackError> {
     let tree_depth = tree.path.len() as u32;
     let (node_count, tree_arity) =
         tree.path
@@ -122,9 +127,10 @@ fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, V
     }
     let payload_len = payload_len as u32;
 
+    let flags = FLAG_PROOF_COMPACT | if is_testnet { FLAG_TESTNET } else { 0 };
     let mut header_buf = [0u8; 20];
     header_buf[0..3].copy_from_slice(&crate::header::MAGIC_BYTES);
-    header_buf[3] = FLAG_PROOF_COMPACT;
+    header_buf[3] = flags;
     header_buf[4] = crate::header::CURRENT_VERSION;
     header_buf[5] = tx_variant.as_u8();
     LittleEndian::write_u16(&mut header_buf[6..8], tree_arity);
@@ -139,7 +145,7 @@ fn header_from_tree(tx_variant: TxVariant, tree: &VPackTree) -> Result<Header, V
     let checksum = hasher.finalize();
 
     Ok(Header {
-        flags: FLAG_PROOF_COMPACT,
+        flags,
         version: crate::header::CURRENT_VERSION,
         tx_variant,
         tree_arity,
@@ -350,7 +356,7 @@ fn tree_from_second_tech_ingredients(
 /// Fee anchor script and nSequence are applied per forensic requirements.
 pub fn create_vpack_ark_labs(ingredients: ArkLabsIngredients) -> Result<Vec<u8>, VPackError> {
     let tree = tree_from_ark_labs_ingredients(&ingredients)?;
-    let header = header_from_tree(TxVariant::V3Anchored, &tree)?;
+    let header = header_from_tree(TxVariant::V3Anchored, &tree, false)?;
     pack::pack(&header, &tree)
 }
 
@@ -358,7 +364,7 @@ pub fn create_vpack_ark_labs(ingredients: ArkLabsIngredients) -> Result<Vec<u8>,
 /// nSequence is enforced as 0; identity is OutPoint (Hash:Index).
 pub fn create_vpack_second_tech(ingredients: SecondTechIngredients) -> Result<Vec<u8>, VPackError> {
     let tree = tree_from_second_tech_ingredients(&ingredients)?;
-    let header = header_from_tree(TxVariant::V3Plain, &tree)?;
+    let header = header_from_tree(TxVariant::V3Plain, &tree, false)?;
     pack::pack(&header, &tree)
 }
 
@@ -367,7 +373,8 @@ pub fn create_vpack_second_tech(ingredients: SecondTechIngredients) -> Result<Ve
 pub fn create_vpack_from_tree(
     tree: &VPackTree,
     tx_variant: TxVariant,
+    is_testnet: bool,
 ) -> Result<Vec<u8>, VPackError> {
-    let header = header_from_tree(tx_variant, tree)?;
+    let header = header_from_tree(tx_variant, tree, is_testnet)?;
     pack::pack(&header, tree)
 }

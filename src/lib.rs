@@ -127,8 +127,8 @@ mod wasm_auto_inference_test {
             .ok_or("missing reconstruction_ingredients")?;
 
         if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
-            let bytes =
-                create_vpack_from_tree(&tree, TxVariant::V3Anchored).map_err(|e| e.to_string())?;
+            let bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored, false)
+                .map_err(|e| e.to_string())?;
             let anchor_value = value["anchor_value"].as_u64().unwrap_or(1100u64);
             verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
             let output = ArkLabsV3
@@ -138,8 +138,8 @@ mod wasm_auto_inference_test {
         }
 
         if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
-            let bytes =
-                create_vpack_from_tree(&tree, TxVariant::V3Plain).map_err(|e| e.to_string())?;
+            let bytes = create_vpack_from_tree(&tree, TxVariant::V3Plain, false)
+                .map_err(|e| e.to_string())?;
             let anchor_value = value["anchor_value"].as_u64().unwrap_or(10_000u64);
             verify(&bytes, &expected_id, anchor_value).map_err(|e| e.to_string())?;
             let output = SecondTechV3

@@ -28,14 +28,16 @@ export function wasm_compute_vtxo_id(json_input) {
  * Exports reconstruction_ingredients JSON to standard-compliant V-PACK binary.
  * Uses the same LogicAdapter mapping as verification (ArkLabs/SecondTech) for byte-perfect output.
  * JSON must include reconstruction_ingredients; anchor_value is not required for packing.
+ * When is_testnet is true, sets the TESTNET flag in the V-PACK header.
  * Returns raw bytes as Uint8Array, or throws on parse/encoding error.
  * @param {string} json_input
+ * @param {boolean} is_testnet
  * @returns {Uint8Array}
  */
-export function wasm_export_to_vpack(json_input) {
+export function wasm_export_to_vpack(json_input, is_testnet) {
     const ptr0 = passStringToWasm0(json_input, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.wasm_export_to_vpack(ptr0, len0);
+    const ret = wasm.wasm_export_to_vpack(ptr0, len0, is_testnet);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }

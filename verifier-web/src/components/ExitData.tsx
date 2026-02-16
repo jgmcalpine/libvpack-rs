@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BoxSelect, Fuel, Clock } from 'lucide-react';
 import type { PathDetail } from '../types/verification';
 import { fetchRecommendedFee, DEFAULT_FEE_RATE_SATS_VB } from '../services/mempool';
+import type { Network } from '../types/network';
 import {
   formatBlocksAsDays,
   satsToBtc,
@@ -12,6 +13,8 @@ import {
 interface ExitDataProps {
   pathDetails: PathDetail[];
   isTestMode: boolean;
+  /** Network for fee fetch (ignored when isTestMode). */
+  network?: Network;
   /** Optional content to render on the far right (e.g. Preview Claim Process button). */
   trailingContent?: React.ReactNode;
   /** When true, pins the bar to the bottom of the viewport as a sticky HUD. */
@@ -44,7 +47,7 @@ function computeExitAggregates(pathDetails: PathDetail[]): {
 const SECTION_BASE_CLASSES =
   'flex items-center gap-3 px-4 py-3 flex-1 min-w-0 justify-center';
 
-function ExitData({ pathDetails, isTestMode, trailingContent, sticky = false }: ExitDataProps) {
+function ExitData({ pathDetails, isTestMode, network = 'bitcoin', trailingContent, sticky = false }: ExitDataProps) {
   const [fetchedFeeRate, setFetchedFeeRate] = useState<number | null>(null);
   const feeRateSatsVb = isTestMode ? DEFAULT_FEE_RATE_SATS_VB : (fetchedFeeRate ?? DEFAULT_FEE_RATE_SATS_VB);
 
@@ -57,7 +60,7 @@ function ExitData({ pathDetails, isTestMode, trailingContent, sticky = false }: 
   useEffect(() => {
     if (isTestMode) return;
     let cancelled = false;
-    fetchRecommendedFee().then((rate) => {
+    fetchRecommendedFee(network).then((rate) => {
       if (!cancelled && rate !== null) {
         setFetchedFeeRate(rate);
       }
@@ -65,7 +68,7 @@ function ExitData({ pathDetails, isTestMode, trailingContent, sticky = false }: 
     return () => {
       cancelled = true;
     };
-  }, [isTestMode]);
+  }, [isTestMode, network]);
 
   if (pathDetails.length === 0) {
     return null;

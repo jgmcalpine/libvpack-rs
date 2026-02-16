@@ -18,7 +18,10 @@ import ScenarioPicker from './components/ScenarioPicker';
 import SecureInput from './components/SecureInput';
 import SovereigntyPath from './components/SovereigntyPath';
 import type { VectorEntry } from './constants/vectors';
+import { NetworkProvider, useNetwork } from './contexts/NetworkContext';
 import { TestModeProvider, useTestMode } from './contexts/TestModeContext';
+import NetworkSwitcher from './components/NetworkSwitcher';
+import ProgressiveVerificationBadge from './components/ProgressiveVerificationBadge';
 import useTypingEffect from './hooks/useTypingEffect';
 import { fetchTxVoutValue } from './services/mempool';
 import {
@@ -35,6 +38,7 @@ import {
   type VtxoInputJson,
 } from './types/verification';
 import { pathDetailsToTreeData } from './types/arkTree';
+import { NETWORK_LABELS } from './types/network';
 
 type EngineStatus = 'Loading' | 'Ready' | 'Error';
 
@@ -48,6 +52,7 @@ function injectAnchorValue(json: string, anchorValue: number | string): string {
 
 function AppContent() {
   const { setTestMode } = useTestMode();
+  const { network, setNetwork } = useNetwork();
   const [mode, setMode] = useState<AppMode>('demo');
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('Loading');
   const [vtxoData, setVtxoData] = useState('');
@@ -59,7 +64,7 @@ function AppContent() {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [manualAnchorValue, setManualAnchorValue] = useState('');
-  const [, setL1Status] = useState<'verified' | 'unknown' | 'mock' | 'anchor_not_found' | null>(null);
+  const [l1Status, setL1Status] = useState<'verified' | 'unknown' | 'mock' | 'anchor_not_found' | null>(null);
   const [lastAuditInputValue, setLastAuditInputValue] = useState<number | null>(null);
   const [lastAuditOutputSum, setLastAuditOutputSum] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -294,17 +299,37 @@ function AppContent() {
         parsed.reconstruction_ingredients.anchor_outpoint;
       const outpoint = parseParentOutpoint(outpointStr);
       if (!outpoint) {
-        setVerificationError('Invalid parent_outpoint or anchor_outpoint; enter anchor value manually.');
+        setVerificationError(
+          'Invalid parent_outpoint or anchor_outpoint. Cannot fetch L1 anchor from network.',
+        );
         setPhase('fetch_failed');
         return;
       }
-      const fetchedAnchor = await fetchTxVoutValue(outpoint.txid, outpoint.voutIndex);
+      const fetchedAnchor = await fetchTxVoutValue(
+        outpoint.txid,
+        outpoint.voutIndex,
+        network,
+      );
       if (fetchedAnchor !== null) {
         anchorValue = fetchedAnchor;
         setL1Status('verified');
       } else {
-        anchorValue = outputSum > 0 ? outputSum : 1100;
         setL1Status('anchor_not_found');
+        setVerificationError(
+          `INVALID: Anchor not found on ${NETWORK_LABELS[network]}.`,
+        );
+        setLastAuditInputValue(null);
+        setLastAuditOutputSum(outputSum);
+        setPhase('anchor_not_found');
+        try {
+          const displayAnchor = outputSum > 0 ? outputSum : 1100;
+          const jsonWithAnchor = injectAnchorValue(input, displayAnchor);
+          const result = wasm_verify(jsonWithAnchor) as VerifyResult;
+          setVerifyResult(result);
+        } catch {
+          setVerifyResult(null);
+        }
+        return;
       }
       setLastAuditInputValue(anchorValue);
       setLastAuditOutputSum(outputSum);
@@ -319,7 +344,7 @@ function AppContent() {
       setVerificationError(fullErr instanceof Error ? fullErr.message : String(fullErr));
       setPhase('error');
     }
-  }, [isTestMode]);
+  }, [isTestMode, network]);
 
   const isExportEnabled =
     verifyResult?.status === 'Success' &&
@@ -329,7 +354,8 @@ function AppContent() {
   const handleExportToVpack = useCallback(() => {
     if (!isExportEnabled || !verifyResult || !effectiveVtxoData.trim()) return;
     try {
-      const bytes = wasm_export_to_vpack(effectiveVtxoData);
+      const isTestnet = network !== 'bitcoin';
+      const bytes = wasm_export_to_vpack(effectiveVtxoData, isTestnet);
       const filename = buildVpackFilename(
         verifyResult.variant,
         verifyResult.reconstructed_tx_id,
@@ -338,7 +364,7 @@ function AppContent() {
     } catch (err) {
       setVerificationError(err instanceof Error ? err.message : String(err));
     }
-  }, [isExportEnabled, verifyResult, effectiveVtxoData]);
+  }, [isExportEnabled, verifyResult, effectiveVtxoData, network]);
 
   const handleVerifyWithManualAnchor = useCallback(() => {
     const value = parseInt(manualAnchorValue, 10);
@@ -391,13 +417,12 @@ function AppContent() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [effectiveVtxoData, engineStatus, runProgressiveVerification]);
+  }, [effectiveVtxoData, engineStatus, runProgressiveVerification, network]);
 
   const shouldShowResults = engineStatus === 'Ready' && effectiveVtxoData.trim();
-  const showManualAnchorFallback =
-    shouldShowResults && phase === 'fetch_failed' && !isTestMode;
+  const showManualAnchorFallback = false;
   const canVisualize =
-    phase === 'sovereign_complete' &&
+    (phase === 'sovereign_complete' || phase === 'anchor_not_found') &&
     verifyResult &&
     (mode === 'audit' || verificationStatus === 'verified');
 
@@ -475,6 +500,15 @@ function AppContent() {
               showHelpIcon
               isDataLoading={isDataLoading}
             />
+            {shouldShowResults && (
+              <ProgressiveVerificationBadge
+                phase={phase}
+                errorMessage={phase === 'error' ? verificationError : undefined}
+                l1Status={l1Status}
+                issuer={verifyResult?.variant}
+                isTestMode
+              />
+            )}
             <div className="space-y-3">
               <button
                 type="button"
@@ -589,6 +623,12 @@ function AppContent() {
 
   const auditContent = (
     <div className="space-y-4">
+      <div className="flex flex-col gap-3">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Network
+        </label>
+        <NetworkSwitcher network={network} onNetworkChange={setNetwork} />
+      </div>
       <p className="text-sm text-gray-600 dark:text-gray-400">
         Paste your VTXO data or import a V-PACK to verify your specific funds. No data leaves your browser.
       </p>
@@ -612,6 +652,15 @@ function AppContent() {
         showHelpIcon
         isDataLoading={isDataLoading}
       />
+      {shouldShowResults && (
+        <ProgressiveVerificationBadge
+          phase={phase}
+          errorMessage={phase === 'error' ? verificationError : undefined}
+          l1Status={l1Status}
+          issuer={verifyResult?.variant}
+          isTestMode={isTestMode}
+        />
+      )}
       <div className="space-y-3">
         <button
             type="button"
@@ -631,72 +680,63 @@ function AppContent() {
             this device.
           </p>
       </div>
-      {phase === 'error' && verificationError && (
+      {(phase === 'error' || phase === 'anchor_not_found') && verificationError && (
         <div
-          className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg space-y-2"
+          className="p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-lg space-y-2"
           role="alert"
         >
-          <p className="text-sm text-red-700 dark:text-red-300">{verificationError}</p>
-          {(lastAuditInputValue !== null || lastAuditOutputSum !== null) && (
-            <>
-              <h3 className="text-sm font-semibold text-red-800 dark:text-red-200">
-                Audit Ledger
-              </h3>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-red-700 dark:text-red-300">
-                <div>
-                  <dt className="font-medium">Input value</dt>
-                  <dd>
-                    {lastAuditInputValue !== null
-                      ? `${lastAuditInputValue.toLocaleString()} sats`
-                      : '—'}
-                    {lastAuditInputValue !== null && (
-                      <span className="text-red-600 dark:text-red-400 ml-1">
-                        (from blockchain or manual)
-                      </span>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Output sum</dt>
-                  <dd>
-                    {lastAuditOutputSum !== null
-                      ? `${lastAuditOutputSum.toLocaleString()} sats`
-                      : '—'}
-                    {lastAuditOutputSum !== null && (
-                      <span className="text-red-600 dark:text-red-400 ml-1">
-                        (calculated from JSON)
-                      </span>
-                    )}
-                  </dd>
-                </div>
-              </dl>
-            </>
-          )}
-        </div>
-      )}
-      {showManualAnchorFallback && (
-        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg space-y-3">
-          <label htmlFor="manual-anchor-audit" className="block text-sm font-medium text-amber-800 dark:text-amber-200">
-            L1 anchor value (sats)
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              id="manual-anchor-audit"
-              type="number"
-              min={0}
-              value={manualAnchorValue}
-              onChange={(e) => setManualAnchorValue(e.target.value)}
-              placeholder="e.g. 1100"
-              className="w-32 px-3 py-2 border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-            />
-            <button
-              type="button"
-              onClick={handleVerifyWithManualAnchor}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500"
+              aria-hidden
             >
-              Verify with this value
-            </button>
+              INVALID
+            </span>
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">
+              {verificationError}
+            </p>
           </div>
+          {phase === 'anchor_not_found' && lastAuditOutputSum !== null && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              Math verified ({lastAuditOutputSum.toLocaleString()} sats output sum), but the L1 anchor transaction was not found on the selected network.
+            </p>
+          )}
+          {phase === 'error' &&
+            (lastAuditInputValue !== null || lastAuditOutputSum !== null) && (
+              <>
+                <h3 className="text-sm font-semibold text-red-800 dark:text-red-200">
+                  Audit Ledger
+                </h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-red-700 dark:text-red-300">
+                  <div>
+                    <dt className="font-medium">Input value</dt>
+                    <dd>
+                      {lastAuditInputValue !== null
+                        ? `${lastAuditInputValue.toLocaleString()} sats`
+                        : '—'}
+                      {lastAuditInputValue !== null && (
+                        <span className="text-red-600 dark:text-red-400 ml-1">
+                          (from blockchain or manual)
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium">Output sum</dt>
+                    <dd>
+                      {lastAuditOutputSum !== null
+                        ? `${lastAuditOutputSum.toLocaleString()} sats`
+                        : '—'}
+                      {lastAuditOutputSum !== null && (
+                        <span className="text-red-600 dark:text-red-400 ml-1">
+                          (calculated from JSON)
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </>
+            )}
         </div>
       )}
     </div>
@@ -734,7 +774,9 @@ function AppContent() {
         </div>
 
         <div ref={sovereigntyRef}>
-          {treeRevealed && phase === 'sovereign_complete' && verifyResult && (
+          {treeRevealed &&
+            (phase === 'sovereign_complete' || phase === 'anchor_not_found') &&
+            verifyResult && (
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
@@ -757,14 +799,25 @@ function AppContent() {
                   verifyResult.reconstructed_tx_id
                 );
                 return hasPathDetails && treeData ? (
-                  <div className="space-y-4">
+                  <div className="space-y-4 relative">
+                    {phase === 'anchor_not_found' && (
+                      <div
+                        className="absolute inset-0 z-20 flex items-center justify-center bg-red-950/80 rounded-2xl pointer-events-none"
+                        aria-live="assertive"
+                      >
+                        <div className="px-6 py-4 rounded-xl border-2 border-red-500 bg-red-900/90 text-red-100 font-bold text-lg shadow-xl">
+                          WARNING: L1 LINK BROKEN
+                        </div>
+                      </div>
+                    )}
                     <SovereigntyPath
                       treeData={treeData}
                       pathDetails={pathDetailsArray}
                       isTestMode={isTestMode}
                       variant={verifyResult.variant}
-                      network={isTestMode ? 'Signet' : 'Mainnet'}
+                      network={isTestMode ? 'signet' : network}
                       blockHeight={isTestMode ? 850_000 : undefined}
+                      l1Broken={phase === 'anchor_not_found'}
                     />
                   </div>
                 ) : (
@@ -794,7 +847,9 @@ function AppContent() {
 function App() {
   return (
     <TestModeProvider>
-      <AppContent />
+      <NetworkProvider defaultNetwork="signet">
+        <AppContent />
+      </NetworkProvider>
     </TestModeProvider>
   );
 }

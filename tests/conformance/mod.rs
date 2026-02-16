@@ -236,7 +236,7 @@ fn run_integrity_sabotage(path: &Path) {
             }
         }
         let bad_bytes =
-            create_vpack_from_tree(&tree, TxVariant::V3Anchored).expect("pack mutated tree");
+            create_vpack_from_tree(&tree, TxVariant::V3Anchored, false).expect("pack mutated tree");
         let result = vpack::verify(&bad_bytes, &expected_id, anchor_value);
         assert!(
             matches!(result, Err(VPackError::IdMismatch)),
@@ -284,7 +284,7 @@ fn run_integrity_sabotage(path: &Path) {
             };
         }
         let bad_bytes =
-            create_vpack_from_tree(&tree, TxVariant::V3Anchored).expect("pack mutated tree");
+            create_vpack_from_tree(&tree, TxVariant::V3Anchored, false).expect("pack mutated tree");
         let result = vpack::verify(&bad_bytes, &expected_id, anchor_value);
         assert!(
             matches!(result, Err(VPackError::PolicyMismatch)),

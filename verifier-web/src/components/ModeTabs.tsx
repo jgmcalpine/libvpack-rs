@@ -55,7 +55,7 @@ function ModeTabs({
           onClick={() => onModeChange('audit')}
           className={`${TAB_BASE} ${mode === 'audit' ? TAB_AUDIT_ACTIVE : TAB_INACTIVE}`}
         >
-          Audit My Funds (Mainnet)
+          Audit My Funds
         </button>
       </div>
 

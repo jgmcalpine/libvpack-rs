@@ -355,7 +355,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
 
     // Try ArkLabs (V3Anchored) first
     if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
-        let bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored)
+        let bytes = create_vpack_from_tree(&tree, TxVariant::V3Anchored, false)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         // Use master verify() function
         verify(&bytes, &expected_id, anchor_value)
@@ -384,7 +384,7 @@ pub fn wasm_verify(json_input: &str) -> Result<JsValue, JsValue> {
 
     // Try SecondTech (V3Plain)
     if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
-        let bytes = create_vpack_from_tree(&tree, TxVariant::V3Plain)
+        let bytes = create_vpack_from_tree(&tree, TxVariant::V3Plain, false)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()))?;
         // Use master verify() function
         verify(&bytes, &expected_id, anchor_value)
@@ -461,9 +461,10 @@ pub fn wasm_compute_vtxo_id(json_input: &str) -> Result<JsValue, JsValue> {
 /// Exports reconstruction_ingredients JSON to standard-compliant V-PACK binary.
 /// Uses the same LogicAdapter mapping as verification (ArkLabs/SecondTech) for byte-perfect output.
 /// JSON must include reconstruction_ingredients; anchor_value is not required for packing.
+/// When is_testnet is true, sets the TESTNET flag in the V-PACK header.
 /// Returns raw bytes as Uint8Array, or throws on parse/encoding error.
 #[wasm_bindgen]
-pub fn wasm_export_to_vpack(json_input: &str) -> Result<Vec<u8>, JsValue> {
+pub fn wasm_export_to_vpack(json_input: &str, is_testnet: bool) -> Result<Vec<u8>, JsValue> {
     let value: serde_json::Value =
         serde_json::from_str(json_input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
@@ -472,12 +473,12 @@ pub fn wasm_export_to_vpack(json_input: &str) -> Result<Vec<u8>, JsValue> {
         .ok_or_else(|| JsValue::from_str("missing reconstruction_ingredients"))?;
 
     if let Ok(tree) = ArkLabsAdapter::map_ingredients(ri) {
-        return create_vpack_from_tree(&tree, TxVariant::V3Anchored)
+        return create_vpack_from_tree(&tree, TxVariant::V3Anchored, is_testnet)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()));
     }
 
     if let Ok(tree) = SecondTechAdapter::map_ingredients(ri) {
-        return create_vpack_from_tree(&tree, TxVariant::V3Plain)
+        return create_vpack_from_tree(&tree, TxVariant::V3Plain, is_testnet)
             .map_err(|e: vpack::error::VPackError| JsValue::from_str(&e.to_string()));
     }
 

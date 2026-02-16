@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 import { X, Landmark, GitBranch, User, Shield, Scale, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import type { PathDetail } from '../types/verification';
+import { getMempoolExplorerUrl } from '../utils/mempoolUrl';
+import type { Network } from '../types/network';
 
 type NodePersona = 'anchor' | 'branch' | 'leaf';
 
@@ -157,22 +159,20 @@ interface NodeDetailModalProps {
   node: PathDetail;
   variant: string;
   onClose: () => void;
-  network?: string;
+  network?: Network;
   blockHeight?: number;
   /** Override when path_details lack is_anchor (e.g. from ArkNode.type) */
   nodeType?: 'anchor' | 'branch' | 'vtxo';
 }
 
-function NodeDetailModal({ node, variant, onClose, network = 'Mainnet', blockHeight, nodeType }: NodeDetailModalProps) {
+function NodeDetailModal({ node, variant, onClose, network = 'bitcoin', blockHeight, nodeType }: NodeDetailModalProps) {
   const persona = resolvePersona(node, nodeType);
   const siblingCount = node.sibling_count ?? 0;
   const isV3Anchored = variant === '0x04';
   const scalingFactor = siblingCount + 1;
 
-  const mempoolTxUrl =
-    network === 'Signet'
-      ? `https://mempool.space/signet/tx/${node.txid}`
-      : `https://mempool.space/tx/${node.txid}`;
+  const explorerBase = getMempoolExplorerUrl(network);
+  const mempoolTxUrl = `${explorerBase}/tx/${node.txid}`;
 
   const exitWeightLabel = persona === 'anchor' ? 'Cost to Open' : 'Cost to Exit this level';
   const exitWeightText =

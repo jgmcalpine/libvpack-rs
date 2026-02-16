@@ -123,6 +123,7 @@ export type VerificationPhase =
   | 'calculating'
   | 'path_verified'
   | 'sovereign_complete'
+  | 'anchor_not_found'
   | 'id_mismatch'
   | 'error'
   | 'fetch_failed';

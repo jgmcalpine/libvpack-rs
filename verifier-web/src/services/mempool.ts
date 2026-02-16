@@ -1,4 +1,5 @@
-const MEMPOOL_API_BASE = 'https://mempool.space/api';
+import { getMempoolUrl } from '../utils/mempoolUrl';
+import type { Network } from '../types/network';
 
 const DEFAULT_FEE_RATE_SATS_VB = 20;
 
@@ -14,8 +15,11 @@ interface MempoolFeesRecommended {
  * Fetches recommended fee rates from mempool.space.
  * Returns the "Fast" rate (halfHourFee) or null if the API is unavailable.
  */
-export async function fetchRecommendedFee(): Promise<number | null> {
-  const url = `${MEMPOOL_API_BASE}/v1/fees/recommended`;
+export async function fetchRecommendedFee(
+  network: Network = 'bitcoin',
+): Promise<number | null> {
+  const base = getMempoolUrl(network);
+  const url = `${base}/v1/fees/recommended`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -44,8 +48,13 @@ interface MempoolTxResponse {
  * Fetches the output value (in sats) for a given txid and vout index from mempool.space.
  * Returns null if the API is down, the tx is not found, or the vout index is invalid.
  */
-export async function fetchTxVoutValue(txid: string, voutIndex: number): Promise<number | null> {
-  const url = `${MEMPOOL_API_BASE}/tx/${txid}`;
+export async function fetchTxVoutValue(
+  txid: string,
+  voutIndex: number,
+  network: Network = 'bitcoin',
+): Promise<number | null> {
+  const base = getMempoolUrl(network);
+  const url = `${base}/tx/${txid}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {

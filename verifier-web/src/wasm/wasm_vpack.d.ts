@@ -17,9 +17,10 @@ export function wasm_compute_vtxo_id(json_input: string): any;
  * Exports reconstruction_ingredients JSON to standard-compliant V-PACK binary.
  * Uses the same LogicAdapter mapping as verification (ArkLabs/SecondTech) for byte-perfect output.
  * JSON must include reconstruction_ingredients; anchor_value is not required for packing.
+ * When is_testnet is true, sets the TESTNET flag in the V-PACK header.
  * Returns raw bytes as Uint8Array, or throws on parse/encoding error.
  */
-export function wasm_export_to_vpack(json_input: string): Uint8Array;
+export function wasm_export_to_vpack(json_input: string, is_testnet: boolean): Uint8Array;
 
 /**
  * Parses the V-PACK header and minimal payload prefix to extract anchor outpoint.
@@ -55,7 +56,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly wasm_compute_vtxo_id: (a: number, b: number) => [number, number, number];
-    readonly wasm_export_to_vpack: (a: number, b: number) => [number, number, number, number];
+    readonly wasm_export_to_vpack: (a: number, b: number, c: number) => [number, number, number, number];
     readonly wasm_parse_vpack_header: (a: number, b: number) => [number, number, number];
     readonly wasm_unpack_to_json: (a: number, b: number) => [number, number, number, number];
     readonly wasm_verify: (a: number, b: number) => [number, number, number];

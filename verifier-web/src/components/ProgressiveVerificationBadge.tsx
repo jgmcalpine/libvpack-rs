@@ -7,10 +7,14 @@ interface ProgressiveVerificationBadgeProps {
   errorMessage?: string | null;
   issuer?: string;
   l1Status?: L1Status;
+  /** When true (Demo/Test Mode), show purple "Math Verified" for sovereign_complete. */
+  isTestMode?: boolean;
 }
 
+type PhaseConfigKey = VerificationPhase | 'sovereign_complete_mock';
+
 const PHASE_CONFIG: Record<
-  VerificationPhase,
+  PhaseConfigKey,
   { label: string; icon: string; className: string }
 > = {
   calculating: {
@@ -26,7 +30,14 @@ const PHASE_CONFIG: Record<
   sovereign_complete: {
     label: 'Sovereign Audit Complete',
     icon: '✓',
-    className: 'verification-badge sovereign-complete bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700',
+    className:
+      'verification-badge sovereign-complete bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700',
+  },
+  sovereign_complete_mock: {
+    label: 'Math Verified',
+    icon: '✓',
+    className:
+      'verification-badge math-verified bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200 border-violet-300 dark:border-violet-700',
   },
   id_mismatch: {
     label: 'ID Mismatch',
@@ -43,6 +54,11 @@ const PHASE_CONFIG: Record<
     icon: '!',
     className: 'verification-badge fetch-failed bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700',
   },
+  anchor_not_found: {
+    label: 'INVALID: Anchor not found',
+    icon: '✗',
+    className: 'verification-badge anchor-not-found bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 border-red-400 dark:border-red-600',
+  },
 };
 
 const L1_STATUS_LABELS: Record<NonNullable<ProgressiveVerificationBadgeProps['l1Status']>, string> = {
@@ -57,8 +73,11 @@ function ProgressiveVerificationBadge({
   errorMessage,
   issuer,
   l1Status,
+  isTestMode = false,
 }: ProgressiveVerificationBadgeProps) {
-  const config = PHASE_CONFIG[phase];
+  const effectivePhase: PhaseConfigKey =
+    phase === 'sovereign_complete' && isTestMode ? 'sovereign_complete_mock' : phase;
+  const config = PHASE_CONFIG[effectivePhase];
   const issuerLabel = issuer === '0x04' ? 'Ark Labs' : issuer === '0x03' ? 'Second Tech' : null;
   const showL1Badge =
     phase === 'sovereign_complete' && l1Status && l1Status !== 'verified';
