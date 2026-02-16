@@ -116,7 +116,7 @@ export const SCENARIO_CARD_ARK_LABS: ScenarioCardContent = {
   headline: 'The Virtual Network',
   subHeadline: 'OPTIMIZED FOR SCALE & DEFI',
   description:
-    'Processes thousands of transactions in parallel using a **Virtual Mempool**. It aggregates thousands of off-chain operations into a **Global State Batch**, enabling complex applications and smart contracts at massive scale.',
+    'Processes thousands of transactions in parallel using a **Virtual Mempool**. It aggregates off-chain operations into a **Global State Batch**, enabling complex applications and smart contracts at massive scale.',
   badge: 'Identity: Whole-Transaction Hash (32B)',
 };
 
