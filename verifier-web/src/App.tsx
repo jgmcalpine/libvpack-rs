@@ -799,7 +799,7 @@ function AppContent() {
                   verifyResult.reconstructed_tx_id
                 );
                 return hasPathDetails && treeData ? (
-                  <div className="space-y-4 relative">
+                  <div className="space-y-4 relative md:mb-8">
                     {phase === 'anchor_not_found' && (
                       <div
                         className="absolute inset-0 z-20 flex items-center justify-center bg-red-950/80 rounded-2xl pointer-events-none"

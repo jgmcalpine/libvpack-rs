@@ -81,7 +81,7 @@ fn export_second_tech_parity() {
             .and_then(|p| p.to_str())
             .map(|n| {
                 if n == "round_v3_borsh.json" {
-                    15_000u64
+                    13_000u64
                 } else {
                     10_000u64
                 }
