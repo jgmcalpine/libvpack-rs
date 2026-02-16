@@ -51,7 +51,7 @@ fn parse_outpoint_consensus(data: &[u8]) -> Result<(OutPoint, usize), VPackError
 }
 
 // -----------------------------------------------------------------------------
-// Genesis item shadow: siblings (Borsh u32 len + compact siblings), then
+// Genesis item shadow: siblings (u8 len + compact siblings), then
 // parent_index, sequence, child_amount, child_script_pubkey, signature.
 // -----------------------------------------------------------------------------
 
@@ -63,13 +63,12 @@ fn parse_borsh_u32(data: &[u8]) -> Result<(u32, usize), VPackError> {
     Ok((n, 4))
 }
 
-/// Bark may use u16 for counts in genesis transitions (e.g. siblings_len).
-fn parse_borsh_u16(data: &[u8]) -> Result<(u16, usize), VPackError> {
-    if data.len() < 2 {
+/// Bark uses u8 for siblings_len in genesis transitions (per Second Technologies lead).
+fn parse_borsh_u8(data: &[u8]) -> Result<(u8, usize), VPackError> {
+    if data.is_empty() {
         return Err(VPackError::IncompleteData);
     }
-    let n = LittleEndian::read_u16(&data[0..2]);
-    Ok((n, 2))
+    Ok((data[0], 1))
 }
 
 fn parse_borsh_vec_u8(data: &[u8]) -> Result<(Vec<u8>, usize), VPackError> {
@@ -103,10 +102,10 @@ fn parse_sibling(data: &[u8]) -> Result<(SiblingNode, usize), VPackError> {
     ))
 }
 
-/// One genesis step. Bark uses u16 for siblings_len here; we consume it and map to standard GenesisItem (u32 lengths in V-PACK).
+/// One genesis step. Bark uses u8 for siblings_len (1 byte); we consume it and map to standard GenesisItem (u32 lengths in V-PACK).
 fn parse_genesis_item(mut rest: &[u8]) -> Result<(GenesisItem, usize), VPackError> {
     let start_len = rest.len();
-    let (siblings_len, n) = parse_borsh_u16(rest)?;
+    let (siblings_len, n) = parse_borsh_u8(rest)?;
     rest = &rest[n..];
     let mut siblings = Vec::with_capacity(siblings_len as usize);
     for _ in 0..siblings_len {
