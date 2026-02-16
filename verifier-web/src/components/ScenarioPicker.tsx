@@ -1,4 +1,8 @@
-import { VECTORS } from '../constants/vectors';
+import {
+  VECTORS,
+  SCENARIO_CARD_ARK_LABS,
+  SCENARIO_CARD_SECOND_TECH,
+} from '../constants/vectors';
 import type { VectorEntry } from '../constants/vectors';
 import ArchetypeHeroCard from './ArchetypeHeroCard';
 import ForensicArchive from './ForensicArchive';
@@ -49,10 +53,10 @@ function ScenarioPicker({
         {merkleTreeVector && (
           <ArchetypeHeroCard
             kind="tree"
-            title="The Fanned-out Tree"
-            subtitle="ARK LABS IMPLEMENTATION"
-            body="Optimized for massive scaling. A wide, fanned-out structure where one root supports many users simultaneously."
-            techBadge="Identity: TxID (32B)"
+            title={SCENARIO_CARD_ARK_LABS.headline}
+            subtitle={SCENARIO_CARD_ARK_LABS.subHeadline}
+            body={SCENARIO_CARD_ARK_LABS.description}
+            techBadge={SCENARIO_CARD_ARK_LABS.badge}
             isSelected={selectedVectorId === MERKLE_TREE_VECTOR_ID}
             onSelect={() => onSelectVector(merkleTreeVector)}
           />
@@ -60,10 +64,10 @@ function ScenarioPicker({
         {connectorChainVector && (
           <ArchetypeHeroCard
             kind="chain"
-            title="The Sequential Chain"
-            subtitle="SECOND TECH IMPLEMENTATION"
-            body="Optimized for agility. A recursive, vertical chain of transactions designed for sequential history and individual updates."
-            techBadge="Identity: OutPoint (36B)"
+            title={SCENARIO_CARD_SECOND_TECH.headline}
+            subtitle={SCENARIO_CARD_SECOND_TECH.subHeadline}
+            body={SCENARIO_CARD_SECOND_TECH.description}
+            techBadge={SCENARIO_CARD_SECOND_TECH.badge}
             isSelected={selectedVectorId === CONNECTOR_CHAIN_VECTOR_ID}
             onSelect={() => onSelectVector(connectorChainVector)}
           />

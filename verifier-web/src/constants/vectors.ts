@@ -103,3 +103,27 @@ export const VECTORS: VectorEntry[] = [
 
 export const ARK_LABS_VECTORS = VECTORS.filter((v) => v.group === 'ark_labs');
 export const SECOND_VECTORS = VECTORS.filter((v) => v.group === 'second');
+
+/** Selection card content for the "Execution vs. Velocity" narrative. */
+export interface ScenarioCardContent {
+  headline: string;
+  subHeadline: string;
+  description: string;
+  badge: string;
+}
+
+export const SCENARIO_CARD_ARK_LABS: ScenarioCardContent = {
+  headline: 'The Virtual Network',
+  subHeadline: 'OPTIMIZED FOR SCALE & DEFI',
+  description:
+    'Processes thousands of transactions in parallel using a **Virtual Mempool**. It settles to Bitcoin in a sturdy **Merkle Tree** structure, enabling complex applications and smart contracts at massive scale.',
+  badge: 'Identity: Whole-Transaction Hash (32B)',
+};
+
+export const SCENARIO_CARD_SECOND_TECH: ScenarioCardContent = {
+  headline: 'The Fluid Chain',
+  subHeadline: 'OPTIMIZED FOR VELOCITY & UX',
+  description:
+    'Uses **Recursive Chaining** to allow money to move instantly from person to person. Coins carry their own history (a **"biography of signatures"**), ensuring seamless payments without waiting for blocks.',
+  badge: 'Identity: Individual OutPoint (36B)',
+};

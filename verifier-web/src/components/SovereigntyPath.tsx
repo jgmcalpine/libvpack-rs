@@ -205,6 +205,16 @@ function SovereigntyPath({
           <p className="text-sm text-slate-400 mt-2">
             Visualizing the link between your funds and the Bitcoin blockchain.
           </p>
+          {variant === '0x04' && (
+            <p className="text-xs text-slate-500 mt-2 font-mono">
+              Sovereign Identity: 32-byte Transaction Fingerprint.
+            </p>
+          )}
+          {variant === '0x03' && (
+            <p className="text-xs text-slate-500 mt-2 font-mono">
+              Sovereign Identity: 36-byte Transaction Output Index.
+            </p>
+          )}
         </div>
 
         <div ref={treeContainerRef} className="relative w-full max-w-3xl">

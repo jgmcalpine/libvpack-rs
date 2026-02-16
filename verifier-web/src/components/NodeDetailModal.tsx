@@ -227,6 +227,26 @@ function NodeDetailModal({ node, variant, onClose, network = 'bitcoin', blockHei
         </div>
 
         <div className="space-y-4">
+          {/* Auditor context (TxVariant-specific) */}
+          {variant === '0x04' && (
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Auditing a <strong>Virtual Network</strong> node. This transaction uses BIP-431 (TRUC) and a
+                mandatory Fee Anchor to ensure your exit cannot be &quot;pinned&quot; or blocked in the Bitcoin
+                mempool, even during high network congestion.
+              </p>
+            </div>
+          )}
+          {variant === '0x03' && (
+            <div className="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Auditing a <strong>Fluid Chain</strong> link. This step represents a private, off-chain handoff of
+                ownership. By carrying the full &quot;biography of signatures&quot; of this chain, your wallet remains autonomous
+                and ready for an emergency exit without server assistance.
+              </p>
+            </div>
+          )}
+
           {/* What is this? */}
           <h3 className={storyHeaderClasses}>What is this?</h3>
           {persona === 'anchor' && (
