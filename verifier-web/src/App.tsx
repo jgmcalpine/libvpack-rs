@@ -69,6 +69,7 @@ function AppContent() {
   const [lastAuditOutputSum, setLastAuditOutputSum] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sovereigntyRef = useRef<HTMLDivElement>(null);
+  const sovAuditSectionRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number | null>(null);
 
   const [typedDisplay] = useTypingEffect({
@@ -98,6 +99,34 @@ function AppContent() {
     }
     const t = setTimeout(() => setVerificationStatus('idle'), 0);
     return () => clearTimeout(t);
+  }, [mode, selectedVectorId]);
+
+  useEffect(() => {
+    if (mode === 'demo' && selectedVectorId) {
+      const timer = setTimeout(() => {
+        const target = sovAuditSectionRef.current;
+        if (!target) return;
+        const targetRect = target.getBoundingClientRect();
+        const startY = window.scrollY;
+        const targetY =
+          startY + targetRect.top - window.innerHeight / 2 + targetRect.height / 2;
+        const duration = 600;
+        const startTime = performance.now();
+
+        const easeInOutCubic = (t: number) =>
+          t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+
+        const step = (now: number) => {
+          const elapsed = now - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = easeInOutCubic(progress);
+          window.scrollTo(0, startY + (targetY - startY) * eased);
+          if (progress < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
   }, [mode, selectedVectorId]);
 
   useEffect(() => {
@@ -509,7 +538,7 @@ function AppContent() {
                 isTestMode
               />
             )}
-            <div className="space-y-3">
+            <div ref={sovAuditSectionRef} className="space-y-3">
               <button
                 type="button"
                 onClick={handleVisualizePath}

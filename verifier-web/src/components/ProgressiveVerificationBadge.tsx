@@ -61,6 +61,8 @@ const PHASE_CONFIG: Record<
   },
 };
 
+const BADGE_BASE_CLASSES = 'inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium';
+
 const L1_STATUS_LABELS: Record<NonNullable<ProgressiveVerificationBadgeProps['l1Status']>, string> = {
   verified: 'L1 Status: Verified',
   unknown: 'L1 Status: Unknown',
@@ -86,7 +88,7 @@ function ProgressiveVerificationBadge({
     <div className="verification-badge-wrapper">
       <div className="flex items-center gap-3 flex-wrap">
         <div
-          className={`inline-flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-semibold transition-all duration-300 ease-out ${config.className}`}
+          className={`${BADGE_BASE_CLASSES} gap-2 border transition-all duration-300 ease-out ${config.className}`}
           role="status"
           aria-live="polite"
         >
@@ -97,7 +99,7 @@ function ProgressiveVerificationBadge({
         </div>
         {issuerLabel && phase === 'sovereign_complete' && (
           <div
-            className={`px-3 py-2 rounded-lg text-sm font-medium border ${
+            className={`${BADGE_BASE_CLASSES} border ${
               issuer === '0x04'
                 ? 'bg-[#f0eef8] dark:bg-[#e8e4f5] text-[#381993] border-[#381993]'
                 : 'bg-white text-black border-gray-300 dark:border-gray-500'
@@ -107,7 +109,7 @@ function ProgressiveVerificationBadge({
           </div>
         )}
         {showL1Badge && (
-          <div className="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium">
+          <div className={`${BADGE_BASE_CLASSES} bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300`}>
             {L1_STATUS_LABELS[l1Status]}
           </div>
         )}
