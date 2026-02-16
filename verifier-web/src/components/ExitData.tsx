@@ -19,6 +19,10 @@ interface ExitDataProps {
   trailingContent?: React.ReactNode;
   /** When true, pins the bar to the bottom of the viewport as a sticky HUD. */
   sticky?: boolean;
+  /** When true, stats are hidden on mobile (space for step info). */
+  isSimulating?: boolean;
+  /** Step info to show in footer on mobile when simulating (replaces stats). */
+  mobileStepInfo?: React.ReactNode;
 }
 
 /** Extracts exit_delta from a PathDetail. Supports snake_case (WASM) and camelCase. */
@@ -44,10 +48,15 @@ function computeExitAggregates(pathDetails: PathDetail[]): {
   return { txCount, totalWeightVb, exitDeltaBlocks };
 }
 
-const SECTION_BASE_CLASSES =
-  'flex items-center gap-3 px-4 py-3 flex-1 min-w-0 justify-center';
-
-function ExitData({ pathDetails, isTestMode, network = 'bitcoin', trailingContent, sticky = false }: ExitDataProps) {
+function ExitData({
+  pathDetails,
+  isTestMode,
+  network = 'bitcoin',
+  trailingContent,
+  sticky = false,
+  isSimulating = false,
+  mobileStepInfo,
+}: ExitDataProps) {
   const [fetchedFeeRate, setFetchedFeeRate] = useState<number | null>(null);
   const feeRateSatsVb = isTestMode ? DEFAULT_FEE_RATE_SATS_VB : (fetchedFeeRate ?? DEFAULT_FEE_RATE_SATS_VB);
 
@@ -81,29 +90,43 @@ function ExitData({ pathDetails, isTestMode, network = 'bitcoin', trailingConten
       : 'w-full rounded-xl border',
   ].join(' ');
 
+  const statsContainerClasses = isSimulating
+    ? 'hidden md:flex flex-1 min-w-0'
+    : 'grid grid-cols-2 md:flex gap-4 flex-1 min-w-0';
+
+  const sectionClasses =
+    'flex items-center gap-3 px-4 py-3 min-w-0 justify-center border-b last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 border-slate-600/50';
+
   const inner = (
     <>
-      <div className={`${SECTION_BASE_CLASSES} border-b last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 border-slate-600/50`}>
-        <BoxSelect className="w-5 h-5 text-cyan-400 shrink-0" />
-        <span className="text-slate-200 text-sm font-medium truncate">
-          {txCount} Transaction{txCount !== 1 ? 's' : ''} to Exit
-        </span>
+      <div className={statsContainerClasses}>
+        <div className={sectionClasses}>
+          <BoxSelect className="w-5 h-5 text-cyan-400 shrink-0" />
+          <span className="text-slate-200 text-sm font-medium truncate">
+            {txCount} Transaction{txCount !== 1 ? 's' : ''} to Exit
+          </span>
+        </div>
+        <div className={sectionClasses}>
+          <Fuel className="w-5 h-5 text-amber-400 shrink-0" />
+          <span
+            className="text-slate-200 text-sm font-medium truncate"
+            title={estimatedFeeSats >= SATS_BTC_HOVER_THRESHOLD ? satsToBtc(estimatedFeeSats) : undefined}
+          >
+            ~{estimatedFeeSats.toLocaleString()} sats fee
+          </span>
+        </div>
+        <div className={`${sectionClasses} col-span-2`}>
+          <Clock className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-slate-200 text-sm font-medium truncate">
+            Wait: {exitDeltaBlocks} blocks ({formatBlocksAsDays(exitDeltaBlocks)})
+          </span>
+        </div>
       </div>
-      <div className={`${SECTION_BASE_CLASSES} border-b last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 border-slate-600/50`}>
-        <Fuel className="w-5 h-5 text-amber-400 shrink-0" />
-        <span
-          className="text-slate-200 text-sm font-medium truncate"
-          title={estimatedFeeSats >= SATS_BTC_HOVER_THRESHOLD ? satsToBtc(estimatedFeeSats) : undefined}
-        >
-          {estimatedFeeSats.toLocaleString()} sats Estimated Fee
-        </span>
-      </div>
-      <div className={`${SECTION_BASE_CLASSES} border-b last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 border-slate-600/50`}>
-        <Clock className="w-5 h-5 text-emerald-400 shrink-0" />
-        <span className="text-slate-200 text-sm font-medium truncate">
-          Wait: {exitDeltaBlocks} blocks ({formatBlocksAsDays(exitDeltaBlocks)})
-        </span>
-      </div>
+      {isSimulating && mobileStepInfo && (
+        <div className="block md:hidden px-4 py-3 border-b border-slate-600/50">
+          {mobileStepInfo}
+        </div>
+      )}
       {trailingContent && (
         <div className="flex items-center justify-end px-4 py-3 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-600/50">
           {trailingContent}

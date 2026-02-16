@@ -367,24 +367,33 @@ function SovereigntyPath({
             delay={0.2}
             visible={fruitVisible}
             onClick={() => openNodeModal(userVtxo)}
-            className={`relative w-full p-5 border-emerald-500/30 transition-all duration-300 ${
-              leafDimmed ? 'opacity-50' : ''
-            } ${leafHighlighted ? 'ring-2 ring-teal-400 shadow-[0_0_32px_rgba(20,184,166,0.4)]' : 'shadow-[0_0_24px_rgba(16,185,129,0.15)]'}
-            ${isChainComplete ? 'shadow-[0_0_32px_rgba(20,184,166,0.4)]' : ''}`}
+            className={`relative w-full p-5 transition-all duration-300 ${
+              rootSettled ? 'border-slate-500/50' : 'border-emerald-500/30'
+            } ${leafDimmed ? 'opacity-50' : ''} ${
+              rootSettled
+                ? ''
+                : leafHighlighted
+                  ? 'ring-2 ring-teal-400 shadow-[0_0_32px_rgba(20,184,166,0.4)]'
+                  : 'shadow-[0_0_24px_rgba(16,185,129,0.15)]'
+            } ${!rootSettled && isChainComplete ? 'shadow-[0_0_32px_rgba(20,184,166,0.4)]' : ''}`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/20">
-                  <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                <div className={`p-2 rounded-lg ${rootSettled ? 'bg-slate-600/40' : 'bg-emerald-500/20'}`}>
+                  <ShieldCheck className={`w-6 h-6 ${rootSettled ? 'text-slate-400' : 'text-emerald-400'}`} />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-white">
                     {userVtxo.amountSats?.toLocaleString() ?? '—'} sats
                   </p>
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-medium">
-                    Unspent
+                  <span
+                    className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                      rootSettled ? 'bg-slate-600/40 text-slate-400' : 'bg-emerald-500/20 text-emerald-300'
+                    }`}
+                  >
+                    {rootSettled ? 'Spent' : 'Unspent'}
                   </span>
-                  {leafHighlighted && (
+                  {leafHighlighted && !rootSettled && (
                     <p className="text-emerald-400 text-sm mt-1 font-medium">
                       {phaseStatus === 'confirming' ? 'Confirming...' : 'Mined.'}
                     </p>
@@ -424,6 +433,49 @@ function SovereigntyPath({
           isTestMode={isTestMode}
           network={network}
           sticky
+          isSimulating={isSimulating}
+          mobileStepInfo={
+            (simulationPhase === 'verifying_up' && exitPhase > 0) ||
+            simulationPhase === 'settling_down' ||
+            (simulationPhase === 'completed' && !hudDismissed)
+              ? (() => {
+                  if (simulationPhase === 'settling_down') {
+                    return (
+                      <>
+                        <p className="text-teal-400 font-bold text-sm mb-1">Settling Funds...</p>
+                        <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
+                          The VTXO is claimed. Value is moving from the ephemeral Ark layer back to
+                          the Bitcoin L1 blockchain.
+                        </p>
+                      </>
+                    );
+                  }
+                  if (simulationPhase === 'completed') {
+                    return (
+                      <>
+                        <p className="text-teal-400 font-bold text-sm mb-1">
+                          Unilateral Exit Complete
+                        </p>
+                        <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
+                          Your {userVtxo.amountSats?.toLocaleString() ?? '—'} sats are now confirmed
+                          in a standard Bitcoin UTXO on the Main Chain. You have full custody.
+                        </p>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <p className="text-teal-400 font-bold text-sm mb-1">
+                        Step {exitPhase} of {exitStepCount}
+                      </p>
+                      <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
+                        Step {exitPhase}: {getStepLabel(exitPhase)}
+                      </p>
+                    </>
+                  );
+                })()
+              : undefined
+          }
           trailingContent={
             <button
               type="button"
@@ -459,7 +511,7 @@ function SovereigntyPath({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed bottom-[80px] left-4 right-4 md:left-auto md:right-6 md:w-80 z-40 p-4 rounded-xl bg-slate-800/95 border border-slate-600/40 shadow-xl"
+            className="hidden md:block fixed bottom-[80px] left-4 right-4 md:left-auto md:right-6 md:w-80 z-40 p-4 rounded-xl bg-slate-800/95 border border-slate-600/40 shadow-xl"
           >
             {simulationPhase === 'settling_down' && (
               <>
