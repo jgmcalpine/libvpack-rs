@@ -80,7 +80,8 @@ See the [Web Verifier Demo](https://vtxopack.org) for a live implementation.
 ## Project Roadmap
 - [x] **Phase 1-5: Forensic Audit & Core Logic.** Byte-level reconciliation of $nSequence$, Fee Anchors, and Identity Models.
 - [ ] **Phase 6 (Current): The VTXO-Inspector.** A WASM-powered "Sovereignty Path" visualizer at `vtxopack.org`. Enabling users to verify balances locally.
-- [ ] **Phase 7: The Fire Escape (Sovereign Recovery).** Transition from verifying IDs to generating and broadcasting fully-signed L1 transaction chains. Includes fee-rate awareness and Mempool.space API integration.
-- [ ] **Phase 8: The Sentinel (Weather Station).** Implementing automated "drift detection" in CI. Monitoring the Ark Labs and Second Tech codebases daily to ensure the V-PACK standard stays synchronized with divergent implementation changes.
-- [ ] **Phase 9: Universal Connect (Mobile Bindings).** Implementing UniFFI support to provide native Swift (iOS) and Kotlin (Android) bindings, allowing mobile wallets to integrate V-PACK verification as a standard feature.
-- [ ] **Phase 10: V-Nostr State Recovery.** Defining a standardized NIP for encrypted V-PACK backups on Nostr. This ensures that even if a user loses their device and the ASP is offline, their "Map" remains retrievable via their sovereign keys.
+- [ ] **Phase 7:** **Path Exclusivity (Sovereignty Pillar 2)** — Implementing Taproot tree reconstruction to independently verify the non-existence of malicious spend paths, ensuring VTXOs are immune to ASP "backdoor" spending.
+- [ ] **Phase 8: The Fire Escape (Sovereign Recovery).** Transition from verifying IDs to generating and broadcasting fully-signed L1 transaction chains. Includes fee-rate awareness and Mempool.space API integration.
+- [ ] **Phase 9: The Sentinel (Weather Station).** Implementing automated "drift detection" in CI. Monitoring the Ark Labs and Second Tech codebases daily to ensure the V-PACK standard stays synchronized with divergent implementation changes.
+- [ ] **Phase 10: Universal Connect (Mobile Bindings).** Implementing UniFFI support to provide native Swift (iOS) and Kotlin (Android) bindings, allowing mobile wallets to integrate V-PACK verification as a standard feature.
+- [ ] **Phase 11: V-Nostr State Recovery.** Defining a standardized NIP for encrypted V-PACK backups on Nostr. This ensures that even if a user loses their device and the ASP is offline, their "Map" remains retrievable via their sovereign keys.
