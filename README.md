@@ -1,6 +1,6 @@
 # `libvpack-rs`: Independent VTXO Verification
 
-**A pure-Rust, no_std clean-room engine for the independent auditing, visualization, and universal verification of Ark Layer 2 VTXOs.**
+**A pure-Rust, `no_std` clean-room engine for auditing, visualizing, and independently recovering Ark Layer 2 VTXOs.**
 
 [![CI](https://github.com/jgmcalpine/libvpack-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/jgmcalpine/libvpack-rs/actions/workflows/ci.yml) [![Crates.io](https://img.shields.io/badge/cargo-v1.0.0--RC.2-green)](https://crates.io/crates/vpack) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![V-PACK Standard](https://img.shields.io/badge/Standard-V--PACK-blue)](docs/specs/01-vbip.md)
 
@@ -10,19 +10,21 @@
 As Bitcoin Layer 2 protocols evolve, the **Virtual UTXO (VTXO)** has emerged as the shared technical primitive. While protocols are exploring different throughput optimizations, a user's proof-of-ownership is ultimately an off-chain VTXO residing within a pre-signed transaction tree.
 
 ## The Need for Independent Verification
-As the Ark ecosystem matures, implementations like **Arkade (by Ark Labs)** and **Bark (by Second)** are naturally diverging into specific technical "dialects" optimized for different use cases. While this rapid innovation is incredibly healthy for Bitcoin, it introduces three challenges for the broader ecosystem:
+As the Ark ecosystem matures, implementations like **Arkade (by Ark Labs)** and **Bark (by Second)** are naturally diverging into specific technical "dialects" optimized for different use cases. While this rapid innovation is incredibly healthy for Bitcoin, it introduces several challenges for the broader ecosystem:
 
-1. **Implementation-Coupled Verification:** Currently, core teams build both the ASP server and the client SDKs used to verify its operations. In complex cryptographic systems, shared assumptions between a server and its companion SDK can sometimes obscure edge cases. As noted by protocol developers, the ecosystem benefits heavily from an independent, "clean-room" verifier to provide thorough, external review of VTXO exits.
-2. **Covenant Complexity:** Ark's underlying covenant math is brilliantly designed but highly complex. Even though the protocols are fully open-source, the raw Taproot tree structures can be difficult for newcomers and developers to visualize and fully grasp without dedicated educational tools.
+1. **Implementation-Coupled Verification:** Currently, core teams build both the ASP server and the client SDKs used to verify its operations. In complex cryptographic systems, shared assumptions between a server and its companion SDK can sometimes obscure edge cases. The ecosystem benefits heavily from an independent, "clean-room" verifier to provide thorough, external review of VTXO exits.
+2. **Vendor-Locked Recovery:** True self-sovereignty requires that a user can reclaim their base-chain Bitcoin without relying on the specific company that issued their L2 balance. Currently, users rely heavily on provider-specific SDKs to unilaterally exit.
 3. **The Hardware Bottleneck:** Feature-rich client SDKs are excellent for hot wallets, but they inherently carry larger dependency footprints. For highly constrained, high-security environments like `no_std` hardware wallets, importing a full protocol stack just to verify an exit path is prohibitive.
+4. **Covenant Complexity:** Ark's underlying covenant math is brilliantly designed but highly complex. Even though the protocols are open-source, the raw Taproot tree structures can be difficult for newcomers to visualize and fully grasp without dedicated educational tools.
 
 ## The Solution: V-PACK
-`libvpack-rs` implements the **V-PACK** standard: a neutral, implementation-agnostic verification engine. It acts as the ecosystem's independent auditor and educational bridge.
+`libvpack-rs` implements the **V-PACK** standard: a neutral, implementation-agnostic verification engine. It acts as the ecosystem's independent auditor, sovereign life raft, and educational bridge.
 
 ### Core Pillars
 *   **Independent Security Audit [In Progress]:** Moving towards a clean-room implementation of BIP-341 Taproot reconstruction. The goal is to independently verify "Path Exclusivity"—mathematically proving the strict absence of ASP backdoors. *(Note: `libvpack-rs` currently verifies structural existence; strict exclusivity auditing is the immediate next phase).*
-*   **Transparency & Education [Current & Expanding]:** Powers local WASM visualizers (like `vtxopack.org`) that parse V-PACK payloads so developers and users can inspect the underlying components. Upcoming phases will upgrade this to graphically map the full Taproot tree and script execution logic.
+*   **Sovereign Recovery ("The Fire Escape") [Planned]:** Building third-party tooling to let users view, understand, and directly broadcast their fully-signed L1 exit transactions independently of the provider-specific software stack that issued the VTXO.
 *   **Hardware-Native (`no_std`) Baseline [Current]:** A zero-dependency core logic designed strictly for resource-constrained devices, establishing the foundational open-source plumbing that hardware wallets can eventually use to verify Ark natively without vendor lock-in.
+*   **Transparency & Education [Current & Expanding]:** Powers local WASM visualizers (like `vtxopack.org`) that break open the "black box" of covenant math. Upcoming phases will graphically map the full Taproot tree and script execution logic.
 
 ---
 
