@@ -7,7 +7,7 @@
 ⚠️ **CURRENT LIMITATION (See Phase 7):** `libvpack-rs` currently verifies **Path Existence** (that an exit path is structurally valid and signatures match) but does not yet verify **Path Exclusivity** (full Taproot tree reconstruction to prove the non-existence of alternative ASP spend paths). This is our current Priority 0.
 
 ## The VTXO: The Fundamental Unit of Layer 2 Scaling
-As Bitcoin Layer 2 protocols evolve, the **Virtual UTXO (VTXO)** has emerged as the shared technical primitive. While protocols are exploring different throughput optimizations, a user's proof-of-ownership is ultimately an off-chain VTXO residing within a pre-signed transaction tree.
+As Bitcoin Layer 2 protocols evolve, the **Virtual UTXO (VTXO)** has emerged as a shared technical primitive. While protocols are exploring different throughput optimizations, a user's proof-of-ownership is ultimately an off-chain VTXO residing within a pre-signed transaction tree.
 
 ## The Need for Independent Verification
 As the Ark ecosystem matures, implementations like **Arkade (by Ark Labs)** and **Bark (by Second)** are naturally diverging into specific technical "dialects" optimized for different use cases. While this rapid innovation is incredibly healthy for Bitcoin, it introduces several challenges for the broader ecosystem:
@@ -88,6 +88,6 @@ See [vtxopack.org](https://vtxopack.org) for a live implementation of the VTXO-I
 - [ ] **Phase 7 (CURRENT PRIORITY): Path Exclusivity Engine (Security & Cryptographic Audit).** Implementing pure-Rust BIP-341 Taproot reconstruction. Building the engine to audit the entire VTXO Taptree, mathematically proving the strict non-existence of ASP backdoors or hidden sweep scripts.
 - [ ] **Phase 8: "The Glass VTXO" (Transparency & Education).** Upgrading the visualizer to parse and graphically display the full Taproot tree and underlying Bitcoin scripts, creating an interactive UX where developers can visually learn how Ark covenants execute.
 - [ ] **Phase 9: "The Sentinel" (Automated Drift Detection & Code Review).** Implementing daily automated CI monitoring against upstream Arkade and Bark codebases to catch silent covenant changes, alerting the community and acting as an automated early-warning system.
-- [ ] **Phase 10: The Fire Escape (Sovereign Recovery Generation).** Transitioning the library from verifying state to trustlessly generating fully-signed L1 exit transactions, complete with fee-rate awareness, allowing users to broadcast their sovereign exit independently of the ASP's proprietary software.
+- [ ] **Phase 10: "The Fire Escape" (Sovereign Recovery Generation).** Transitioning the library from verifying state to trustlessly generating fully-signed L1 exit transactions, complete with fee-rate awareness, allowing users to broadcast their sovereign exit independently of the ASP's proprietary software.
 - [ ] **Phase 11: Standardized Specifications & Educational Deep-Dives.** Writing the formal V-PACK open-source specification and publishing technical deep-dives to educate newcomers on L2 Taproot engineering.
 
