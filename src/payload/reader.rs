@@ -201,6 +201,28 @@ impl BoundedReader {
             });
         }
 
+        // G. internal_key (32 raw bytes)
+        if data.len() < 32 {
+            return Err(VPackError::IncompleteData);
+        }
+        let mut internal_key = [0u8; 32];
+        internal_key.copy_from_slice(&data[0..32]);
+        data = &data[32..];
+
+        // H. asp_expiry_script (Borsh Vec<u8>: u32 len LE + that many bytes)
+        if data.len() < 4 {
+            return Err(VPackError::IncompleteData);
+        }
+        let asp_script_len = LittleEndian::read_u32(&data[0..4]) as usize;
+        let (_, rest) = data.split_at(4);
+        data = rest;
+        if data.len() < asp_script_len {
+            return Err(VPackError::IncompleteData);
+        }
+        let (asp_script_bytes, rest) = data.split_at(asp_script_len);
+        data = rest;
+        let asp_expiry_script = asp_script_bytes.to_vec();
+
         if !data.is_empty() {
             return Err(VPackError::TrailingData(data.len()));
         }
@@ -212,8 +234,8 @@ impl BoundedReader {
             anchor,
             asset_id,
             fee_anchor_script,
-            internal_key: [0u8; 32],
-            asp_expiry_script: alloc::vec![],
+            internal_key,
+            asp_expiry_script,
         })
     }
 

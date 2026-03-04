@@ -1,6 +1,9 @@
 pub mod reader;
 pub mod tree;
 
+#[cfg(test)]
+mod tests;
+
 use crate::error::VPackError;
 use crate::header::Header;
 use crate::payload::tree::{SiblingNode, VPackTree};

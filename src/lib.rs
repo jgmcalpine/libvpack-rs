@@ -6,34 +6,51 @@ extern crate std;
 // Needed for Vec
 extern crate alloc;
 
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod adapters;
 pub mod compact_size;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod consensus;
 pub mod error;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod export;
 pub mod header;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod pack;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod payload;
 
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod types;
 
-#[cfg(any(feature = "adapter", feature = "wasm"))]
+#[cfg(all(
+    any(feature = "adapter", feature = "wasm"),
+    any(feature = "bitcoin", feature = "wasm")
+))]
 pub mod ingredients;
 
-#[cfg(any(feature = "adapter", feature = "wasm"))]
+#[cfg(all(
+    any(feature = "adapter", feature = "wasm"),
+    any(feature = "bitcoin", feature = "wasm")
+))]
 pub use ingredients::{tree_from_ingredients, ArkLabsAdapter, LogicAdapter, SecondTechAdapter};
 
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::{ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput, VtxoId};
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use export::{
     create_vpack_ark_labs, create_vpack_from_tree, create_vpack_second_tech, ArkLabsIngredients,
     ArkLabsOutput, ArkLabsSibling, SecondTechGenesisStep, SecondTechIngredients, SecondTechSibling,
 };
 pub use header::TxVariant;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use payload::tree::VPackTree;
 
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 use crate::error::VPackError;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 use crate::header::{Header, HEADER_SIZE};
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 use crate::payload::reader::BoundedReader;
 
 /// Verifies a V-PACK byte array against an expected VTXO ID with conservation of value.
@@ -46,6 +63,7 @@ use crate::payload::reader::BoundedReader;
 /// # Returns
 /// * `Ok(VPackTree)` - Verification succeeded, returns the parsed tree
 /// * `Err(VPackError)` - Verification failed (checksum, parsing, ID mismatch, or ValueMismatch)
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub fn verify(
     vpack_bytes: &[u8],
     expected_id: &VtxoId,
@@ -84,7 +102,7 @@ pub fn verify(
 
 /// Test-only: compute the VTXO ID that would be verified for this V-PACK. Used to fill expected_vtxo_id in vectors.
 /// Does not perform conservation-of-value checks (anchor_value is None).
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", any(feature = "bitcoin", feature = "wasm")))]
 pub fn compute_vtxo_id_from_bytes(vpack_bytes: &[u8]) -> Result<VtxoId, VPackError> {
     let header = Header::from_bytes(&vpack_bytes[..HEADER_SIZE])?;
     header.verify_checksum(&vpack_bytes[HEADER_SIZE..])?;
@@ -100,7 +118,7 @@ pub fn compute_vtxo_id_from_bytes(vpack_bytes: &[u8]) -> Result<VtxoId, VPackErr
 }
 
 /// Tests that mirror wasm_verify: auto-inference over ArkLabs then SecondTech, create_vpack_from_tree + verify.
-#[cfg(all(test, feature = "adapter"))]
+#[cfg(all(test, feature = "adapter", any(feature = "bitcoin", feature = "wasm")))]
 mod wasm_auto_inference_test {
     use core::str::FromStr;
     use std::string::{String, ToString};

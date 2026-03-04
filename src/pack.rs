@@ -188,6 +188,14 @@ fn serialize_payload_inner(
             .map_err(|_| VPackError::EncodingError)?;
     }
 
+    // internal_key (32 raw bytes)
+    out.extend_from_slice(&tree.internal_key);
+
+    // asp_expiry_script (Borsh Vec<u8>: u32 len LE + bytes)
+    tree.asp_expiry_script
+        .serialize(&mut out)
+        .map_err(|_| VPackError::EncodingError)?;
+
     Ok(out)
 }
 
