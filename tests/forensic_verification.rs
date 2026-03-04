@@ -178,6 +178,8 @@ fn master_universal_verification() {
         anchor,
         asset_id: None,
         fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
     };
 
     let ark_header = Header {
@@ -347,6 +349,8 @@ fn test_sabotage_invalid_signature() {
         anchor,
         asset_id: None,
         fee_anchor_script: fee_anchor_script.clone(),
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
     };
 
     let expected_id = SecondTechV3

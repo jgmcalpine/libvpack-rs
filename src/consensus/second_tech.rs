@@ -408,6 +408,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let engine = SecondTechV3;
@@ -508,6 +510,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script: fee_anchor_script.clone(),
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let mut bad_siblings: Vec<SiblingNode> = sibling_scripts
@@ -545,6 +549,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let engine = SecondTechV3;
@@ -677,6 +683,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let engine = SecondTechV3;

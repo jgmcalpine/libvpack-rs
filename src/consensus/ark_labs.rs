@@ -350,6 +350,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let engine = ArkLabsV3;
@@ -444,6 +446,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script: fee_anchor_script.clone(),
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         // Sabotage: wrong script on the fee anchor sibling → different parent tx → IdMismatch
@@ -466,6 +470,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let anchor_value = 1100u64; // round_leaf_v3 input amount
@@ -567,6 +573,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let engine = ArkLabsV3;
@@ -695,6 +703,8 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         };
 
         let engine = ArkLabsV3;

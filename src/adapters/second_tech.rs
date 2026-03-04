@@ -260,5 +260,7 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         anchor: anchor_point,
         asset_id: None,
         fee_anchor_script: fee_anchor_script_vec,
+        internal_key: [0u8; 32],
+        asp_expiry_script: alloc::vec![],
     })
 }

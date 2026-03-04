@@ -167,6 +167,8 @@ impl LogicAdapter for ArkLabsAdapter {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: vec![],
         })
     }
 }
@@ -271,6 +273,8 @@ impl LogicAdapter for SecondTechAdapter {
             anchor,
             asset_id: None,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: vec![],
         })
     }
 }

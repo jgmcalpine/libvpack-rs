@@ -212,6 +212,8 @@ impl BoundedReader {
             anchor,
             asset_id,
             fee_anchor_script,
+            internal_key: [0u8; 32],
+            asp_expiry_script: alloc::vec![],
         })
     }
 

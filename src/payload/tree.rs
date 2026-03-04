@@ -19,6 +19,10 @@ pub struct VPackTree {
     pub asset_id: Option<[u8; 32]>,
     /// Fee anchor script (Prefix). Required non-empty for V3-Anchored. Used for validation/defaulting; engines build from leaf_siblings/path siblings only.
     pub fee_anchor_script: Vec<u8>,
+    /// Internal key for Path Exclusivity (Taproot tree). Mandatory for v1.
+    pub internal_key: [u8; 32],
+    /// ASP expiry script for Path Exclusivity. Mandatory for v1.
+    pub asp_expiry_script: Vec<u8>,
 }
 
 /// The User's specific UTXO leaf.

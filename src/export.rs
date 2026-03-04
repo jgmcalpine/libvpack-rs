@@ -271,6 +271,8 @@ fn tree_from_ark_labs_ingredients(
         anchor,
         asset_id: None,
         fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: alloc::vec![],
     })
 }
 
@@ -345,6 +347,8 @@ fn tree_from_second_tech_ingredients(
         anchor,
         asset_id: None,
         fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: alloc::vec![],
     })
 }
 

@@ -596,6 +596,8 @@ fn print_round_v3_borsh_3step_path() {
         anchor,
         asset_id: None,
         fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
     };
 
     let path_json = {
@@ -719,6 +721,8 @@ fn print_round_v3_borsh_5step_path() {
         anchor,
         asset_id: None,
         fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
     };
 
     // Path for JSON: only user siblings (adapter adds fee anchor). second_path_from_tree includes fee anchor.
@@ -1078,6 +1082,8 @@ fn test_vpack_internal_consistency_roundtrip() {
         anchor,
         asset_id: None,
         fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
     };
 
     let ark_header = Header {
@@ -1216,6 +1222,8 @@ fn test_vpack_internal_consistency_roundtrip() {
         anchor: second_anchor,
         asset_id: None,
         fee_anchor_script: second_fee_anchor_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
     };
 
     let second_engine = vpack::consensus::SecondTechV3;
