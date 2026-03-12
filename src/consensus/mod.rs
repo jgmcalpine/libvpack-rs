@@ -14,6 +14,7 @@ use crate::payload::tree::VPackTree;
 
 pub mod ark_labs;
 pub mod second_tech;
+pub mod taproot;
 pub mod tx_factory;
 
 #[cfg(feature = "schnorr-verify")]

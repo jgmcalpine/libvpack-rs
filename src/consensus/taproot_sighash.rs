@@ -8,6 +8,7 @@ use k256::schnorr::signature::Verifier;
 use k256::schnorr::{Signature, VerifyingKey};
 
 use crate::compact_size::write_compact_size;
+use crate::consensus::taproot::tagged_hash;
 use crate::consensus::{TxInPreimage, TxOutPreimage};
 use crate::error::VPackError;
 use crate::types::hashes::sha256::Hash as Sha256Hash;
@@ -58,17 +59,6 @@ pub fn verify_schnorr_bip340(
     verifying_key
         .verify(msg, &signature)
         .map_err(|_| VPackError::InvalidSignature)
-}
-
-/// BIP-341 tagged hash: SHA256(SHA256(tag) || SHA256(tag) || x).
-fn tagged_hash(tag: &[u8], payload: &[u8]) -> [u8; 32] {
-    let tag_hash = Sha256Hash::hash(tag);
-    let mut inner = Vec::with_capacity(64 + payload.len());
-    inner.extend_from_slice(&tag_hash.to_byte_array());
-    inner.extend_from_slice(&tag_hash.to_byte_array());
-    inner.extend_from_slice(payload);
-    let h = Sha256Hash::hash(&inner);
-    h.to_byte_array()
 }
 
 /// Serialize a single outpoint for sha_prevouts (32 bytes txid + 4 bytes vout LE).
