@@ -37,3 +37,37 @@ pub fn tap_branch_hash(a: [u8; 32], b: [u8; 32]) -> [u8; 32] {
     payload[32..].copy_from_slice(&right);
     tagged_hash(b"TapBranch", &payload)
 }
+
+/// BIP-341 TapTweak: compute the tweaked x-only public key from an internal key
+/// and Merkle root. Returns the 32-byte x-coordinate of Q = P + t*G, where
+/// t = TaggedHash("TapTweak", internal_key || merkle_root).
+#[cfg(feature = "schnorr-verify")]
+pub fn compute_taproot_tweak(internal_key: [u8; 32], merkle_root: [u8; 32]) -> [u8; 32] {
+    use k256::elliptic_curve::ff::PrimeField;
+    use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
+    use k256::{AffinePoint, EncodedPoint, ProjectivePoint, Scalar};
+
+    let mut payload = [0u8; 64];
+    payload[..32].copy_from_slice(&internal_key);
+    payload[32..].copy_from_slice(&merkle_root);
+    let tweak_hash = tagged_hash(b"TapTweak", &payload);
+
+    let mut compressed = [0u8; 33];
+    compressed[0] = 0x02;
+    compressed[1..].copy_from_slice(&internal_key);
+    let encoded =
+        EncodedPoint::from_bytes(compressed).expect("33-byte compressed point is valid encoding");
+    let p: AffinePoint = AffinePoint::from_encoded_point(&encoded).unwrap();
+
+    let tweak_scalar: Scalar =
+        Scalar::from_repr_vartime(tweak_hash.into()).expect("tweak hash is a valid scalar");
+
+    let q: ProjectivePoint = ProjectivePoint::from(p) + ProjectivePoint::GENERATOR * tweak_scalar;
+    let q_affine = q.to_affine();
+    let q_encoded = q_affine.to_encoded_point(false);
+
+    let x = q_encoded.x().expect("tweaked point is not identity");
+    let mut result = [0u8; 32];
+    result.copy_from_slice(x.as_ref());
+    result
+}
