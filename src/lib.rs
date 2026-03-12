@@ -36,6 +36,8 @@ pub mod ingredients;
 pub use ingredients::{tree_from_ingredients, ArkLabsAdapter, LogicAdapter, SecondTechAdapter};
 
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
+pub use consensus::taproot;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::{ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput, VtxoId};
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use export::{

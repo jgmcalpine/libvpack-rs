@@ -4,7 +4,8 @@
 use super::{BarkBranchVector, TaprootTestVector};
 
 /// A single node internal Taproot representing the Cosign path.
-/// Useful for testing tweak math (Commit 4) without a complex tree.
+/// Useful for testing tweak math without a complex tree.
+#[allow(dead_code)]
 pub const BARK_COSIGN_TAPROOT: TaprootTestVector = TaprootTestVector {
     description: "cosign_taproot: guards internal node / root output",
     internal_key: "0710fc677c82cc82912438c88914a1d8ecbb31401360c89059976e4cb826c5bd",

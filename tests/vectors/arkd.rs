@@ -32,6 +32,7 @@ pub const ARKD_2_LEAF_TREE: TaprootTestVector = TaprootTestVector {
 
 /// A complex 6-leaf VTXO script tree.
 /// Perfect for testing deep Merkle tree assembly and multi-level branch hashing.
+#[allow(dead_code)]
 pub const ARKD_6_LEAF_TREE: TaprootTestVector = TaprootTestVector {
     description: "vtxoScript from even number of tapscripts (6 leaves)",
     internal_key: "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",

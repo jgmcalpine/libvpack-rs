@@ -7,6 +7,7 @@ pub mod bark;
 
 /// Standardized structure for Taproot tree extraction vectors.
 /// All values are represented as hex strings to maintain readability.
+#[allow(dead_code)]
 pub struct TaprootTestVector {
     pub description: &'static str,
     /// 32-byte X-only public key used as the base for the Taproot tweak.
@@ -24,6 +25,7 @@ pub struct TaprootTestVector {
 }
 
 /// Structure specifically for Bark's explicit left/right branch sorting vectors.
+#[allow(dead_code)]
 pub struct BarkBranchVector {
     pub description: &'static str,
     pub left_sorted: &'static str,
