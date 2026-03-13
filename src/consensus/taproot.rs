@@ -38,6 +38,31 @@ pub fn tap_branch_hash(a: [u8; 32], b: [u8; 32]) -> [u8; 32] {
     tagged_hash(b"TapBranch", &payload)
 }
 
+/// Balanced Merkle root from a slice of leaf hashes using pairwise bottom-up
+/// construction. Adjacent pairs are combined with `tap_branch_hash` (which
+/// handles lexicographic sorting per BIP-341). If a level has an odd number of
+/// nodes the last element is promoted to the next level.
+/// Returns `None` for an empty slice.
+pub fn compute_balanced_merkle_root(leaf_hashes: &[[u8; 32]]) -> Option<[u8; 32]> {
+    if leaf_hashes.is_empty() {
+        return None;
+    }
+    let mut level: Vec<[u8; 32]> = leaf_hashes.to_vec();
+    while level.len() > 1 {
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
+        let mut i = 0;
+        while i + 1 < level.len() {
+            next.push(tap_branch_hash(level[i], level[i + 1]));
+            i += 2;
+        }
+        if i < level.len() {
+            next.push(level[i]);
+        }
+        level = next;
+    }
+    Some(level[0])
+}
+
 /// BIP-341 TapTweak: compute the tweaked x-only public key from an internal key
 /// and Merkle root. Returns the 32-byte x-coordinate of Q = P + t*G, where
 /// t = TaggedHash("TapTweak", internal_key || merkle_root).

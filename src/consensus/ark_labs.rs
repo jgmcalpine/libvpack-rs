@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 
 use crate::types::{hashes::sha256d, hashes::Hash, OutPoint, Txid};
 
+use crate::consensus::taproot::{compute_balanced_merkle_root, tap_leaf_hash};
 use crate::consensus::{
     tx_preimage, tx_signed_hex, ConsensusEngine, TxInPreimage, TxOutPreimage, VerificationOutput,
     VtxoId,
@@ -287,6 +288,165 @@ impl ArkLabsV3 {
     ) -> Vec<u8> {
         tx_preimage(version, inputs, outputs, locktime)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Ark Labs Taproot Tree Builder (Path Exclusivity)
+// ---------------------------------------------------------------------------
+
+const OP_1: u8 = 0x51;
+const OP_VERIFY: u8 = 0x69;
+const OP_PUSH32: u8 = 0x20;
+const OP_CHECKSIGVERIFY: u8 = 0xad;
+const OP_CHECKSIG: u8 = 0xac;
+const OP_CSV: u8 = 0xb2;
+const OP_DROP: u8 = 0x75;
+
+/// The shared suffix of both Ark Labs tapscript templates:
+/// `OP_PUSH32 <asp_pk> OP_CHECKSIGVERIFY OP_PUSH32 <user_pk> OP_CHECKSIG` (66 bytes).
+const PUBKEY_TAIL_LEN: usize = 1 + 32 + 1 + 1 + 32 + 1; // 68
+
+/// Parses an Ark Labs tapscript to extract the ASP x-only pubkey and user x-only pubkey.
+///
+/// Accepts both the **forfeit** template (no CSV prefix, 70 bytes min) and the
+/// **exit/closure** template (with CSV prefix, 76+ bytes).
+///
+/// Returns `(asp_pubkey, user_pubkey)` or `None` if the script doesn't match
+/// a recognised Ark Labs template.
+pub fn parse_ark_labs_pubkeys(script: &[u8]) -> Option<([u8; 32], [u8; 32])> {
+    if script.len() < 4 || script[0] != OP_1 || script[1] != OP_VERIFY {
+        return None;
+    }
+
+    let tail_start = if script[2] == OP_PUSH32 {
+        // Forfeit template: OP_1 OP_VERIFY OP_PUSH32 <asp> ...
+        2
+    } else {
+        // Exit template: OP_1 OP_VERIFY <push N> <N bytes CSV> OP_CSV OP_DROP OP_PUSH32 <asp> ...
+        let csv_push_len = script[2] as usize;
+        let expected_csv_end = 3 + csv_push_len;
+        if script.len() <= expected_csv_end + 2 {
+            return None;
+        }
+        if script[expected_csv_end] != OP_CSV || script[expected_csv_end + 1] != OP_DROP {
+            return None;
+        }
+        expected_csv_end + 2
+    };
+
+    // Remaining bytes must be: OP_PUSH32 <asp 32> OP_CHECKSIGVERIFY OP_PUSH32 <user 32> OP_CHECKSIG
+    if script.len() < tail_start + PUBKEY_TAIL_LEN {
+        return None;
+    }
+    if script[tail_start] != OP_PUSH32
+        || script[tail_start + 33] != OP_CHECKSIGVERIFY
+        || script[tail_start + 34] != OP_PUSH32
+        || script[tail_start + 67] != OP_CHECKSIG
+    {
+        return None;
+    }
+
+    let mut asp_pk = [0u8; 32];
+    let mut user_pk = [0u8; 32];
+    asp_pk.copy_from_slice(&script[tail_start + 1..tail_start + 33]);
+    user_pk.copy_from_slice(&script[tail_start + 35..tail_start + 67]);
+    Some((asp_pk, user_pk))
+}
+
+/// Compiles the Ark Labs **forfeit** (condition) tapscript:
+/// `OP_1 OP_VERIFY OP_PUSH32 <asp_pk> OP_CHECKSIGVERIFY OP_PUSH32 <user_pk> OP_CHECKSIG`
+pub fn compile_forfeit_script(asp_pk: &[u8; 32], user_pk: &[u8; 32]) -> Vec<u8> {
+    let mut script = Vec::with_capacity(70);
+    script.push(OP_1);
+    script.push(OP_VERIFY);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(asp_pk);
+    script.push(OP_CHECKSIGVERIFY);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(user_pk);
+    script.push(OP_CHECKSIG);
+    script
+}
+
+/// Compiles the Ark Labs **exit/closure** tapscript with a CSV relative-timelock prefix:
+/// `OP_1 OP_VERIFY <push csv_bytes> OP_CSV OP_DROP OP_PUSH32 <asp_pk> OP_CHECKSIGVERIFY
+///  OP_PUSH32 <user_pk> OP_CHECKSIG`
+///
+/// `csv_bytes` is the raw minimal-encoded Script number for OP_CHECKSEQUENCEVERIFY.
+pub fn compile_exit_script(asp_pk: &[u8; 32], user_pk: &[u8; 32], csv_bytes: &[u8]) -> Vec<u8> {
+    let mut script = Vec::with_capacity(70 + csv_bytes.len() + 3);
+    script.push(OP_1);
+    script.push(OP_VERIFY);
+    script.push(csv_bytes.len() as u8);
+    script.extend_from_slice(csv_bytes);
+    script.push(OP_CSV);
+    script.push(OP_DROP);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(asp_pk);
+    script.push(OP_CHECKSIGVERIFY);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(user_pk);
+    script.push(OP_CHECKSIG);
+    script
+}
+
+/// Detects whether `asp_expiry_script` is the forfeit template (returns `true`)
+/// or the exit/CSV template (returns `false`). Returns `None` if unrecognised.
+fn is_forfeit_template(script: &[u8]) -> Option<bool> {
+    if script.len() < 4 || script[0] != OP_1 || script[1] != OP_VERIFY {
+        return None;
+    }
+    Some(script[2] == OP_PUSH32)
+}
+
+/// Computes the Taproot Merkle root for an Ark Labs VTXO from its `VPackTree`.
+///
+/// The `asp_expiry_script` field must contain a complete Ark Labs tapscript
+/// (either the forfeit or exit template). The function auto-detects the template,
+/// extracts the embedded pubkeys, compiles the companion script, and builds a
+/// balanced Merkle tree from the resulting TapLeaf hashes.
+///
+/// Returns `None` if `asp_expiry_script` is empty or doesn't match a recognised
+/// Ark Labs template.
+pub fn compute_ark_labs_merkle_root(tree: &VPackTree) -> Option<[u8; 32]> {
+    if tree.asp_expiry_script.is_empty() {
+        return None;
+    }
+
+    let (asp_pk, user_pk) = parse_ark_labs_pubkeys(&tree.asp_expiry_script)?;
+    let forfeit_template = is_forfeit_template(&tree.asp_expiry_script)?;
+
+    let (forfeit_script, exit_script) = if forfeit_template {
+        let csv_bytes = encode_exit_delta_csv(tree.leaf.exit_delta);
+        let exit = compile_exit_script(&asp_pk, &user_pk, &csv_bytes);
+        (tree.asp_expiry_script.clone(), exit)
+    } else {
+        let forfeit = compile_forfeit_script(&asp_pk, &user_pk);
+        (forfeit, tree.asp_expiry_script.clone())
+    };
+
+    let leaf_hashes = [tap_leaf_hash(&forfeit_script), tap_leaf_hash(&exit_script)];
+    compute_balanced_merkle_root(&leaf_hashes)
+}
+
+/// Encodes `exit_delta` as a minimal Bitcoin Script number for use with OP_CSV.
+/// Follows BIP 68 block-based relative timelock encoding (type flag bit 22 = 0).
+fn encode_exit_delta_csv(exit_delta: u16) -> Vec<u8> {
+    if exit_delta == 0 {
+        return vec![0x00];
+    }
+    let val = exit_delta as u32;
+    let mut bytes = Vec::with_capacity(3);
+    bytes.push(val as u8);
+    if val > 0x7F {
+        bytes.push((val >> 8) as u8);
+        if val > 0x7FFF {
+            bytes.push((val >> 16) as u8);
+        } else if (val >> 8) & 0x80 != 0 {
+            bytes.push(0x00);
+        }
+    }
+    bytes
 }
 
 #[cfg(test)]

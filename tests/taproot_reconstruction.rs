@@ -1,8 +1,12 @@
 //! TDD tests for BIP-341 Taproot tree reconstruction primitives.
-//! Validates `tap_leaf_hash` and `tap_branch_hash` against reference vectors
-//! extracted from arkd (Ark Labs) and bark (Second Tech).
+//! Validates `tap_leaf_hash`, `tap_branch_hash`, balanced Merkle root
+//! construction, and full Ark Labs tree reconstruction against reference
+//! vectors extracted from arkd (Ark Labs) and bark (Second Tech).
 
 mod vectors;
+
+use bitcoin::hashes::Hash;
+use vpack::payload::tree::{VPackTree, VtxoLeaf};
 
 use vectors::arkd::{ARKD_2_LEAF_TREE, ARKD_6_LEAF_TREE};
 use vectors::bark::{BARK_COSIGN_TAPROOT, BARK_LEAF_COSIGN_SORTING};
@@ -78,5 +82,83 @@ fn test_taptweak_against_bark() {
     assert_eq!(
         result, expected,
         "TapTweak mismatch for BARK_COSIGN_TAPROOT"
+    );
+}
+
+#[test]
+fn test_balanced_merkle_root_6_leaf() {
+    let leaf_hashes: Vec<[u8; 32]> = ARKD_6_LEAF_TREE
+        .tapleaf_hashes
+        .iter()
+        .map(|h| hex_to_32(h))
+        .collect();
+    let expected = hex_to_32(ARKD_6_LEAF_TREE.merkle_root);
+
+    let result = vpack::taproot::compute_balanced_merkle_root(&leaf_hashes)
+        .expect("6 leaves must produce a root");
+    assert_eq!(
+        result, expected,
+        "Balanced Merkle root mismatch for ARKD_6_LEAF_TREE (recursive halving topology)"
+    );
+}
+
+#[test]
+fn test_ark_labs_full_tree_reconstruction() {
+    let internal_key = hex_to_32(ARKD_2_LEAF_TREE.internal_key);
+    let asp_expiry_script = hex_to_vec(ARKD_2_LEAF_TREE.leaf_scripts[1]);
+    let expected_merkle_root = hex_to_32(ARKD_2_LEAF_TREE.merkle_root);
+    let expected_tweaked = hex_to_32(ARKD_2_LEAF_TREE.tweaked_pubkey);
+
+    let mut p2tr_script_pubkey = vec![0x51, 0x20];
+    p2tr_script_pubkey.extend_from_slice(&expected_tweaked);
+
+    let dummy_anchor = {
+        let txid = vpack::types::Txid::from_byte_array([0u8; 32]);
+        vpack::types::OutPoint { txid, vout: 0 }
+    };
+
+    let tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: 1000,
+            vout: 0,
+            sequence: 0xFFFFFFFF,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: p2tr_script_pubkey.clone(),
+        },
+        leaf_siblings: Vec::new(),
+        path: Vec::new(),
+        anchor: dummy_anchor,
+        asset_id: None,
+        fee_anchor_script: vec![0x51, 0x02, 0x4e, 0x73],
+        internal_key,
+        asp_expiry_script,
+    };
+
+    let merkle_root = vpack::compute_ark_labs_merkle_root(&tree)
+        .expect("compute_ark_labs_merkle_root must succeed for a valid 2-leaf tree");
+
+    assert_eq!(
+        merkle_root,
+        expected_merkle_root,
+        "Merkle root mismatch: got {}, expected {}",
+        hex::encode(merkle_root),
+        ARKD_2_LEAF_TREE.merkle_root,
+    );
+
+    let tweaked_key = vpack::taproot::compute_taproot_tweak(internal_key, merkle_root);
+
+    assert_eq!(
+        tweaked_key,
+        expected_tweaked,
+        "Tweaked key mismatch: got {}, expected {}",
+        hex::encode(tweaked_key),
+        ARKD_2_LEAF_TREE.tweaked_pubkey,
+    );
+
+    assert_eq!(
+        &tweaked_key,
+        &p2tr_script_pubkey[2..34],
+        "Tweaked key must match the x-only pubkey embedded in the P2TR scriptPubKey"
     );
 }
