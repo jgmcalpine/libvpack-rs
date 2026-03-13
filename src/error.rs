@@ -65,6 +65,9 @@ pub enum VPackError {
 
     /// A GenesisItem signature failed Taproot (BIP-340/341) verification.
     InvalidSignature,
+
+    /// Bark script template failed zero-trust validation (CLTV expiry or unlock clause).
+    InvalidBarkScript,
 }
 
 // Manual implementation of Display for no_std environments.
@@ -120,6 +123,10 @@ impl core::fmt::Display for VPackError {
             Self::InvalidSignature => write!(
                 f,
                 "Invalid signature: GenesisItem Schnorr signature verification failed"
+            ),
+            Self::InvalidBarkScript => write!(
+                f,
+                "Invalid Bark script template (CLTV expiry or unlock clause)"
             ),
         }
     }

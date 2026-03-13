@@ -327,6 +327,212 @@ impl SecondTechV3 {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Bark Taproot Tree Builder (Path Exclusivity)
+// ---------------------------------------------------------------------------
+
+use crate::consensus::taproot::{compute_balanced_merkle_root, tap_leaf_hash};
+
+// Bark Taproot Script Opcodes
+const OP_CHECKSIG: u8 = 0xac;
+const OP_CLTV: u8 = 0xb1;
+const OP_DROP: u8 = 0x75;
+const OP_PUSH32: u8 = 0x20;
+const OP_HASH160: u8 = 0xa9;
+const OP_PUSH20: u8 = 0x14;
+const OP_EQUALVERIFY: u8 = 0x88;
+
+/// Encodes a `u32` value as minimal CScriptNum bytes for use with OP_CLTV.
+///
+/// Follows Bitcoin's minimal script number encoding: little-endian with a
+/// sign-bit padding byte appended only when the MSB of the last data byte
+/// has its sign bit set.
+pub fn encode_bark_cltv(value: u32) -> Vec<u8> {
+    if value == 0 {
+        return vec![0x00];
+    }
+    let mut bytes = Vec::with_capacity(5);
+    bytes.push(value as u8);
+    if value > 0x7F {
+        bytes.push((value >> 8) as u8);
+        if value > 0x7FFF {
+            bytes.push((value >> 16) as u8);
+            if value > 0x7F_FFFF {
+                bytes.push((value >> 24) as u8);
+                if (value >> 24) & 0x80 != 0 {
+                    bytes.push(0x00);
+                }
+            } else if (value >> 16) & 0x80 != 0 {
+                bytes.push(0x00);
+            }
+        } else if (value >> 8) & 0x80 != 0 {
+            bytes.push(0x00);
+        }
+    }
+    bytes
+}
+
+/// Decodes minimal CScriptNum bytes (1-5 bytes, positive) into a `u32`.
+/// Returns `None` if the encoding is non-minimal or exceeds u32 range.
+fn decode_script_num(bytes: &[u8]) -> Option<u32> {
+    if bytes.is_empty() || bytes.len() > 5 {
+        return None;
+    }
+
+    let last = *bytes.last().unwrap();
+    if last & 0x80 != 0 {
+        return None;
+    }
+
+    if bytes.len() > 1 && last == 0x00 {
+        let penultimate = bytes[bytes.len() - 2];
+        if penultimate & 0x80 == 0 {
+            return None;
+        }
+    }
+
+    let mut val: u64 = 0;
+    for (i, &b) in bytes.iter().enumerate() {
+        val |= (b as u64) << (8 * i);
+    }
+
+    u32::try_from(val).ok()
+}
+
+/// Parses a Bark expiry clause script, extracting the CLTV value and server key.
+///
+/// Template: `OP_PUSHBYTES_N <N cltv bytes> OP_CLTV OP_DROP OP_PUSH32 <server_key> OP_CHECKSIG`
+///
+/// Returns `(cltv_value_u32, server_key)`. The raw CLTV bytes are decoded
+/// into a native `u32` to enforce anti-malleability: downstream recompilation
+/// via `encode_bark_cltv` guarantees minimal encoding.
+pub fn parse_bark_expiry_script(script: &[u8]) -> Result<(u32, [u8; 32]), VPackError> {
+    if script.is_empty() {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let push_len = script[0] as usize;
+    if push_len == 0 || push_len > 5 {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let expected_len = push_len + 37; // N + (1 push_len + 1 CLTV + 1 DROP + 1 PUSH32 + 32 key + 1 CHECKSIG)
+    if script.len() != expected_len {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let cltv_bytes = &script[1..1 + push_len];
+    let cltv_value = decode_script_num(cltv_bytes).ok_or(VPackError::InvalidBarkScript)?;
+
+    let after_cltv = 1 + push_len;
+    if script[after_cltv] != OP_CLTV || script[after_cltv + 1] != OP_DROP {
+        return Err(VPackError::InvalidBarkScript);
+    }
+    if script[after_cltv + 2] != OP_PUSH32 {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let mut server_key = [0u8; 32];
+    server_key.copy_from_slice(&script[after_cltv + 3..after_cltv + 35]);
+
+    if script[after_cltv + 35] != OP_CHECKSIG {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    Ok((cltv_value, server_key))
+}
+
+/// Parses a Bark unlock clause script, extracting the hash160 and MuSig2 key.
+///
+/// Template: `OP_HASH160 OP_PUSH20 <hash160> OP_EQUALVERIFY OP_PUSH32 <musig_key> OP_CHECKSIG`
+/// (57 bytes fixed)
+pub fn parse_bark_unlock_script(script: &[u8]) -> Result<([u8; 20], [u8; 32]), VPackError> {
+    if script.len() != 57 {
+        return Err(VPackError::InvalidBarkScript);
+    }
+    if script[0] != OP_HASH160 || script[1] != OP_PUSH20 {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let mut hash160 = [0u8; 20];
+    hash160.copy_from_slice(&script[2..22]);
+
+    if script[22] != OP_EQUALVERIFY || script[23] != OP_PUSH32 {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let mut musig_key = [0u8; 32];
+    musig_key.copy_from_slice(&script[24..56]);
+
+    if script[56] != OP_CHECKSIG {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    Ok((hash160, musig_key))
+}
+
+/// Compiles a Bark **expiry clause** tapscript from native types.
+///
+/// Takes a `u32` CLTV value (not raw bytes) and re-encodes via `encode_bark_cltv`
+/// to guarantee minimal representation.
+pub fn compile_bark_expiry_script(cltv_value: u32, server_key: &[u8; 32]) -> Vec<u8> {
+    let cltv_bytes = encode_bark_cltv(cltv_value);
+    let mut script = Vec::with_capacity(cltv_bytes.len() + 37);
+    script.push(cltv_bytes.len() as u8);
+    script.extend_from_slice(&cltv_bytes);
+    script.push(OP_CLTV);
+    script.push(OP_DROP);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(server_key);
+    script.push(OP_CHECKSIG);
+    script
+}
+
+/// Compiles a Bark **unlock clause** tapscript from native types.
+///
+/// `OP_HASH160 OP_PUSH20 <hash160> OP_EQUALVERIFY OP_PUSH32 <musig_key> OP_CHECKSIG` (57 bytes)
+pub fn compile_bark_unlock_script(hash160: &[u8; 20], musig_key: &[u8; 32]) -> Vec<u8> {
+    let mut script = Vec::with_capacity(57);
+    script.push(OP_HASH160);
+    script.push(OP_PUSH20);
+    script.extend_from_slice(hash160);
+    script.push(OP_EQUALVERIFY);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(musig_key);
+    script.push(OP_CHECKSIG);
+    script
+}
+
+/// Computes the Taproot Merkle root for a Bark VTXO from its `VPackTree`.
+///
+/// Parses `asp_expiry_script` as the expiry clause, re-encodes via
+/// `compile_bark_expiry_script` (zero-trust), and hashes as TapLeaf.
+/// Then iterates `leaf_siblings` for any unlock clause scripts, parsing and
+/// recompiling each match. All collected leaf hashes are passed to
+/// `compute_balanced_merkle_root`.
+pub fn compute_bark_merkle_root(tree: &VPackTree) -> Result<[u8; 32], VPackError> {
+    if tree.asp_expiry_script.is_empty() {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
+
+    let (cltv_value, server_key) = parse_bark_expiry_script(&tree.asp_expiry_script)?;
+    let expiry_script = compile_bark_expiry_script(cltv_value, &server_key);
+    leaf_hashes.push(tap_leaf_hash(&expiry_script));
+
+    for sibling in &tree.leaf_siblings {
+        if let SiblingNode::Compact { script, .. } = sibling {
+            if let Ok((hash160, musig_key)) = parse_bark_unlock_script(script) {
+                let unlock = compile_bark_unlock_script(&hash160, &musig_key);
+                leaf_hashes.push(tap_leaf_hash(&unlock));
+            }
+        }
+    }
+
+    compute_balanced_merkle_root(&leaf_hashes).ok_or(VPackError::InvalidBarkScript)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

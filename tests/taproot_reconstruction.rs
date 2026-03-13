@@ -7,6 +7,7 @@ mod vectors;
 
 use bitcoin::hashes::Hash;
 use vpack::payload::tree::{VPackTree, VtxoLeaf};
+use vpack::taproot::tap_leaf_hash;
 
 use vectors::arkd::{ARKD_2_LEAF_TREE, ARKD_6_LEAF_TREE};
 use vectors::bark::{BARK_COSIGN_TAPROOT, BARK_LEAF_COSIGN_SORTING};
@@ -154,6 +155,75 @@ fn test_ark_labs_full_tree_reconstruction() {
         "Tweaked key mismatch: got {}, expected {}",
         hex::encode(tweaked_key),
         ARKD_2_LEAF_TREE.tweaked_pubkey,
+    );
+
+    assert_eq!(
+        &tweaked_key,
+        &p2tr_script_pubkey[2..34],
+        "Tweaked key must match the x-only pubkey embedded in the P2TR scriptPubKey"
+    );
+}
+
+#[test]
+fn test_bark_full_tree_reconstruction() {
+    let internal_key = hex_to_32(BARK_COSIGN_TAPROOT.internal_key);
+    let asp_expiry_script = hex_to_vec(BARK_COSIGN_TAPROOT.leaf_scripts[0]);
+    let expected_merkle_root = hex_to_32(BARK_COSIGN_TAPROOT.merkle_root);
+    let expected_tweaked = hex_to_32(BARK_COSIGN_TAPROOT.tweaked_pubkey);
+
+    let mut p2tr_script_pubkey = vec![0x51, 0x20];
+    p2tr_script_pubkey.extend_from_slice(&expected_tweaked);
+
+    let dummy_anchor = {
+        let txid = vpack::types::Txid::from_byte_array([0u8; 32]);
+        vpack::types::OutPoint { txid, vout: 0 }
+    };
+
+    let tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: 1000,
+            vout: 0,
+            sequence: 0x00000000,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: p2tr_script_pubkey.clone(),
+        },
+        leaf_siblings: Vec::new(),
+        path: Vec::new(),
+        anchor: dummy_anchor,
+        asset_id: None,
+        fee_anchor_script: vec![0x51, 0x02, 0x4e, 0x73],
+        internal_key,
+        asp_expiry_script,
+    };
+
+    let merkle_root = vpack::compute_bark_merkle_root(&tree)
+        .expect("compute_bark_merkle_root must succeed for a valid Bark expiry script");
+
+    assert_eq!(
+        merkle_root,
+        expected_merkle_root,
+        "Merkle root mismatch: got {}, expected {}",
+        hex::encode(merkle_root),
+        BARK_COSIGN_TAPROOT.merkle_root,
+    );
+
+    let expiry_tapleaf = tap_leaf_hash(&hex_to_vec(BARK_COSIGN_TAPROOT.leaf_scripts[0]));
+    let expected_right_sorted = hex_to_32(BARK_LEAF_COSIGN_SORTING.right_sorted);
+    assert_eq!(
+        expiry_tapleaf, expected_right_sorted,
+        "Expiry TapLeaf hash must match BARK_LEAF_COSIGN_SORTING.right_sorted, \
+         confirming parse->u32->re-encode->compile roundtrip is identical to Bark reference"
+    );
+
+    let tweaked_key = vpack::taproot::compute_taproot_tweak(internal_key, merkle_root);
+
+    assert_eq!(
+        tweaked_key,
+        expected_tweaked,
+        "Tweaked key mismatch: got {}, expected {}",
+        hex::encode(tweaked_key),
+        BARK_COSIGN_TAPROOT.tweaked_pubkey,
     );
 
     assert_eq!(

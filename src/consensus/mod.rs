@@ -22,6 +22,7 @@ pub mod taproot_sighash;
 
 pub use ark_labs::compute_ark_labs_merkle_root;
 pub use ark_labs::ArkLabsV3;
+pub use second_tech::compute_bark_merkle_root;
 pub use second_tech::SecondTechV3;
 pub use tx_factory::{tx_preimage, tx_signed_hex, TxInPreimage, TxOutPreimage};
 
