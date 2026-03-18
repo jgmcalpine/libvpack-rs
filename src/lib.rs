@@ -37,6 +37,8 @@ pub use ingredients::{tree_from_ingredients, ArkLabsAdapter, LogicAdapter, Secon
 
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::taproot;
+#[cfg(all(feature = "schnorr-verify", any(feature = "bitcoin", feature = "wasm")))]
+pub use consensus::verify_path_exclusivity;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::{
     compute_ark_labs_merkle_root, compute_bark_merkle_root, ArkLabsV3, ConsensusEngine,
@@ -101,7 +103,11 @@ pub fn verify(
         }
     }
 
-    // Step 7: Return the parsed tree
+    // Step 7: Path Exclusivity — verify Taproot tree has no hidden spend paths
+    #[cfg(feature = "schnorr-verify")]
+    crate::consensus::verify_path_exclusivity(&tree, header.tx_variant)?;
+
+    // Step 8: Return the parsed tree
     Ok(tree)
 }
 

@@ -423,15 +423,21 @@ fn test_sabotage_inflation() {
 #[test]
 fn print_computed_vtxo_id() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let path = manifest_dir.join("tests/conformance/vectors/ark_labs/round_branch_v3.json");
-    let contents = fs::read_to_string(&path).expect("read");
-    let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
-    let ingredients =
-        crate::common::ark_labs_ingredients_from_json(&vector.reconstruction_ingredients)
-            .expect("full reconstruction_ingredients");
-    let bytes = create_vpack_ark_labs(ingredients).expect("pack");
-    let id = vpack::compute_vtxo_id_from_bytes(&bytes).expect("compute id");
-    println!("expected_vtxo_id for round_branch_v3.json: {}", id);
+    for name in [
+        "round_leaf_v3.json",
+        "round_branch_v3.json",
+        "oor_forfeit_pset.json",
+    ] {
+        let path = manifest_dir.join(format!("tests/conformance/vectors/ark_labs/{}", name));
+        let contents = fs::read_to_string(&path).expect("read");
+        let vector: AuditVector = serde_json::from_str(&contents).expect("parse");
+        let ingredients =
+            crate::common::ark_labs_ingredients_from_json(&vector.reconstruction_ingredients)
+                .expect("full reconstruction_ingredients");
+        let bytes = create_vpack_ark_labs(ingredients).expect("pack");
+        let id = vpack::compute_vtxo_id_from_bytes(&bytes).expect("compute id");
+        println!("expected_vtxo_id for {}: {}", name, id);
+    }
 }
 
 /// Reports byte sizes for conformance vectors. Run with `cargo test vpack_byte_size_summary -- --nocapture`.
@@ -1068,6 +1074,20 @@ fn test_vpack_internal_consistency_roundtrip() {
         value: 0,
         script: fee_anchor_script.clone(),
     }];
+    let internal_key = {
+        let ik_hex = ri["internal_key"].as_str().unwrap_or("");
+        let ik_bytes = hex::decode(ik_hex).unwrap_or_default();
+        let mut arr = [0u8; 32];
+        if ik_bytes.len() >= 32 {
+            arr.copy_from_slice(&ik_bytes[..32]);
+        }
+        arr
+    };
+    let asp_expiry_script = ri["asp_expiry_script"]
+        .as_str()
+        .and_then(|h| hex::decode(h).ok())
+        .unwrap_or_default();
+
     let ark_tree = VPackTree {
         leaf: VtxoLeaf {
             amount: user_value,
@@ -1082,8 +1102,8 @@ fn test_vpack_internal_consistency_roundtrip() {
         anchor,
         asset_id: None,
         fee_anchor_script,
-        internal_key: [0u8; 32],
-        asp_expiry_script: vec![],
+        internal_key,
+        asp_expiry_script,
     };
 
     let ark_header = Header {
@@ -1208,6 +1228,19 @@ fn test_vpack_internal_consistency_roundtrip() {
         value: 0,
         script: second_fee_anchor_script.clone(),
     }];
+    let bark_internal_key =
+        hex::decode("0710fc677c82cc82912438c88914a1d8ecbb31401360c89059976e4cb826c5bd")
+            .expect("decode bark internal key");
+    let bark_asp_expiry = hex::decode(
+        "03a08601b17520bd20b0bf5e3164ab2d0aeff8805771e9795a04ff92d91eddf07d1d3ce01d474cac",
+    )
+    .expect("decode bark asp expiry");
+    let bark_p2tr =
+        hex::decode("5120ca542aaf6c76c4b4c7822d73d91551ef42482098f3675d915d61782448b2ac5b")
+            .expect("decode bark p2tr");
+    let mut bark_ik = [0u8; 32];
+    bark_ik.copy_from_slice(&bark_internal_key);
+
     let second_tree = VPackTree {
         leaf: VtxoLeaf {
             amount: 1000,
@@ -1215,15 +1248,15 @@ fn test_vpack_internal_consistency_roundtrip() {
             sequence: 0,
             expiry: 0,
             exit_delta: 0,
-            script_pubkey: step0_child_script,
+            script_pubkey: bark_p2tr,
         },
         leaf_siblings: second_leaf_siblings,
         path: second_path_items,
         anchor: second_anchor,
         asset_id: None,
         fee_anchor_script: second_fee_anchor_script,
-        internal_key: [0u8; 32],
-        asp_expiry_script: vec![],
+        internal_key: bark_ik,
+        asp_expiry_script: bark_asp_expiry,
     };
 
     let second_engine = vpack::consensus::SecondTechV3;

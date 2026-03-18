@@ -1,1 +1,63 @@
-{"meta":{"variant":"0x03","description":"Borsh-serialized Vtxo struct with OutPoint-based ID — 3-step path (forensic audit alignment)"},"raw_evidence":{"expected_vtxo_id":"25a9c204a375d4fc058e8c45ce2919c06324ee2fdf4726a2fd298904ddebe347:0"},"reconstruction_ingredients":{"topology":"Chain","tx_version":3,"nSequence":0,"fee_anchor_script":"51024e73","id_type":"OutPoint","amount":10000,"exit_delta":2016,"script_pubkey_hex":"5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8","anchor_outpoint":"0000000000000000000000000000000000000000000000000000000000000000:0","path":[{"child_amount":12000,"child_script_pubkey":"5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8","parent_index":0,"sequence":0,"siblings":[{"hash":"a47f1e66d7dd10a9988172877d0952222d61a12039859bfec7eeadebf7568189","script":"5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3","value":1000}]},{"child_amount":11000,"child_script_pubkey":"5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8","parent_index":0,"sequence":0,"siblings":[{"hash":"a47f1e66d7dd10a9988172877d0952222d61a12039859bfec7eeadebf7568189","script":"5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3","value":1000}]},{"child_amount":10000,"child_script_pubkey":"5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8","parent_index":0,"sequence":0,"siblings":[{"hash":"a47f1e66d7dd10a9988172877d0952222d61a12039859bfec7eeadebf7568189","script":"5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3","value":1000}]}]}}
+{
+  "meta": {
+    "variant": "0x03",
+    "description": "Borsh-serialized Vtxo struct with OutPoint-based ID \u2014 3-step path (forensic audit alignment)"
+  },
+  "raw_evidence": {
+    "expected_vtxo_id": "b466513dd4fe94ad6a5a1b29a8a6bc7f843ea344213b6f28c710e07b3d2e3fb6:0"
+  },
+  "reconstruction_ingredients": {
+    "topology": "Chain",
+    "tx_version": 3,
+    "nSequence": 0,
+    "fee_anchor_script": "51024e73",
+    "id_type": "OutPoint",
+    "amount": 10000,
+    "exit_delta": 2016,
+    "script_pubkey_hex": "5120ca542aaf6c76c4b4c7822d73d91551ef42482098f3675d915d61782448b2ac5b",
+    "anchor_outpoint": "0000000000000000000000000000000000000000000000000000000000000000:0",
+    "path": [
+      {
+        "child_amount": 12000,
+        "child_script_pubkey": "5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8",
+        "parent_index": 0,
+        "sequence": 0,
+        "siblings": [
+          {
+            "hash": "a47f1e66d7dd10a9988172877d0952222d61a12039859bfec7eeadebf7568189",
+            "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+            "value": 1000
+          }
+        ]
+      },
+      {
+        "child_amount": 11000,
+        "child_script_pubkey": "5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8",
+        "parent_index": 0,
+        "sequence": 0,
+        "siblings": [
+          {
+            "hash": "a47f1e66d7dd10a9988172877d0952222d61a12039859bfec7eeadebf7568189",
+            "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+            "value": 1000
+          }
+        ]
+      },
+      {
+        "child_amount": 10000,
+        "child_script_pubkey": "5120e9d56cdf22598ce6c05950b3580e194a19e53f8b887fc6c4111ca2a82a0608a8",
+        "parent_index": 0,
+        "sequence": 0,
+        "siblings": [
+          {
+            "hash": "a47f1e66d7dd10a9988172877d0952222d61a12039859bfec7eeadebf7568189",
+            "script": "5120faac533aa0def6c9b1196e501d92fc7edc1972964793bd4fa0dde835b1fb9ae3",
+            "value": 1000
+          }
+        ]
+      }
+    ],
+    "internal_key": "0710fc677c82cc82912438c88914a1d8ecbb31401360c89059976e4cb826c5bd",
+    "asp_expiry_script": "03a08601b17520bd20b0bf5e3164ab2d0aeff8805771e9795a04ff92d91eddf07d1d3ce01d474cac"
+  }
+}

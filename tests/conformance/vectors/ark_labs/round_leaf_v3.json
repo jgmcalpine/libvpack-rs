@@ -1,10 +1,10 @@
 {
   "meta": {
     "variant": "0x04",
-    "description": "Ark Labs Round Leaf (V3 Anchored) — Gold Standard from arkd"
+    "description": "Ark Labs Round Leaf (V3 Anchored) \u2014 Gold Standard from arkd"
   },
   "raw_evidence": {
-    "expected_vtxo_id": "47ea55bcb18fe596e19e2ad50603216926d12b7f0498d5204abf5604d4a4bc7d"
+    "expected_vtxo_id": "d333e04fa9e4181e1a34eea38418b09e68dd20bb3f610e33860b4c396c429422"
   },
   "reconstruction_ingredients": {
     "topology": "Tree",
@@ -17,13 +17,15 @@
     "outputs": [
       {
         "value": 1100,
-        "script": "512025a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
+        "script": "51202e65d02c0d5a6f6a11cbf67692d0fc0c9f115661d945146511d3b6bf80825c1a"
       },
       {
         "value": 0,
         "script": "51024e73",
         "note": "Fee Anchor"
       }
-    ]
+    ],
+    "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+    "asp_expiry_script": "516903020040b27520002851fd1c7692e5ab649ce1a88bd8ba59e09401d78c4c8fe6ef93c405c4bbb8ad2008c65c69fb2bb155d81f914de7b0319a01f3ce89eaad8e212efaf835c58010a3ac"
   }
 }

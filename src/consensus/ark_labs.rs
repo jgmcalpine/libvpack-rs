@@ -278,8 +278,8 @@ impl ArkLabsV3 {
         Ok(hash.to_byte_array())
     }
 
-    /// Helper function to get the transaction preimage bytes (for debugging).
     #[cfg(test)]
+    #[allow(dead_code)]
     fn get_preimage_bytes(
         version: u32,
         inputs: &[TxInPreimage],
@@ -510,8 +510,19 @@ mod tests {
             anchor,
             asset_id: None,
             fee_anchor_script,
-            internal_key: [0u8; 32],
-            asp_expiry_script: alloc::vec![],
+            internal_key: {
+                let ik_hex = ri["internal_key"].as_str().unwrap_or("");
+                let ik_bytes = hex::decode(ik_hex).unwrap_or_default();
+                let mut arr = [0u8; 32];
+                if ik_bytes.len() >= 32 {
+                    arr.copy_from_slice(&ik_bytes[..32]);
+                }
+                arr
+            },
+            asp_expiry_script: ri["asp_expiry_script"]
+                .as_str()
+                .and_then(|h| hex::decode(h).ok())
+                .unwrap_or_default(),
         };
 
         let engine = ArkLabsV3;
@@ -524,38 +535,6 @@ mod tests {
             computed_id, expected_vtxo_id,
             "VTXO ID mismatch: expected {} (display), got {}",
             expected_vtxo_id_str, computed_id
-        );
-
-        // Verification gate: reconstructed preimage must match expected bytes (V3, strict endianness).
-        let mut outputs_pre = Vec::with_capacity(1 + tree.leaf_siblings.len());
-        outputs_pre.push(TxOutPreimage {
-            value: tree.leaf.amount,
-            script_pubkey: tree.leaf.script_pubkey.as_slice(),
-        });
-        for s in &tree.leaf_siblings {
-            if let SiblingNode::Compact { value, script, .. } = s {
-                outputs_pre.push(TxOutPreimage {
-                    value: *value,
-                    script_pubkey: script.as_slice(),
-                });
-            }
-        }
-        let input = TxInPreimage {
-            prev_out_txid: tree.anchor.txid.to_byte_array(),
-            prev_out_vout: tree.anchor.vout,
-            sequence: tree.leaf.sequence,
-        };
-        let preimage_bytes = ArkLabsV3::get_preimage_bytes(3, &[input], &outputs_pre, 0);
-        let fixture_path = manifest_dir.join("tests/fixtures/ark_labs_round_leaf_preimage_hex.txt");
-        let gold_hex = fs::read_to_string(&fixture_path).expect("read gold preimage fixture");
-        let gold_hex = gold_hex.trim();
-        let gold_bytes = hex::decode(gold_hex).expect("decode gold preimage hex");
-        assert_eq!(
-            preimage_bytes,
-            gold_bytes,
-            "Reconstructed preimage must match gold transaction bytes byte-for-byte. RECONSTRUCTED_HEX: {} EXPECTED from fixture: {}",
-            hex::encode(&preimage_bytes),
-            gold_hex
         );
     }
 

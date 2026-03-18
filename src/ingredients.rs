@@ -160,6 +160,20 @@ impl LogicAdapter for ArkLabsAdapter {
             (Vec::new(), leaf, leaf_siblings)
         };
 
+        let internal_key_hex = json["internal_key"].as_str().unwrap_or("");
+        let internal_key = if internal_key_hex.len() == 64 {
+            let bytes = hex::decode(internal_key_hex).map_err(|_| VPackError::EncodingError)?;
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            arr
+        } else {
+            [0u8; 32]
+        };
+        let asp_expiry_script = json["asp_expiry_script"]
+            .as_str()
+            .and_then(|h| hex::decode(h).ok())
+            .unwrap_or_default();
+
         Ok(VPackTree {
             leaf,
             leaf_siblings,
@@ -167,8 +181,8 @@ impl LogicAdapter for ArkLabsAdapter {
             anchor,
             asset_id: None,
             fee_anchor_script,
-            internal_key: [0u8; 32],
-            asp_expiry_script: alloc::vec![],
+            internal_key,
+            asp_expiry_script,
         })
     }
 }
@@ -267,6 +281,20 @@ impl LogicAdapter for SecondTechAdapter {
             script: fee_anchor_script.clone(),
         }];
 
+        let internal_key_hex = json["internal_key"].as_str().unwrap_or("");
+        let internal_key = if internal_key_hex.len() == 64 {
+            let bytes = hex::decode(internal_key_hex).map_err(|_| VPackError::EncodingError)?;
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            arr
+        } else {
+            [0u8; 32]
+        };
+        let asp_expiry_script = json["asp_expiry_script"]
+            .as_str()
+            .and_then(|h| hex::decode(h).ok())
+            .unwrap_or_default();
+
         Ok(VPackTree {
             leaf,
             leaf_siblings,
@@ -274,8 +302,8 @@ impl LogicAdapter for SecondTechAdapter {
             anchor,
             asset_id: None,
             fee_anchor_script,
-            internal_key: [0u8; 32],
-            asp_expiry_script: alloc::vec![],
+            internal_key,
+            asp_expiry_script,
         })
     }
 }

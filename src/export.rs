@@ -57,6 +57,10 @@ pub struct ArkLabsIngredients {
     pub siblings: Option<Vec<ArkLabsSibling>>,
     /// Branch case: child output (value + script) for the path step.
     pub child_output: Option<ArkLabsOutput>,
+    /// 32-byte x-only internal key for Taproot path exclusivity.
+    pub internal_key: [u8; 32],
+    /// ASP expiry tapscript for path exclusivity verification.
+    pub asp_expiry_script: Vec<u8>,
 }
 
 // -----------------------------------------------------------------------------
@@ -92,6 +96,10 @@ pub struct SecondTechIngredients {
     pub vout: u32,
     pub expiry_height: u32,
     pub path: Vec<SecondTechGenesisStep>,
+    /// 32-byte x-only internal key for Taproot path exclusivity.
+    pub internal_key: [u8; 32],
+    /// ASP expiry tapscript for path exclusivity verification.
+    pub asp_expiry_script: Vec<u8>,
 }
 
 // -----------------------------------------------------------------------------
@@ -271,8 +279,8 @@ fn tree_from_ark_labs_ingredients(
         anchor,
         asset_id: None,
         fee_anchor_script,
-        internal_key: [0u8; 32],
-        asp_expiry_script: alloc::vec![],
+        internal_key: ingredients.internal_key,
+        asp_expiry_script: ingredients.asp_expiry_script.clone(),
     })
 }
 
@@ -347,8 +355,8 @@ fn tree_from_second_tech_ingredients(
         anchor,
         asset_id: None,
         fee_anchor_script,
-        internal_key: [0u8; 32],
-        asp_expiry_script: alloc::vec![],
+        internal_key: ingredients.internal_key,
+        asp_expiry_script: ingredients.asp_expiry_script.clone(),
     })
 }
 

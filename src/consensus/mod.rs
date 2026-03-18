@@ -179,6 +179,54 @@ pub trait ConsensusEngine {
 }
 
 // -----------------------------------------------------------------------------
+// Path Exclusivity Verification
+// -----------------------------------------------------------------------------
+
+/// P2TR scriptPubKey prefix: OP_1 (0x51) OP_PUSHBYTES_32 (0x20).
+const P2TR_PREFIX: [u8; 2] = [0x51, 0x20];
+
+/// Zero-trust verification that the VTXO leaf's Taproot tree contains only the
+/// expected spend paths. Recomputes the Merkle root from `asp_expiry_script`,
+/// tweaks the `internal_key`, and asserts the result matches the x-only key
+/// embedded in the leaf's P2TR `script_pubkey`.
+///
+/// This makes it mathematically impossible for an ASP to construct a V-PACK
+/// with hidden spend paths without libvpack-rs flagging it as invalid.
+#[cfg(feature = "schnorr-verify")]
+pub fn verify_path_exclusivity(
+    tree: &VPackTree,
+    variant: crate::header::TxVariant,
+) -> Result<(), VPackError> {
+    if tree.asp_expiry_script.is_empty() {
+        return Err(VPackError::MissingExclusivityData);
+    }
+
+    let merkle_root = match variant {
+        crate::header::TxVariant::V3Anchored => {
+            compute_ark_labs_merkle_root(tree).ok_or(VPackError::InvalidArkLabsScript)?
+        }
+        crate::header::TxVariant::V3Plain => compute_bark_merkle_root(tree)?,
+    };
+
+    let derived_key = taproot::compute_taproot_tweak(tree.internal_key, merkle_root)
+        .ok_or(VPackError::PathExclusivityViolation)?;
+
+    let script = &tree.leaf.script_pubkey;
+    if script.len() != 34 || script[..2] != P2TR_PREFIX {
+        return Err(VPackError::PathExclusivityViolation);
+    }
+    let expected_key: [u8; 32] = script[2..34]
+        .try_into()
+        .map_err(|_| VPackError::PathExclusivityViolation)?;
+
+    if derived_key != expected_key {
+        return Err(VPackError::PathExclusivityViolation);
+    }
+
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
 // Tests: Verification Gate (VtxoId parsing)
 // -----------------------------------------------------------------------------
 //

@@ -98,6 +98,15 @@ pub fn ark_labs_ingredients_from_json(
         ArkLabsOutput { value, script }
     });
 
+    let internal_key = json["internal_key"]
+        .as_str()
+        .and_then(|h| decode_hex_32(h).ok())
+        .unwrap_or([0u8; 32]);
+    let asp_expiry_script = json["asp_expiry_script"]
+        .as_str()
+        .and_then(|h| decode_hex_to_vec(h).ok())
+        .unwrap_or_default();
+
     Ok(ArkLabsIngredients {
         anchor_outpoint: anchor_str.to_string(),
         fee_anchor_script,
@@ -105,6 +114,8 @@ pub fn ark_labs_ingredients_from_json(
         outputs,
         siblings,
         child_output,
+        internal_key,
+        asp_expiry_script,
     })
 }
 
@@ -174,6 +185,15 @@ pub fn second_tech_ingredients_from_json(
         vec![]
     };
 
+    let internal_key = json["internal_key"]
+        .as_str()
+        .and_then(|h| decode_hex_32(h).ok())
+        .unwrap_or([0u8; 32]);
+    let asp_expiry_script = json["asp_expiry_script"]
+        .as_str()
+        .and_then(|h| decode_hex_to_vec(h).ok())
+        .unwrap_or_default();
+
     Ok(SecondTechIngredients {
         anchor_outpoint: anchor_str.to_string(),
         fee_anchor_script,
@@ -183,5 +203,7 @@ pub fn second_tech_ingredients_from_json(
         vout,
         expiry_height,
         path,
+        internal_key,
+        asp_expiry_script,
     })
 }

@@ -164,6 +164,20 @@ fn master_universal_verification() {
         value: 0,
         script: fee_anchor_script.clone(),
     }];
+    let internal_key = {
+        let ik_hex = ri["internal_key"].as_str().unwrap_or("");
+        let ik_bytes = hex::decode(ik_hex).unwrap_or_default();
+        let mut arr = [0u8; 32];
+        if ik_bytes.len() >= 32 {
+            arr.copy_from_slice(&ik_bytes[..32]);
+        }
+        arr
+    };
+    let asp_expiry_script = ri["asp_expiry_script"]
+        .as_str()
+        .and_then(|h| hex::decode(h).ok())
+        .unwrap_or_default();
+
     let ark_tree = VPackTree {
         leaf: VtxoLeaf {
             amount: user_value,
@@ -178,8 +192,8 @@ fn master_universal_verification() {
         anchor,
         asset_id: None,
         fee_anchor_script,
-        internal_key: [0u8; 32],
-        asp_expiry_script: vec![],
+        internal_key,
+        asp_expiry_script,
     };
 
     let ark_header = Header {

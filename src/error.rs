@@ -68,6 +68,15 @@ pub enum VPackError {
 
     /// Bark script template failed zero-trust validation (CLTV expiry or unlock clause).
     InvalidBarkScript,
+
+    /// Ark Labs tapscript template failed zero-trust validation (forfeit or exit clause).
+    InvalidArkLabsScript,
+
+    /// Path exclusivity data (internal_key + asp_expiry_script) is missing from the tree.
+    MissingExclusivityData,
+
+    /// Derived Taproot tweaked key does not match the x-only key in the leaf P2TR scriptPubKey.
+    PathExclusivityViolation,
 }
 
 // Manual implementation of Display for no_std environments.
@@ -127,6 +136,18 @@ impl core::fmt::Display for VPackError {
             Self::InvalidBarkScript => write!(
                 f,
                 "Invalid Bark script template (CLTV expiry or unlock clause)"
+            ),
+            Self::InvalidArkLabsScript => write!(
+                f,
+                "Invalid Ark Labs tapscript template (forfeit or exit clause)"
+            ),
+            Self::MissingExclusivityData => write!(
+                f,
+                "Path exclusivity data missing: internal_key and asp_expiry_script are required"
+            ),
+            Self::PathExclusivityViolation => write!(
+                f,
+                "Path exclusivity mathematically violated: derived Taproot key does not match L1 anchor script"
             ),
         }
     }
