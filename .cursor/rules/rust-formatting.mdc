@@ -1,0 +1,43 @@
+---
+description: Rust formatting and lint to pass CI (cargo fmt, cargo clippy)
+globs: "**/*.rs"
+alwaysApply: true
+---
+
+# Rust Formatting and Lint (CI Compliance)
+
+All Rust code must pass `cargo fmt --all -- --check` and `cargo clippy --all-targets`. Follow these rules:
+
+## After Every Code Change
+
+**Always run `cargo fmt --all` and `cargo clippy --all-targets` immediately after editing any `.rs` file.** Fix any format or lint errors before proceeding—CI will fail otherwise.
+
+## Before Committing
+
+- Run `cargo fmt --all` and `cargo clippy --all-targets` before committing any Rust changes.
+- Never leave Rust code unformatted or with lint errors—the CI will fail.
+
+## rustfmt Conventions
+
+- **Line wrapping**: Long method chains and expressions are split across multiple lines (typically at ~100 chars).
+- **Indentation**: 4 spaces.
+- **Trailing commas**: Use in multi-line structs, enums, and function args.
+
+## Example
+
+```rust
+// ❌ Single long line (may exceed width)
+let expected_id = engine.compute_vtxo_id(&tree, Some(anchor_value)).expect("good tree");
+
+// ✅ Formatted (rustfmt wraps long lines)
+let expected_id = engine
+    .compute_vtxo_id(&tree, Some(anchor_value))
+    .expect("good tree");
+```
+
+## Workflow
+
+1. Edit Rust code.
+2. Run `cargo fmt --all`.
+3. Run `cargo clippy --all-targets` and fix any lint errors.
+4. Proceed with tests/commit.

@@ -4,8 +4,6 @@
 
 [![CI](https://github.com/jgmcalpine/libvpack-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/jgmcalpine/libvpack-rs/actions/workflows/ci.yml) [![Crates.io](https://img.shields.io/badge/cargo-v1.0.0--RC.2-green)](https://crates.io/crates/vpack) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![V-PACK Standard](https://img.shields.io/badge/Standard-V--PACK-blue)](docs/specs/01-vbip.md)
 
-⚠️ **CURRENT LIMITATION (See Phase 7):** `libvpack-rs` currently verifies **Path Existence** (that an exit path is structurally valid and signatures match) but does not yet verify **Path Exclusivity** (full Taproot tree reconstruction to prove the non-existence of alternative ASP spend paths). This is our current Priority 0.
-
 ## The VTXO: The Fundamental Unit of Layer 2 Scaling
 As Bitcoin Layer 2 protocols evolve, the **Virtual UTXO (VTXO)** has emerged as a shared technical primitive. While protocols are exploring different throughput optimizations, a user's proof-of-ownership is ultimately an off-chain VTXO residing within a pre-signed transaction tree.
 
@@ -21,7 +19,7 @@ As the Ark ecosystem matures, implementations like **Arkade (by Ark Labs)** and 
 `libvpack-rs` implements the **V-PACK** standard: a neutral, implementation-agnostic verification engine. It acts as the ecosystem's independent auditor, sovereign life raft, and educational bridge.
 
 ### Core Pillars
-*   **Independent Security Audit [In Progress]:** Moving towards a clean-room implementation of BIP-341 Taproot reconstruction. The goal is to independently verify "Path Exclusivity"—mathematically proving the strict absence of ASP backdoors. *(Note: `libvpack-rs` currently verifies structural existence; strict exclusivity auditing is the immediate next phase).*
+*   **Independent Security Audit [Complete]:** A clean-room `no_std` implementation of BIP-341 Taproot reconstruction. The engine independently verifies "Path Exclusivity"—mathematically proving the strict absence of ASP backdoors by acting as a strict script compiler rather than a blind hasher.
 *   **Sovereign Recovery ("The Fire Escape") [Planned]:** Building third-party tooling to let users view, understand, and directly broadcast their fully-signed L1 exit transactions independently of the provider-specific software stack that issued the VTXO.
 *   **Hardware-Native (`no_std`) Baseline [Current]:** A zero-dependency core logic designed strictly for resource-constrained devices, establishing the foundational open-source plumbing that hardware wallets can eventually use to verify Ark natively without vendor lock-in.
 *   **Transparency & Education [Current & Expanding]:** Powers local WASM visualizers (like `vtxopack.org`) that break open the "black box" of covenant math. Upcoming phases will graphically map the full Taproot tree and script execution logic.
@@ -35,6 +33,58 @@ Arkade and Bark utilize distinct mathematical identities and sequencing logic fo
 |:--- |:--- |:--- |:--- |:--- |
 | **Arkade (Ark Labs)** | **Transaction-Native** | `sha256d(Bitcoin_V3_Tx)` | 32 Bytes | `0xFFFFFFFE` (TRUC RBF) |
 | **Bark (Second)** | **Object-Native** | `sha256d(Tx):Index` | 36 Bytes | `0x00000000` (BIP-68 Timelocks) |
+
+---
+
+## The Minimum Viable VTXO (MVV) Schema
+To achieve this cross-dialect compatibility without compromising security, `libvpack-rs` defines a draft of a MVV Schema. Notice that `internal_key` and `asp_expiry_script` are strictly mandatory. The verifier uses these to dynamically compile the expected Bitcoin scripts (Zero-Trust Compilation), ensuring malicious ASPs cannot hide backdoors in malleable payload bytes.
+
+<details>
+<summary>Click to view the MVV Schema (Rust)</summary>
+
+```rust
+/// The Minimal Viable VTXO (MVV) Ingredient Schema (v0.1 RFC)
+/// Designed for Zero-Trust Path Exclusivity and Dialect-Agnostic Verification.
+
+pub struct VtxoIngredient {
+    /// Implementation version to identify template logic (e.g., 0x03 Bark, 0x04 Ark Labs)
+    pub dialect_version: u32,
+    pub amount: u64,
+    pub script_pubkey: Vec<u8>,
+    pub vout: u32,
+    /// The relative timelock required for the exit (blocks or seconds)
+    pub exit_delta: u32,
+    pub sequence: u32,
+    
+    // --- PATH EXCLUSIVITY DATA (Mandatory for Zero-Trust) ---
+    /// The 32-byte X-only base key tweaked by the Merkle root
+    pub internal_key: [u8; 32],
+    /// The abstract sweeping/forfeit script (compiled dynamically by the dialect builder)
+    pub asp_expiry_script: Vec<u8>,
+    // --------------------------------------------------------
+
+    /// Merkle path to the L1 Anchor
+    pub path: Vec<VPackPathStep>,
+    /// The L1 Anchor (TxID and Vout) where the tree is rooted
+    pub anchor_outpoint: OutPoint,
+}
+
+pub struct VPackPathStep {
+    /// Every output in this transaction *except* the one leading to the user.
+    /// Includes other users’ VTXOs and protocol anchors/connectors.
+    pub other_outputs: Vec<VPackOutput>,
+    /// The ASP’s signature authorizing this specific step in the tree
+    pub signature:[u8; 64],
+    pub parent_index: u32,
+}
+
+pub struct VPackOutput {
+    pub value: u64,
+    pub script_pubkey: Vec<u8>,
+}
+```
+
+</details>
 
 ---
 
@@ -85,10 +135,9 @@ See [vtxopack.org](https://vtxopack.org) for a live implementation of the VTXO-I
 
 - [x] **Phase 1-5: Forensic Audit & Core Logic.** Byte-level reconciliation of nSequence, Fee Anchors, and Identity Models across divergent Ark implementations.
 - [x] **Phase 6: The VTXO-Inspector.** A WASM-powered visualizer at `vtxopack.org`, enabling users to parse and verify L2 balances locally in the browser.
-- [ ] **Phase 7 (CURRENT PRIORITY): Path Exclusivity Engine (Security & Cryptographic Audit).** Implementing pure-Rust BIP-341 Taproot reconstruction. Building the engine to audit the entire VTXO Taptree, mathematically proving the strict non-existence of ASP backdoors or hidden sweep scripts.
-- [ ] **Phase 8: "The Glass VTXO" (Transparency & Education).** Upgrading the visualizer to parse and graphically display the full Taproot tree and underlying Bitcoin scripts, creating an interactive UX where developers can visually learn how Ark covenants execute.
+- [x] **Phase 7: Path Exclusivity Engine (Security & Cryptographic Audit).** Implementing pure-Rust BIP-341 Taproot reconstruction. Building the engine to audit the entire VTXO Taptree, mathematically proving the strict non-existence of ASP backdoors or hidden sweep scripts.
+- [ ] **Phase 8 (CURRENT): "The Glass VTXO" (Transparency & Education).** Upgrading the visualizer to parse and graphically display the full Taproot tree and underlying Bitcoin scripts, creating an interactive UX where developers can visually learn how Ark covenants execute.
 - [ ] **Phase 9: "The Sentinel" (Automated Drift Detection & Code Review).** Implementing daily automated CI monitoring against upstream Arkade and Bark codebases to catch silent covenant changes, alerting the community and acting as an automated early-warning system.
 - [ ] **Phase 10: "The Fire Escape" (Sovereign Recovery Generation).** Transitioning the library from verifying state to trustlessly generating fully-signed L1 exit transactions, complete with fee-rate awareness, allowing users to broadcast their sovereign exit independently of the provider-specific software stack.
 - [ ] **Phase 11: Utreexo Integration.** Implementing a `no_std` Utreexo accumulator verifier within the core library. This enables "Existential L1 Verification," allowing V-PACK to prove that a VTXO's L1 anchor is currently unspent without relying on block explorers or heavy local nodes.
 - [ ] **Phase 12: Standardized Specifications & Educational Deep-Dives.** Writing the formal V-PACK open-source specification and publishing technical deep-dives to educate newcomers on L2 Taproot engineering.
-
