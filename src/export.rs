@@ -29,37 +29,71 @@ const DEFAULT_FEE_ANCHOR_SCRIPT: [u8; 4] = [0x51, 0x02, 0x4e, 0x73];
 
 /// One output in Ark Labs reconstruction (value + script).
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "export-json", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArkLabsOutput {
     pub value: u64,
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::vec"))]
     pub script: Vec<u8>,
 }
 
 /// One sibling in a branch step (hash, value, script).
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "export-json", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArkLabsSibling {
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::bytes32"))]
     pub hash: [u8; 32],
     pub value: u64,
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::vec"))]
     pub script: Vec<u8>,
 }
 
 /// Ingredients to rebuild an Ark Labs (V3-Anchored) V-PACK.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "export-json", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArkLabsIngredients {
     /// Parent or anchor outpoint, e.g. `"txid:0"` (display order).
+    #[cfg_attr(feature = "export-json", serde(alias = "parent_outpoint"))]
     pub anchor_outpoint: String,
     /// Fee anchor script bytes (default 51024e73 if empty).
+    #[cfg_attr(
+        feature = "export-json",
+        serde(
+            default,
+            deserialize_with = "crate::json_hex::deserialize_vec_default_empty",
+            serialize_with = "crate::json_hex::vec::serialize"
+        )
+    )]
     pub fee_anchor_script: Vec<u8>,
     /// nSequence (e.g. 0xFFFFFFFF round, 0xFFFFFFFE OOR).
+    #[cfg_attr(feature = "export-json", serde(rename = "nSequence"))]
     pub n_sequence: u32,
     /// At least one output; first is the leaf when path is empty.
     pub outputs: Vec<ArkLabsOutput>,
     /// Branch case: siblings for the single path step.
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub siblings: Option<Vec<ArkLabsSibling>>,
     /// Branch case: child output (value + script) for the path step.
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub child_output: Option<ArkLabsOutput>,
     /// 32-byte x-only internal key for Taproot path exclusivity.
+    #[cfg_attr(
+        feature = "export-json",
+        serde(
+            default,
+            deserialize_with = "crate::json_hex::deserialize_bytes32_default_zero",
+            serialize_with = "crate::json_hex::bytes32::serialize"
+        )
+    )]
     pub internal_key: [u8; 32],
     /// ASP expiry tapscript for path exclusivity verification.
+    #[cfg_attr(
+        feature = "export-json",
+        serde(
+            default,
+            deserialize_with = "crate::json_hex::deserialize_vec_default_empty",
+            serialize_with = "crate::json_hex::vec::serialize"
+        )
+    )]
     pub asp_expiry_script: Vec<u8>,
 }
 
@@ -69,36 +103,79 @@ pub struct ArkLabsIngredients {
 
 /// One sibling in a path step.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "export-json", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondTechSibling {
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::bytes32"))]
     pub hash: [u8; 32],
     pub value: u64,
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::vec"))]
     pub script: Vec<u8>,
 }
 
 /// One genesis step in the path.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "export-json", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondTechGenesisStep {
     pub siblings: Vec<SecondTechSibling>,
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub parent_index: u32,
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub sequence: u32,
     pub child_amount: u64,
+    #[cfg_attr(feature = "export-json", serde(alias = "child_script"))]
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::vec"))]
     pub child_script_pubkey: Vec<u8>,
 }
 
 /// Ingredients to rebuild a Second Tech (V3-Plain) V-PACK. nSequence is always 0.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "export-json", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondTechIngredients {
+    #[cfg_attr(feature = "export-json", serde(alias = "parent_outpoint"))]
     pub anchor_outpoint: String,
+    #[cfg_attr(
+        feature = "export-json",
+        serde(
+            default,
+            deserialize_with = "crate::json_hex::deserialize_vec_default_empty",
+            serialize_with = "crate::json_hex::vec::serialize"
+        )
+    )]
     pub fee_anchor_script: Vec<u8>,
     pub amount: u64,
+    #[cfg_attr(
+        feature = "export-json",
+        serde(alias = "script_pubkey_hex", alias = "script")
+    )]
+    #[cfg_attr(feature = "export-json", serde(with = "crate::json_hex::vec"))]
     pub script_pubkey: Vec<u8>,
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub exit_delta: u16,
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub vout: u32,
+    #[cfg_attr(feature = "export-json", serde(default))]
     pub expiry_height: u32,
+    #[cfg_attr(feature = "export-json", serde(default, alias = "genesis"))]
     pub path: Vec<SecondTechGenesisStep>,
     /// 32-byte x-only internal key for Taproot path exclusivity.
+    #[cfg_attr(
+        feature = "export-json",
+        serde(
+            default,
+            deserialize_with = "crate::json_hex::deserialize_bytes32_default_zero",
+            serialize_with = "crate::json_hex::bytes32::serialize"
+        )
+    )]
     pub internal_key: [u8; 32],
     /// ASP expiry tapscript for path exclusivity verification.
+    #[cfg_attr(
+        feature = "export-json",
+        serde(
+            default,
+            deserialize_with = "crate::json_hex::deserialize_vec_default_empty",
+            serialize_with = "crate::json_hex::vec::serialize"
+        )
+    )]
     pub asp_expiry_script: Vec<u8>,
 }
 

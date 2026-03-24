@@ -15,10 +15,14 @@ pub mod error;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod export;
 pub mod header;
+#[cfg(all(any(feature = "bitcoin", feature = "wasm"), feature = "export-json"))]
+mod json_hex;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod pack;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod payload;
+#[cfg(all(any(feature = "bitcoin", feature = "wasm"), feature = "export-json"))]
+pub mod state;
 
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod types;
@@ -52,6 +56,8 @@ pub use export::{
 pub use header::TxVariant;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use payload::tree::VPackTree;
+#[cfg(all(any(feature = "bitcoin", feature = "wasm"), feature = "export-json"))]
+pub use state::{VpackImplementation, VpackIngredients, VpackState};
 
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 use crate::error::VPackError;

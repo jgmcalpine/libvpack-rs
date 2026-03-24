@@ -37,7 +37,7 @@ hex = { version = "0.4", default-features = false, features = ["alloc"], optiona
 k256 = { version = "0.13", default-features = false, features = ["schnorr"], optional = true }
 
 [features]
-default = ["std", "bitcoin", "schnorr-verify"]
+default = ["std", "bitcoin", "schnorr-verify", "export-json"]
 std = [
     "bitcoin?/std",
     "borsh/std",
@@ -51,13 +51,17 @@ alloc = []
 bitcoin = ["dep:bitcoin"]
 
 # Enable JSON adapters (reconstruction_ingredients -> VPackTree; used by wasm-vpack)
-adapter = ["dep:serde", "dep:hex", "dep:serde_json", "std"]
+adapter = ["dep:serde", "dep:hex", "dep:serde_json", "std", "export-json"]
+
+# JSON envelope (VpackState) + serde on export ingredient types (optional for minimal builds).
+export-json = ["dep:serde", "dep:hex", "dep:serde_json", "hex/alloc"]
 
 # For wasm32: no bitcoin (no secp256k1); use bitcoin_hashes + minimal types.
 wasm = [
     "dep:serde",
     "dep:hex",
     "dep:serde_json",
+    "export-json",
     "dep:bitcoin_hashes",
     "borsh/std",
     "byteorder/std",
