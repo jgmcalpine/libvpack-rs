@@ -78,6 +78,9 @@ pub enum VPackError {
     /// Derived Taproot tweaked key does not match the x-only key in the leaf P2TR scriptPubKey.
     PathExclusivityViolation,
 
+    /// BIP-341 control block could not be reconstructed from the tree (no matching Taproot layout).
+    ControlBlockReconstructionFailed,
+
     /// Parsed tree is missing data required for the checked completeness policy.
     ///
     /// **Depth convention:** `0` always refers to the **leaf tier** (the VTXO leaf script and/or
@@ -156,6 +159,10 @@ impl core::fmt::Display for VPackError {
             Self::PathExclusivityViolation => write!(
                 f,
                 "Path exclusivity mathematically violated: derived Taproot key does not match L1 anchor script"
+            ),
+            Self::ControlBlockReconstructionFailed => write!(
+                f,
+                "BIP-341 control block reconstruction failed: tree Taproot layout does not match P2TR output"
             ),
             Self::TreeIncomplete { depth, field } => {
                 if *depth == 0 {

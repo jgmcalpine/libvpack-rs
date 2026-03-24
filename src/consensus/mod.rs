@@ -23,6 +23,12 @@ pub use completeness::{validate_exit_ready_completeness, validate_tree_completen
 #[cfg(feature = "schnorr-verify")]
 pub mod taproot_sighash;
 
+#[cfg(feature = "bitcoin")]
+pub mod control_block;
+
+#[cfg(feature = "bitcoin")]
+pub use control_block::{reconstruct_control_block, verify_control_block};
+
 pub use ark_labs::compute_ark_labs_merkle_root;
 pub use ark_labs::ArkLabsV3;
 pub use second_tech::compute_bark_merkle_root;

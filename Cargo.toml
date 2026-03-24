@@ -50,6 +50,10 @@ alloc = []
 # Use full bitcoin crate (native builds only; pulls secp256k1).
 bitcoin = ["dep:bitcoin"]
 
+# BIP-341 script-path control blocks and Taproot output-key tweaking use `rust-secp256k1` via this
+# crate. This is separate from `schnorr-verify` (BIP-340 signature checks via k256 / wasm).
+# Control-block APIs are compiled only when `bitcoin` is enabled.
+
 # Enable JSON adapters (reconstruction_ingredients -> VPackTree; used by wasm-vpack)
 adapter = ["dep:serde", "dep:hex", "dep:serde_json", "std", "export-json"]
 
@@ -70,7 +74,8 @@ wasm = [
     "schnorr-verify",
 ]
 
-# Taproot (BIP-341) sighash + BIP-340 Schnorr verification; uses k256 (pure Rust).
+# BIP-340 Schnorr signature verification + Taproot sighash helpers; uses k256 (pure Rust, wasm-friendly).
+# Taproot *output-key tweak* for `bitcoin` builds uses rust-secp256k1 instead (see `compute_taproot_tweak`).
 schnorr-verify = ["dep:k256"]
 
 [dev-dependencies]

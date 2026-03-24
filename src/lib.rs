@@ -49,6 +49,8 @@ pub use consensus::{
     validate_tree_completeness, ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput,
     VtxoId,
 };
+#[cfg(feature = "bitcoin")]
+pub use consensus::{reconstruct_control_block, verify_control_block};
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use export::{
     create_vpack_ark_labs, create_vpack_from_tree, create_vpack_second_tech, ArkLabsIngredients,

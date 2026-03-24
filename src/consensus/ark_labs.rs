@@ -429,6 +429,32 @@ pub fn compute_ark_labs_merkle_root(tree: &VPackTree) -> Option<[u8; 32]> {
     compute_balanced_merkle_root(&leaf_hashes)
 }
 
+/// Tap leaf hashes in the same order as [`compute_ark_labs_merkle_root`], and the index of the
+/// spend corresponding to `tree.asp_expiry_script` (`0` = forfeit arm, `1` = exit arm).
+pub fn ark_labs_tap_leaf_hashes_for_merkle_path(
+    tree: &VPackTree,
+) -> Option<(Vec<[u8; 32]>, usize)> {
+    if tree.asp_expiry_script.is_empty() {
+        return None;
+    }
+
+    let (asp_pk, user_pk) = parse_ark_labs_pubkeys(&tree.asp_expiry_script)?;
+    let forfeit_template = is_forfeit_template(&tree.asp_expiry_script)?;
+
+    let (forfeit_script, exit_script) = if forfeit_template {
+        let csv_bytes = encode_exit_delta_csv(tree.leaf.exit_delta);
+        let exit = compile_exit_script(&asp_pk, &user_pk, &csv_bytes);
+        (tree.asp_expiry_script.clone(), exit)
+    } else {
+        let forfeit = compile_forfeit_script(&asp_pk, &user_pk);
+        (forfeit, tree.asp_expiry_script.clone())
+    };
+
+    let hashes = vec![tap_leaf_hash(&forfeit_script), tap_leaf_hash(&exit_script)];
+    let leaf_idx = if forfeit_template { 0 } else { 1 };
+    Some((hashes, leaf_idx))
+}
+
 /// Encodes `exit_delta` as a minimal Bitcoin Script number for use with OP_CSV.
 /// Follows BIP 68 block-based relative timelock encoding (type flag bit 22 = 0).
 fn encode_exit_delta_csv(exit_delta: u16) -> Vec<u8> {

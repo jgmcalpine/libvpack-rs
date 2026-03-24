@@ -533,6 +533,37 @@ pub fn compute_bark_merkle_root(tree: &VPackTree) -> Result<[u8; 32], VPackError
     compute_balanced_merkle_root(&leaf_hashes).ok_or(VPackError::InvalidBarkScript)
 }
 
+/// Tap leaf hashes in the same order as [`compute_bark_merkle_root`], and the index of the
+/// expiry spend path (`0` = `compile_bark_expiry_script` leaf).
+pub fn bark_tap_leaf_hashes_for_merkle_path(
+    tree: &VPackTree,
+) -> Result<(Vec<[u8; 32]>, usize), VPackError> {
+    if tree.asp_expiry_script.is_empty() {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
+
+    let (cltv_value, server_key) = parse_bark_expiry_script(&tree.asp_expiry_script)?;
+    let expiry_script = compile_bark_expiry_script(cltv_value, &server_key);
+    leaf_hashes.push(tap_leaf_hash(&expiry_script));
+
+    for sibling in &tree.leaf_siblings {
+        if let SiblingNode::Compact { script, .. } = sibling {
+            if let Ok((hash160, musig_key)) = parse_bark_unlock_script(script) {
+                let unlock = compile_bark_unlock_script(&hash160, &musig_key);
+                leaf_hashes.push(tap_leaf_hash(&unlock));
+            }
+        }
+    }
+
+    if leaf_hashes.is_empty() {
+        return Err(VPackError::InvalidBarkScript);
+    }
+
+    Ok((leaf_hashes, 0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
