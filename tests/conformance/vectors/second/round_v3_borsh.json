@@ -6,6 +6,7 @@
   "raw_evidence": {
     "expected_vtxo_id": "b466513dd4fe94ad6a5a1b29a8a6bc7f843ea344213b6f28c710e07b3d2e3fb6:0"
   },
+  "anchor_value": 13000,
   "reconstruction_ingredients": {
     "topology": "Chain",
     "tx_version": 3,

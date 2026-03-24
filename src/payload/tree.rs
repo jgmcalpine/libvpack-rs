@@ -58,6 +58,38 @@ pub struct GenesisItem {
     pub sighash_flag: u8,
 }
 
+impl Default for GenesisItem {
+    fn default() -> Self {
+        Self {
+            siblings: Vec::new(),
+            parent_index: 0,
+            sequence: 0xFFFF_FFFF,
+            child_amount: 0,
+            child_script_pubkey: Vec::new(),
+            signature: None,
+            sighash_flag: 0x00,
+        }
+    }
+}
+
+impl GenesisItem {
+    /// Path step with standard finality (`sequence` = `0xFFFFFFFF`), default sighash, and `parent_index` 0.
+    pub fn new(
+        siblings: Vec<SiblingNode>,
+        child_amount: u64,
+        child_script_pubkey: Vec<u8>,
+        signature: Option<[u8; 64]>,
+    ) -> Self {
+        Self {
+            siblings,
+            child_amount,
+            child_script_pubkey,
+            signature,
+            ..Default::default()
+        }
+    }
+}
+
 /// A Sibling can be a Hash (Compact) or a Full TxOut (Hydrated).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SiblingNode {

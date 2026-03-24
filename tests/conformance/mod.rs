@@ -576,12 +576,10 @@ fn print_round_v3_borsh_3step_path() {
         }];
         path_items.push(GenesisItem {
             siblings: step_siblings,
-            parent_index: 0,
             sequence: 0,
             child_amount,
             child_script_pubkey: leaf_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         });
     }
 
@@ -702,12 +700,10 @@ fn print_round_v3_borsh_5step_path() {
         }];
         path_items.push(GenesisItem {
             siblings: step_siblings,
-            parent_index: 0, // child at output 0; next step spends it
             sequence: 0,
             child_amount,
             child_script_pubkey: leaf_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         });
     }
 
@@ -1190,8 +1186,7 @@ fn test_vpack_internal_consistency_roundtrip() {
         sequence: 0,
         child_amount: 30000u64,
         child_script_pubkey: step0_child_script.clone(),
-        signature: None,
-        sighash_flag: 0,
+        ..Default::default()
     };
 
     let intermediate_script =
@@ -1221,8 +1216,7 @@ fn test_vpack_internal_consistency_roundtrip() {
             sequence: 0,
             child_amount: child_amt,
             child_script_pubkey: step0_child_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
         second_path_items.push(step_item);
     }

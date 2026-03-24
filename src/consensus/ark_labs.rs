@@ -712,12 +712,10 @@ mod tests {
 
         let path_item = GenesisItem {
             siblings,
-            parent_index: 0,
             sequence,
             child_amount,
             child_script_pubkey: child_script_pubkey.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
 
         let leaf_siblings = vec![SiblingNode::Compact {
@@ -820,12 +818,10 @@ mod tests {
         // Level 1: Branch node (from round_branch_v3.json)
         let level1_item = GenesisItem {
             siblings: level1_siblings,
-            parent_index: 0,
             sequence,
             child_amount: 1100, // Child amount for next level
             child_script_pubkey: child_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
 
         // Level 2: Intermediate node (simplified - using same structure). Fee anchor last.
@@ -843,12 +839,10 @@ mod tests {
         ];
         let level2_item = GenesisItem {
             siblings: level2_siblings,
-            parent_index: 0,
             sequence,
             child_amount: 600, // Child amount for leaf
             child_script_pubkey: child_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
 
         // Level 3: Leaf node

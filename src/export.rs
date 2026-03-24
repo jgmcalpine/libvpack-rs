@@ -295,12 +295,10 @@ fn tree_from_ark_labs_ingredients(
             });
             vec![GenesisItem {
                 siblings: sibling_nodes,
-                parent_index: 0,
                 sequence: ingredients.n_sequence,
                 child_amount,
                 child_script_pubkey: child_script_pubkey.clone(),
-                signature: None,
-                sighash_flag: 0,
+                ..Default::default()
             }]
         };
         let leaf = VtxoLeaf {
@@ -406,8 +404,7 @@ fn tree_from_second_tech_ingredients(
                 sequence: step.sequence,
                 child_amount: step.child_amount,
                 child_script_pubkey: step.child_script_pubkey.clone(),
-                signature: None,
-                sighash_flag: 0,
+                ..Default::default()
             }
         })
         .collect();

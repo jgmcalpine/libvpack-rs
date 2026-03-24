@@ -22,15 +22,12 @@ fn sample_sibling() -> SiblingNode {
 }
 
 fn sample_genesis_item() -> GenesisItem {
-    GenesisItem {
-        siblings: vec![sample_sibling()],
-        parent_index: 0,
-        sequence: 0xFFFFFFFF,
-        child_amount: 1000,
-        child_script_pubkey: vec![0x76],
-        signature: non_zero_signature(),
-        sighash_flag: 0,
-    }
+    GenesisItem::new(
+        vec![sample_sibling()],
+        1000,
+        vec![0x76],
+        non_zero_signature(),
+    )
 }
 
 fn leaf_script_nonempty() -> Vec<u8> {
@@ -150,15 +147,12 @@ fn withheld_leaf_sibling_reported_at_leaf_tier_depth_zero() {
 #[test]
 fn second_path_step_uses_depth_two() {
     let mut tree = valid_tree();
-    tree.path.push(GenesisItem {
-        siblings: vec![sample_sibling()],
-        parent_index: 0,
-        sequence: 0xFFFFFFFF,
-        child_amount: 1000,
-        child_script_pubkey: vec![0x76],
-        signature: non_zero_signature(),
-        sighash_flag: 0,
-    });
+    tree.path.push(GenesisItem::new(
+        vec![sample_sibling()],
+        1000,
+        vec![0x76],
+        non_zero_signature(),
+    ));
     tree.path[1].signature = None;
 
     assert_eq!(

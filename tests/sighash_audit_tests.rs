@@ -138,21 +138,19 @@ fn build_signed_tree(
 
     let genesis_item_1 = GenesisItem {
         siblings: vec![sibling1],
-        parent_index: 0,
-        sequence: 0xFFFF_FFFF,
         child_amount: child_amount_1,
         child_script_pubkey: script.clone(),
         signature: Some(depth1_sig),
         sighash_flag: depth1_sighash_flag,
+        ..Default::default()
     };
     let genesis_item_2 = GenesisItem {
         siblings: vec![sibling2],
-        parent_index: 0,
-        sequence: 0xFFFF_FFFF,
         child_amount: child_amount_2,
         child_script_pubkey: script.clone(),
         signature: Some(depth2_sig),
         sighash_flag: depth2_sighash_flag,
+        ..Default::default()
     };
 
     let tree = VPackTree {

@@ -108,12 +108,10 @@ impl LogicAdapter for ArkLabsAdapter {
                 });
                 vec![GenesisItem {
                     siblings: sibling_nodes,
-                    parent_index: 0,
                     sequence,
                     child_amount,
                     child_script_pubkey: child_script_pubkey.clone(),
-                    signature: None,
-                    sighash_flag: 0,
+                    ..Default::default()
                 }]
             };
             let leaf = VtxoLeaf {
@@ -261,8 +259,7 @@ impl LogicAdapter for SecondTechAdapter {
                         sequence,
                         child_amount,
                         child_script_pubkey,
-                        signature: None,
-                        sighash_flag: 0,
+                        ..Default::default()
                     })
                 })
                 .collect()

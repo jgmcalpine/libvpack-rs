@@ -628,8 +628,7 @@ mod tests {
             sequence: 0,
             child_amount,
             child_script_pubkey: child_script,
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
 
         let tree = VPackTree {
@@ -732,8 +731,7 @@ mod tests {
             sequence: 0,
             child_amount,
             child_script_pubkey: child_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
         let good_tree = VPackTree {
             leaf: VtxoLeaf {
@@ -772,8 +770,7 @@ mod tests {
             sequence: 0,
             child_amount,
             child_script_pubkey: child_script,
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
         let bad_tree = VPackTree {
             leaf: VtxoLeaf {
@@ -862,8 +859,7 @@ mod tests {
             sequence: 0,
             child_amount: step0_child_amount,
             child_script_pubkey: child_script.clone(),
-            signature: None,
-            sighash_flag: 0,
+            ..Default::default()
         };
 
         // Intermediate step script from round_branch vector (single script for steps 1–4)
@@ -900,8 +896,7 @@ mod tests {
                 sequence: 0,
                 child_amount: 20000 - (i * 1000),
                 child_script_pubkey: child_script.clone(),
-                signature: None,
-                sighash_flag: 0,
+                ..Default::default()
             };
             path_items.push(step_item);
         }
