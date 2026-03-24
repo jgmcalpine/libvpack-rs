@@ -77,6 +77,14 @@ pub enum VPackError {
 
     /// Derived Taproot tweaked key does not match the x-only key in the leaf P2TR scriptPubKey.
     PathExclusivityViolation,
+
+    /// Parsed tree is missing data required for the checked completeness policy.
+    ///
+    /// **Depth convention:** `0` always refers to the **leaf tier** (the VTXO leaf script and/or
+    /// `leaf_siblings` entries). Values `1..=N` refer to **path steps** counting **upward from the
+    /// leaf** (`1` = first [`GenesisItem`](crate::payload::tree::GenesisItem) after the leaf,
+    /// i.e. index `0` in `tree.path`).
+    TreeIncomplete { depth: u16, field: &'static str },
 }
 
 // Manual implementation of Display for no_std environments.
@@ -149,6 +157,17 @@ impl core::fmt::Display for VPackError {
                 f,
                 "Path exclusivity mathematically violated: derived Taproot key does not match L1 anchor script"
             ),
+            Self::TreeIncomplete { depth, field } => {
+                if *depth == 0 {
+                    write!(f, "Tree incomplete at leaf tier: missing {}", field)
+                } else {
+                    write!(
+                        f,
+                        "Tree incomplete at path step {} (1-based from leaf): missing {}",
+                        depth, field
+                    )
+                }
+            }
         }
     }
 }

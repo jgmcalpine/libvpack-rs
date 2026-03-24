@@ -45,8 +45,9 @@ pub use consensus::taproot;
 pub use consensus::verify_path_exclusivity;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::{
-    compute_ark_labs_merkle_root, compute_bark_merkle_root, ArkLabsV3, ConsensusEngine,
-    SecondTechV3, VerificationOutput, VtxoId,
+    compute_ark_labs_merkle_root, compute_bark_merkle_root, validate_exit_ready_completeness,
+    validate_tree_completeness, ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput,
+    VtxoId,
 };
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use export::{

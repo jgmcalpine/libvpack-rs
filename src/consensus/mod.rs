@@ -13,9 +13,12 @@ use crate::error::VPackError;
 use crate::payload::tree::VPackTree;
 
 pub mod ark_labs;
+pub mod completeness;
 pub mod second_tech;
 pub mod taproot;
 pub mod tx_factory;
+
+pub use completeness::{validate_exit_ready_completeness, validate_tree_completeness};
 
 #[cfg(feature = "schnorr-verify")]
 pub mod taproot_sighash;
