@@ -581,6 +581,7 @@ fn print_round_v3_borsh_3step_path() {
             child_amount,
             child_script_pubkey: leaf_script.clone(),
             signature: None,
+            sighash_flag: 0,
         });
     }
 
@@ -706,6 +707,7 @@ fn print_round_v3_borsh_5step_path() {
             child_amount,
             child_script_pubkey: leaf_script.clone(),
             signature: None,
+            sighash_flag: 0,
         });
     }
 
@@ -1189,6 +1191,7 @@ fn test_vpack_internal_consistency_roundtrip() {
         child_amount: 30000u64,
         child_script_pubkey: step0_child_script.clone(),
         signature: None,
+        sighash_flag: 0,
     };
 
     let intermediate_script =
@@ -1219,6 +1222,7 @@ fn test_vpack_internal_consistency_roundtrip() {
             child_amount: child_amt,
             child_script_pubkey: step0_child_script.clone(),
             signature: None,
+            sighash_flag: 0,
         };
         second_path_items.push(step_item);
     }

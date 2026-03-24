@@ -123,7 +123,7 @@ impl ConsensusEngine for ArkLabsV3 {
                     let parent_amount = vals[idx];
                     let parent_script = scripts[idx].as_slice();
                     let sighash =
-                        taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs);
+                        taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs, 0x00);
                     verify_schnorr_bip340(&verify_key, &sighash, &sig)?;
                 }
             }
@@ -717,6 +717,7 @@ mod tests {
             child_amount,
             child_script_pubkey: child_script_pubkey.clone(),
             signature: None,
+            sighash_flag: 0,
         };
 
         let leaf_siblings = vec![SiblingNode::Compact {
@@ -824,6 +825,7 @@ mod tests {
             child_amount: 1100, // Child amount for next level
             child_script_pubkey: child_script.clone(),
             signature: None,
+            sighash_flag: 0,
         };
 
         // Level 2: Intermediate node (simplified - using same structure). Fee anchor last.
@@ -846,6 +848,7 @@ mod tests {
             child_amount: 600, // Child amount for leaf
             child_script_pubkey: child_script.clone(),
             signature: None,
+            sighash_flag: 0,
         };
 
         // Level 3: Leaf node

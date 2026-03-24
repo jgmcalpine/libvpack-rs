@@ -160,6 +160,7 @@ fn parse_genesis_item(mut rest: &[u8]) -> Result<(GenesisItem, usize), VPackErro
             child_amount,
             child_script_pubkey,
             signature,
+            sighash_flag: 0,
         },
         total_consumed,
     ))

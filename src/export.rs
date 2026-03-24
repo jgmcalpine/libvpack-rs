@@ -300,6 +300,7 @@ fn tree_from_ark_labs_ingredients(
                 child_amount,
                 child_script_pubkey: child_script_pubkey.clone(),
                 signature: None,
+                sighash_flag: 0,
             }]
         };
         let leaf = VtxoLeaf {
@@ -406,6 +407,7 @@ fn tree_from_second_tech_ingredients(
                 child_amount: step.child_amount,
                 child_script_pubkey: step.child_script_pubkey.clone(),
                 signature: None,
+                sighash_flag: 0,
             }
         })
         .collect();

@@ -315,6 +315,7 @@ fn test_sabotage_invalid_signature() {
         child_amount: step0_child_amount,
         child_script_pubkey: child_script.clone(),
         signature: None,
+        sighash_flag: 0,
     };
 
     let intermediate_script =
@@ -341,6 +342,7 @@ fn test_sabotage_invalid_signature() {
         child_amount: 4000u64,
         child_script_pubkey: child_script.clone(),
         signature: None,
+        sighash_flag: 0,
     };
 
     let leaf_siblings = vec![SiblingNode::Compact {

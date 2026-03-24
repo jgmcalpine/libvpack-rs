@@ -104,7 +104,7 @@ impl ConsensusEngine for SecondTechV3 {
                     let parent_amount = vals[idx];
                     let parent_script = scripts[idx].as_slice();
                     let sighash =
-                        taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs);
+                        taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs, 0x00);
                     verify_schnorr_bip340(&verify_key, &sighash, &sig)?;
                 }
             }
@@ -629,6 +629,7 @@ mod tests {
             child_amount,
             child_script_pubkey: child_script,
             signature: None,
+            sighash_flag: 0,
         };
 
         let tree = VPackTree {
@@ -732,6 +733,7 @@ mod tests {
             child_amount,
             child_script_pubkey: child_script.clone(),
             signature: None,
+            sighash_flag: 0,
         };
         let good_tree = VPackTree {
             leaf: VtxoLeaf {
@@ -771,6 +773,7 @@ mod tests {
             child_amount,
             child_script_pubkey: child_script,
             signature: None,
+            sighash_flag: 0,
         };
         let bad_tree = VPackTree {
             leaf: VtxoLeaf {
@@ -860,6 +863,7 @@ mod tests {
             child_amount: step0_child_amount,
             child_script_pubkey: child_script.clone(),
             signature: None,
+            sighash_flag: 0,
         };
 
         // Intermediate step script from round_branch vector (single script for steps 1–4)
@@ -897,6 +901,7 @@ mod tests {
                 child_amount: 20000 - (i * 1000),
                 child_script_pubkey: child_script.clone(),
                 signature: None,
+                sighash_flag: 0,
             };
             path_items.push(step_item);
         }

@@ -113,6 +113,7 @@ impl LogicAdapter for ArkLabsAdapter {
                     child_amount,
                     child_script_pubkey: child_script_pubkey.clone(),
                     signature: None,
+                    sighash_flag: 0,
                 }]
             };
             let leaf = VtxoLeaf {
@@ -261,6 +262,7 @@ impl LogicAdapter for SecondTechAdapter {
                         child_amount,
                         child_script_pubkey,
                         signature: None,
+                        sighash_flag: 0,
                     })
                 })
                 .collect()

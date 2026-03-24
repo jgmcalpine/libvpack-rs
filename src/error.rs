@@ -66,6 +66,10 @@ pub enum VPackError {
     /// A GenesisItem signature failed Taproot (BIP-340/341) verification.
     InvalidSignature,
 
+    /// The sighash flag on a GenesisItem is not in the allowed policy set
+    /// {0x00 (DEFAULT), 0x01 (ALL), 0x81 (ALL|ANYONECANPAY)}.
+    InvalidSighashFlag(u8),
+
     /// Bark script template failed zero-trust validation (CLTV expiry or unlock clause).
     InvalidBarkScript,
 
@@ -143,6 +147,11 @@ impl core::fmt::Display for VPackError {
             Self::InvalidSignature => write!(
                 f,
                 "Invalid signature: GenesisItem Schnorr signature verification failed"
+            ),
+            Self::InvalidSighashFlag(flag) => write!(
+                f,
+                "Invalid sighash flag: 0x{:02x} (allowed: 0x00, 0x01, 0x81)",
+                flag
             ),
             Self::InvalidBarkScript => write!(
                 f,

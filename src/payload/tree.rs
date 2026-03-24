@@ -52,6 +52,10 @@ pub struct GenesisItem {
     pub child_script_pubkey: Vec<u8>,
     /// Cosigned transition support (Second Tech audit). Borsh: 1-byte tag then 64 bytes if Some.
     pub signature: Option<[u8; 64]>,
+    /// Runtime-only sighash type annotation. NOT part of the V-PACK binary wire format.
+    /// Reader initializes to 0x00 (SIGHASH_DEFAULT). Tests may set other values for
+    /// policy-filter exercising via `audit_sighash_policy`.
+    pub sighash_flag: u8,
 }
 
 /// A Sibling can be a Hash (Compact) or a Full TxOut (Hydrated).

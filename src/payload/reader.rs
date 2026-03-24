@@ -198,6 +198,7 @@ impl BoundedReader {
                 child_amount,
                 child_script_pubkey,
                 signature,
+                sighash_flag: 0,
             });
         }
 

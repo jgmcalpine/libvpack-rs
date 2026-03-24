@@ -29,6 +29,7 @@ fn sample_genesis_item() -> GenesisItem {
         child_amount: 1000,
         child_script_pubkey: vec![0x76],
         signature: non_zero_signature(),
+        sighash_flag: 0,
     }
 }
 
@@ -156,6 +157,7 @@ fn second_path_step_uses_depth_two() {
         child_amount: 1000,
         child_script_pubkey: vec![0x76],
         signature: non_zero_signature(),
+        sighash_flag: 0,
     });
     tree.path[1].signature = None;
 
