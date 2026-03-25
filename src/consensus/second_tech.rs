@@ -374,7 +374,7 @@ pub fn encode_bark_cltv(value: u32) -> Vec<u8> {
 
 /// Decodes minimal CScriptNum bytes (1-5 bytes, positive) into a `u32`.
 /// Returns `None` if the encoding is non-minimal or exceeds u32 range.
-fn decode_script_num(bytes: &[u8]) -> Option<u32> {
+pub(crate) fn decode_script_num(bytes: &[u8]) -> Option<u32> {
     if bytes.is_empty() || bytes.len() > 5 {
         return None;
     }

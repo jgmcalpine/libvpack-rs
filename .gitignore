@@ -44,3 +44,7 @@ Thumbs.db
 *.zip
 *.tar.gz
 *.vpk_temp
+
+# cargo-mutants output
+mutants.out/
+mutants.out.old/

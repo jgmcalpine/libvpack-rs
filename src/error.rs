@@ -1,5 +1,17 @@
 // src/error.rs
 
+/// Why [`VPackError::TimelockViolation`] was raised (BIP-68 CSV / BIP-113 CLTV audit).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TimelockViolationReason {
+    /// BIP-68: `nSequence` magnitude (lower 16 bits) or absolute locktime is below the script.
+    ValueTooLow,
+    /// Block-height vs timestamp units disagree between script and packaged field (BIP-68 type bit
+    /// or BIP-113 height vs time).
+    TypeMismatch,
+    /// BIP-68: `SEQUENCE_LOCKTIME_DISABLE_FLAG` (bit 31) is set while a CSV requirement exists.
+    LocktimeDisabled,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VPackError {
     /// The data stream ended before the header or payload could be fully read.
@@ -84,6 +96,17 @@ pub enum VPackError {
 
     /// BIP-341 control block could not be reconstructed from the tree (no matching Taproot layout).
     ControlBlockReconstructionFailed,
+
+    /// Transaction timelock does not satisfy `asp_expiry_script` (BIP-68 / BIP-113).
+    ///
+    /// `expected` / `actual` are the script threshold vs observed packaged value (for CSV, often
+    /// lower 16 bits of `nSequence`); `is_relative` is `true` for CSV, `false` for CLTV.
+    TimelockViolation {
+        expected: u32,
+        actual: u32,
+        is_relative: bool,
+        reason: TimelockViolationReason,
+    },
 
     /// Parsed tree is missing data required for the checked completeness policy.
     ///
@@ -173,6 +196,32 @@ impl core::fmt::Display for VPackError {
                 f,
                 "BIP-341 control block reconstruction failed: tree Taproot layout does not match P2TR output"
             ),
+            Self::TimelockViolation {
+                expected,
+                actual,
+                is_relative,
+                reason,
+            } => {
+                let kind = if *is_relative {
+                    "relative (CSV)"
+                } else {
+                    "absolute (CLTV)"
+                };
+                match reason {
+                    TimelockViolationReason::ValueTooLow => write!(
+                        f,
+                        "Timelock violation ({kind}): value too low (need >= {expected}, got {actual})"
+                    ),
+                    TimelockViolationReason::TypeMismatch => write!(
+                        f,
+                        "Timelock violation ({kind}): type mismatch (script vs packaged field; expected threshold {expected}, observed {actual})"
+                    ),
+                    TimelockViolationReason::LocktimeDisabled => write!(
+                        f,
+                        "Timelock violation ({kind}): BIP-68 disable bit (31) set on nSequence 0x{actual:08x} but CSV is required"
+                    ),
+                }
+            }
             Self::TreeIncomplete { depth, field } => {
                 if *depth == 0 {
                     write!(f, "Tree incomplete at leaf tier: missing {}", field)

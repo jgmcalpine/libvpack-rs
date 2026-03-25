@@ -16,9 +16,11 @@ pub mod ark_labs;
 pub mod completeness;
 pub mod second_tech;
 pub mod taproot;
+pub mod timelocks;
 pub mod tx_factory;
 
 pub use completeness::{validate_exit_ready_completeness, validate_tree_completeness};
+pub use timelocks::validate_timelocks;
 
 #[cfg(feature = "schnorr-verify")]
 pub mod taproot_sighash;
