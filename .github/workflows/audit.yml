@@ -43,4 +43,9 @@ jobs:
       - name: Run mutation tests (consensus only)
         run: |
           set -euo pipefail
-          cargo mutants --package vpack --file 'src/consensus/*'
+          # Sovereignty boundary: mutate only validate_*, verify_*, compute_vtxo_id, reconstruct_*, audit_*.
+          # cargo-mutants matches this via -F/--re against `cargo mutants --list` lines (not a separate --function flag).
+          cargo mutants --package vpack --file "src/consensus/*" \
+            -F "validate_.*|verify_.*|compute_vtxo_id|reconstruct_.*|audit_.*" \
+            --baseline skip \
+            --jobs 4

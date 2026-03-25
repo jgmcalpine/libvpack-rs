@@ -337,7 +337,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::*;
-    use crate::consensus::second_tech::compile_bark_expiry_script;
+    use crate::consensus::second_tech::{compile_bark_expiry_script, decode_script_num};
     use crate::payload::tree::{GenesisItem, VtxoLeaf};
     use crate::types::hashes::Hash;
     use crate::types::{OutPoint, Txid};
@@ -419,6 +419,98 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    /// Table-driven checks for [`decode_push_at`]: correct cursor advance and script-number extraction
+    /// catch pointer / length arithmetic regressions (e.g. mutants flipping `+` / `-`).
+    #[test]
+    fn test_decode_push_at_exhaustive() {
+        struct Case {
+            name: &'static str,
+            script: Vec<u8>,
+            start: usize,
+            /// `None` means expect [`VPackError::EncodingError`].
+            want: Option<(usize, Option<u32>)>,
+        }
+
+        let mut cases: Vec<Case> = Vec::new();
+
+        for n in 1u32..=16 {
+            let op = OP_1 + (n - 1) as u8;
+            cases.push(Case {
+                name: "small_integer_push",
+                script: alloc::vec![op],
+                start: 0,
+                want: Some((1, Some(n))),
+            });
+        }
+
+        cases.push(Case {
+            name: "OP_PUSHBYTES_1",
+            script: alloc::vec![0x01, 0xFF],
+            start: 0,
+            want: Some((2, decode_script_num(&[0xFF]))),
+        });
+
+        let mut push75 = alloc::vec![0x4bu8];
+        push75.extend_from_slice(&[0xEEu8; 75]);
+        cases.push(Case {
+            name: "OP_PUSHBYTES_75",
+            script: push75,
+            start: 0,
+            want: Some((76, None)),
+        });
+
+        cases.push(Case {
+            name: "OP_PUSHDATA1",
+            script: alloc::vec![OP_PUSHDATA1, 0x01, 0xAA],
+            start: 0,
+            want: Some((3, decode_script_num(&[0xAA]))),
+        });
+
+        cases.push(Case {
+            name: "OP_PUSHDATA2",
+            script: alloc::vec![OP_PUSHDATA2, 0x01, 0x00, 0xBB],
+            start: 0,
+            want: Some((4, decode_script_num(&[0xBB]))),
+        });
+
+        cases.push(Case {
+            name: "truncated_OP_PUSHBYTES_2",
+            script: alloc::vec![0x02, 0xFF],
+            start: 0,
+            want: None,
+        });
+
+        for (idx, case) in cases.iter().enumerate() {
+            let got = decode_push_at(&case.script, case.start);
+            match &case.want {
+                Some((exp_pos, exp_num)) => {
+                    let inner = got.expect("decode_push_at should succeed");
+                    let (pos, num) = inner.expect("should be a push opcode");
+                    assert_eq!(
+                        (pos, num),
+                        (*exp_pos, *exp_num),
+                        "case [{}] {} script={:?} start={}",
+                        idx,
+                        case.name,
+                        case.script,
+                        case.start
+                    );
+                }
+                None => {
+                    assert!(
+                        matches!(got, Err(VPackError::EncodingError)),
+                        "case [{}] {} script={:?} start={}: expected EncodingError, got {:?}",
+                        idx,
+                        case.name,
+                        case.script,
+                        case.start,
+                        got
+                    );
+                }
+            }
+        }
     }
 
     #[test]
