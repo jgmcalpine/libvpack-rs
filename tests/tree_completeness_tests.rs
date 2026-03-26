@@ -163,3 +163,52 @@ fn second_path_step_uses_depth_two() {
         })
     );
 }
+
+// ---------------------------------------------------------------------------
+// Alias negative tests — kill `replace with Ok(())` mutant
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_exit_ready_alias_rejects_missing_signature() {
+    let mut tree = valid_tree();
+    tree.path[0].signature = None;
+
+    assert_eq!(
+        validate_exit_ready_completeness(&tree),
+        Err(VPackError::TreeIncomplete {
+            depth: 1,
+            field: "signature",
+        }),
+        "validate_exit_ready_completeness must reject a tree with missing signature"
+    );
+}
+
+#[test]
+fn test_exit_ready_alias_rejects_zeroed_signature() {
+    let mut tree = valid_tree();
+    tree.path[0].signature = Some([0u8; 64]);
+
+    assert_eq!(
+        validate_exit_ready_completeness(&tree),
+        Err(VPackError::TreeIncomplete {
+            depth: 1,
+            field: "signature",
+        }),
+        "validate_exit_ready_completeness must reject a tree with all-zero signature"
+    );
+}
+
+#[test]
+fn test_exit_ready_alias_rejects_empty_leaf_script() {
+    let mut tree = valid_tree();
+    tree.leaf.script_pubkey.clear();
+
+    assert_eq!(
+        validate_exit_ready_completeness(&tree),
+        Err(VPackError::TreeIncomplete {
+            depth: 0,
+            field: "leaf.script_pubkey",
+        }),
+        "validate_exit_ready_completeness must reject a tree with empty leaf script"
+    );
+}

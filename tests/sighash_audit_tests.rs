@@ -242,3 +242,230 @@ fn audit_detects_signature_forgery() {
         "Flipping a signature byte must be detected as forgery"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 3-step signed tree builder and deep-path integrity tests
+// ---------------------------------------------------------------------------
+
+fn build_signed_tree_3_steps() -> (VPackTree, u64, Vec<u8>) {
+    use vpack::consensus::tx_factory::tx_preimage;
+    use vpack::types::hashes::{sha256d, Hash};
+
+    let pk = test_pubkey();
+    let script = p2tr_script(&pk);
+    let anchor_script = script.clone();
+    let anchor_value: u64 = 12_000;
+    let fee_script = fee_anchor_script();
+
+    let child_amount_1: u64 = 11_000;
+    let sibling_value_1: u64 = 1_000;
+
+    let child_amount_2: u64 = 10_000;
+    let sibling_value_2: u64 = 1_000;
+
+    let child_amount_3: u64 = 9_000;
+    let sibling_value_3: u64 = 1_000;
+
+    // --- Depth 1: spends the anchor ---
+    let depth1_outputs = vec![
+        TxOutPreimage {
+            value: child_amount_1,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: sibling_value_1,
+            script_pubkey: fee_script.as_slice(),
+        },
+    ];
+    let depth1_input = TxInPreimage {
+        prev_out_txid: [0u8; 32],
+        prev_out_vout: 0,
+        sequence: 0xFFFF_FFFF,
+    };
+    let depth1_sighash = taproot_sighash(
+        3,
+        0,
+        &depth1_input,
+        anchor_value,
+        &anchor_script,
+        &depth1_outputs,
+        0x00,
+    );
+    let (depth1_sig, _) = sign_sighash_for_test(&depth1_sighash);
+
+    let depth1_preimage = tx_preimage(3, &[depth1_input], &depth1_outputs, 0);
+    let depth1_txid = sha256d::Hash::hash(&depth1_preimage).to_byte_array();
+
+    // --- Depth 2: spends depth-1's output 0 ---
+    let depth2_outputs = vec![
+        TxOutPreimage {
+            value: child_amount_2,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: sibling_value_2,
+            script_pubkey: fee_script.as_slice(),
+        },
+    ];
+    let depth2_input = TxInPreimage {
+        prev_out_txid: depth1_txid,
+        prev_out_vout: 0,
+        sequence: 0xFFFF_FFFF,
+    };
+    let depth2_sighash = taproot_sighash(
+        3,
+        0,
+        &depth2_input,
+        child_amount_1,
+        &script,
+        &depth2_outputs,
+        0x00,
+    );
+    let (depth2_sig, _) = sign_sighash_for_test(&depth2_sighash);
+
+    let depth2_preimage = tx_preimage(3, &[depth2_input], &depth2_outputs, 0);
+    let depth2_txid = sha256d::Hash::hash(&depth2_preimage).to_byte_array();
+
+    // --- Depth 3: spends depth-2's output 0 ---
+    let depth3_outputs = vec![
+        TxOutPreimage {
+            value: child_amount_3,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: sibling_value_3,
+            script_pubkey: fee_script.as_slice(),
+        },
+    ];
+    let depth3_input = TxInPreimage {
+        prev_out_txid: depth2_txid,
+        prev_out_vout: 0,
+        sequence: 0xFFFF_FFFF,
+    };
+    let depth3_sighash = taproot_sighash(
+        3,
+        0,
+        &depth3_input,
+        child_amount_2,
+        &script,
+        &depth3_outputs,
+        0x00,
+    );
+    let (depth3_sig, _) = sign_sighash_for_test(&depth3_sighash);
+
+    let sibling1 = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: sibling_value_1,
+        script: fee_script.clone(),
+    };
+    let sibling2 = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: sibling_value_2,
+        script: fee_script.clone(),
+    };
+    let sibling3 = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: sibling_value_3,
+        script: fee_script.clone(),
+    };
+
+    let genesis_item_1 = GenesisItem {
+        siblings: vec![sibling1],
+        child_amount: child_amount_1,
+        child_script_pubkey: script.clone(),
+        signature: Some(depth1_sig),
+        sighash_flag: 0x00,
+        ..Default::default()
+    };
+    let genesis_item_2 = GenesisItem {
+        siblings: vec![sibling2],
+        child_amount: child_amount_2,
+        child_script_pubkey: script.clone(),
+        signature: Some(depth2_sig),
+        sighash_flag: 0x00,
+        ..Default::default()
+    };
+    let genesis_item_3 = GenesisItem {
+        siblings: vec![sibling3],
+        child_amount: child_amount_3,
+        child_script_pubkey: script.clone(),
+        signature: Some(depth3_sig),
+        sighash_flag: 0x00,
+        ..Default::default()
+    };
+
+    let tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: child_amount_3,
+            vout: 0,
+            sequence: 0xFFFF_FFFF,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: script.clone(),
+        },
+        leaf_siblings: vec![],
+        path: vec![genesis_item_1, genesis_item_2, genesis_item_3],
+        anchor: dummy_anchor(),
+        asset_id: None,
+        fee_anchor_script: fee_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
+    };
+
+    (tree, anchor_value, anchor_script)
+}
+
+// ---------------------------------------------------------------------------
+// Test 5: 3-step tree with all valid signatures passes audit
+// ---------------------------------------------------------------------------
+
+#[test]
+fn audit_3step_passes_when_valid() {
+    let (tree, anchor_value, anchor_script) = build_signed_tree_3_steps();
+    let result = audit_sighash_policy(&tree, TxVariant::V3Anchored, anchor_value, &anchor_script);
+    assert!(
+        result.is_ok(),
+        "3-step tree with all valid signatures must pass audit: {:?}",
+        result.err()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 6: Forgery at step 3 only — proves the loop does not short-circuit
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_sighash_auditor_path_integrity_step3_forgery() {
+    let (mut tree, anchor_value, anchor_script) = build_signed_tree_3_steps();
+
+    if let Some(ref mut sig) = tree.path[2].signature {
+        sig[31] ^= 0x01;
+    }
+
+    let result = audit_sighash_policy(&tree, TxVariant::V3Anchored, anchor_value, &anchor_script);
+    assert_eq!(
+        result,
+        Err(VPackError::InvalidSignature),
+        "Mutating a single byte in step 3's signature must be detected as forgery"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 7: Forgery at step 2 with valid steps 1 and 3
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_sighash_auditor_step2_forgery_with_valid_step1_and_step3() {
+    let (mut tree, anchor_value, anchor_script) = build_signed_tree_3_steps();
+
+    if let Some(ref mut sig) = tree.path[1].signature {
+        sig[0] ^= 0xFF;
+    }
+
+    let result = audit_sighash_policy(&tree, TxVariant::V3Anchored, anchor_value, &anchor_script);
+    assert_eq!(
+        result,
+        Err(VPackError::InvalidSignature),
+        "Forgery at step 2 must be caught even when steps 1 and 3 are valid"
+    );
+}

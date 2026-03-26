@@ -270,3 +270,108 @@ fn no_timelock_opcodes_is_ok() {
     tree.leaf.sequence = 0;
     assert!(validate_timelocks(&tree).is_ok());
 }
+
+// ---------------------------------------------------------------------------
+// Deterministic boundary-negation tests (kill < vs <= and < vs == mutants)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_timelock_boundary_negation_csv() {
+    let required: u32 = 144;
+    let one_below = required - 1;
+
+    let tree_fail = tree_with_csv_block(required, one_below, one_below);
+    assert_eq!(
+        validate_timelocks(&tree_fail),
+        Err(VPackError::TimelockViolation {
+            expected: required,
+            actual: one_below,
+            is_relative: true,
+            reason: TimelockViolationReason::ValueTooLow,
+        }),
+        "CSV: sequence 143 must fail when script requires 144"
+    );
+
+    let tree_pass = tree_with_csv_block(required, required, required);
+    assert!(
+        validate_timelocks(&tree_pass).is_ok(),
+        "CSV: sequence 144 must pass when script requires exactly 144"
+    );
+}
+
+#[test]
+fn test_timelock_boundary_negation_cltv_time() {
+    let server_key = [0x77u8; 32];
+    let required: u32 = 500_000_100;
+    let one_below = required - 1;
+
+    let mut tree_fail = base_tree();
+    tree_fail.asp_expiry_script = compile_bark_expiry_script(required, &server_key);
+    tree_fail.leaf.expiry = one_below;
+    assert_eq!(
+        validate_timelocks(&tree_fail),
+        Err(VPackError::TimelockViolation {
+            expected: required,
+            actual: one_below,
+            is_relative: false,
+            reason: TimelockViolationReason::ValueTooLow,
+        }),
+        "CLTV time: expiry T-1 must fail when script requires T"
+    );
+
+    let mut tree_pass = base_tree();
+    tree_pass.asp_expiry_script = compile_bark_expiry_script(required, &server_key);
+    tree_pass.leaf.expiry = required;
+    assert!(
+        validate_timelocks(&tree_pass).is_ok(),
+        "CLTV time: expiry T must pass when script requires exactly T"
+    );
+}
+
+#[test]
+fn test_timelock_boundary_negation_cltv_height() {
+    let server_key = [0x77u8; 32];
+    let required: u32 = 1000;
+    let one_below = required - 1;
+
+    let mut tree_fail = base_tree();
+    tree_fail.asp_expiry_script = compile_bark_expiry_script(required, &server_key);
+    tree_fail.leaf.expiry = one_below;
+    assert_eq!(
+        validate_timelocks(&tree_fail),
+        Err(VPackError::TimelockViolation {
+            expected: required,
+            actual: one_below,
+            is_relative: false,
+            reason: TimelockViolationReason::ValueTooLow,
+        }),
+        "CLTV height: expiry 999 must fail when script requires 1000"
+    );
+
+    let mut tree_pass = base_tree();
+    tree_pass.asp_expiry_script = compile_bark_expiry_script(required, &server_key);
+    tree_pass.leaf.expiry = required;
+    assert!(
+        validate_timelocks(&tree_pass).is_ok(),
+        "CLTV height: expiry 1000 must pass when script requires exactly 1000"
+    );
+}
+
+#[test]
+fn test_timelock_boundary_negation_disable_bit() {
+    let required: u32 = 10;
+    let disabled_seq: u32 = SEQUENCE_DISABLE_BIT | required;
+
+    let tree = tree_with_csv_block(required, disabled_seq, disabled_seq);
+    assert_eq!(
+        validate_timelocks(&tree),
+        Err(VPackError::TimelockViolation {
+            expected: 0,
+            actual: disabled_seq,
+            is_relative: true,
+            reason: TimelockViolationReason::LocktimeDisabled,
+        }),
+        "CSV: disable bit set (0x{:08X}) must fail even when magnitude satisfies threshold",
+        disabled_seq,
+    );
+}
