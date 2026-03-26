@@ -258,3 +258,89 @@ fn control_block_deep_tree_length_33_plus_32_times_depth() {
     let out_key: [u8; 32] = tree.leaf.script_pubkey[2..34].try_into().unwrap();
     assert!(verify_control_block(&cb, leaf.as_slice(), &out_key));
 }
+
+// ---------------------------------------------------------------------------
+// Chunk 2.2 — Taproot Tweak Sovereignty & Control Block Integrity
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_control_block_shadow_key_fails() {
+    let tree = build_bark_cosign_tree();
+    let mut cb = reconstruct_control_block(&tree, TxVariant::V3Plain).expect("reconstruct Bark");
+    let leaf = bark_expiry_leaf_script(&tree);
+    let out_key: [u8; 32] = tree.leaf.script_pubkey[2..34].try_into().unwrap();
+
+    assert!(
+        verify_control_block(&cb, leaf.as_slice(), &out_key),
+        "baseline must verify before sabotage"
+    );
+
+    // XOR byte 16 of the internal key (cb index 1+16 = 17) — middle of the key.
+    cb[17] ^= 0xFF;
+
+    assert!(
+        !verify_control_block(&cb, leaf.as_slice(), &out_key),
+        "Shadow key (middle-byte mutation) must be rejected"
+    );
+}
+
+#[test]
+fn test_control_block_internal_key_parity_mismatch() {
+    let tree = build_arkd_2_tree();
+    let mut cb = reconstruct_control_block(&tree, TxVariant::V3Anchored).expect("reconstruct ARKD");
+    let out_key: [u8; 32] = tree.leaf.script_pubkey[2..34].try_into().unwrap();
+
+    assert!(
+        verify_control_block(&cb, tree.asp_expiry_script.as_slice(), &out_key),
+        "baseline must verify before parity flip"
+    );
+
+    // Flip only the parity bit (bit 0), leaving the leaf version bits untouched.
+    cb[0] ^= 0x01;
+
+    assert!(
+        !verify_control_block(&cb, tree.asp_expiry_script.as_slice(), &out_key),
+        "Parity mismatch must be rejected — witness stack would fail L1 validation"
+    );
+}
+
+#[test]
+fn test_control_block_invalid_leaf_version_fails() {
+    let tree = build_arkd_2_tree();
+    let mut cb = reconstruct_control_block(&tree, TxVariant::V3Anchored).expect("reconstruct ARKD");
+    let out_key: [u8; 32] = tree.leaf.script_pubkey[2..34].try_into().unwrap();
+
+    assert!(
+        verify_control_block(&cb, tree.asp_expiry_script.as_slice(), &out_key),
+        "baseline must verify before leaf version mutation"
+    );
+
+    // Replace leaf version 0xc0 with unknown version 0xc2, preserving the parity bit.
+    let parity_bit = cb[0] & 0x01;
+    cb[0] = 0xc2 | parity_bit;
+
+    assert!(
+        !verify_control_block(&cb, tree.asp_expiry_script.as_slice(), &out_key),
+        "Unknown leaf version 0xc2 must be rejected — \
+         different version changes the TapLeaf hash, cascading to a Merkle root mismatch"
+    );
+}
+
+#[test]
+fn test_control_block_output_key_mismatch() {
+    let tree = build_arkd_2_tree();
+    let cb = reconstruct_control_block(&tree, TxVariant::V3Anchored).expect("reconstruct ARKD");
+
+    // Valid output key from a *different* VTXO (Bark cosign tree).
+    let wrong_key = hex_to_32(BARK_COSIGN_TAPROOT.tweaked_pubkey);
+    let correct_key: [u8; 32] = tree.leaf.script_pubkey[2..34].try_into().unwrap();
+    assert_ne!(
+        wrong_key, correct_key,
+        "test vectors must produce distinct tweaked keys"
+    );
+
+    assert!(
+        !verify_control_block(&cb, tree.asp_expiry_script.as_slice(), &wrong_key),
+        "Control block verified against a different VTXO's output key must fail"
+    );
+}

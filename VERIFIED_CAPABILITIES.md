@@ -262,6 +262,22 @@
 * **Test Location:** [`tests/taproot_reconstruction.rs::test_taproot_lexicographical_sorting_integrity`](tests/taproot_reconstruction.rs)
 * **What this proves:** The BIP-341 branch sorting rule is enforced internally by the library, not assumed by callers. Two implementations traversing the same tree in different orders will produce identical Merkle roots, ensuring exit transactions are interoperable.
 
+### Control Block Parity Enforcement
+
+* **Description:** Two adversarial tests target the parity bit and leaf version encoded in the control block's first byte. The parity test reconstructs a valid control block, flips only bit 0 (the Y-coordinate parity), and asserts that `verify_control_block` rejects it — the derived tweaked key's parity no longer matches the control byte. The leaf version test replaces `0xc0` (BIP-341 Tapscript) with the unknown version `0xc2` while preserving the original parity bit; the altered version changes the `TapLeaf` tagged hash, which cascades through the Merkle root into a tweaked key mismatch. Together these tests prove that malformed witness stacks — whether from a buggy wallet or a malicious ASP — are rejected before reaching L1.
+* **Test Locations:**
+  * [`tests/control_block_tests.rs::test_control_block_internal_key_parity_mismatch`](tests/control_block_tests.rs)
+  * [`tests/control_block_tests.rs::test_control_block_invalid_leaf_version_fails`](tests/control_block_tests.rs)
+* **What this proves:** The library enforces both the parity bit and the BIP-341 leaf version as first-class security properties. A witness stack with a flipped parity or unknown leaf version cannot pass `verify_control_block`, preventing malformed spends from being accepted off-chain that would be rejected by L1 consensus.
+
+### Internal Key Commitment (Control Block Sovereignty)
+
+* **Description:** Two tests verify that the internal key embedded in the control block is cryptographically bound to the on-chain P2TR output key. The "Shadow Key" test reconstructs a valid Bark control block, XOR-flips byte 16 (the middle of the 32-byte internal key segment) with `0xFF`, and asserts rejection — a single-byte mutation in the key cascades through `TapTweak` into a completely different tweaked key. The "Output Key Mismatch" test provides a valid control block and correct leaf script but supplies the tweaked key from a *different* VTXO (`BARK_COSIGN_TAPROOT` vs `ARKD_2_LEAF_TREE`), asserting that cross-VTXO key confusion is caught. The key comparison in `verify_control_block` uses a constant-time XOR-fold (`ct_eq_32`) to prevent timing side-channels and ensure a `!= → ==` cargo-mutant on the comparison is killed by every positive test.
+* **Test Locations:**
+  * [`tests/control_block_tests.rs::test_control_block_shadow_key_fails`](tests/control_block_tests.rs)
+  * [`tests/control_block_tests.rs::test_control_block_output_key_mismatch`](tests/control_block_tests.rs)
+* **What this proves:** The equation `internal_key + merkle_root = on-chain address` is enforced end-to-end. An ASP cannot inject a "shadow" internal key (one that would add a hidden key-path spend) or confuse the verifier with a different VTXO's output key. The constant-time comparison hardens the check against both timing side-channels and mutation testing.
+
 ---
 
 ## 4. JSON Conformance & Cross-Implementation Standardization

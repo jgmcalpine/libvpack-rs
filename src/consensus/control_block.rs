@@ -15,6 +15,19 @@ use crate::payload::tree::VPackTree;
 /// P2TR scriptPubKey prefix: OP_1 (0x51) OP_PUSHBYTES_32 (0x20).
 const P2TR_PREFIX: [u8; 2] = [0x51, 0x20];
 
+/// Non-short-circuiting 32-byte equality check.
+/// Folds XOR across all bytes so a `!=` → `==` cargo-mutant on the final
+/// comparison is killed by every positive test, and timing does not leak
+/// which byte differs.
+#[inline]
+fn ct_eq_32(a: &[u8; 32], b: &[u8; 32]) -> bool {
+    let mut diff = 0u8;
+    for i in 0..32 {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
+}
+
 fn p2tr_output_xonly(tree: &VPackTree) -> Result<[u8; 32], VPackError> {
     let script = &tree.leaf.script_pubkey;
     if script.len() != 34 || script[..2] != P2TR_PREFIX {
@@ -49,7 +62,7 @@ fn try_reconstruct_with_hashes(
     let merkle_root = compute_balanced_merkle_root(hashes)?;
     let (x_only, parity) =
         taproot::compute_taproot_tweaked_key_x_and_parity(tree.internal_key, merkle_root)?;
-    if x_only != *expected_output {
+    if !ct_eq_32(&x_only, expected_output) {
         return None;
     }
     let path = balanced_merkle_sibling_path(hashes, leaf_idx)?;
@@ -128,5 +141,5 @@ pub fn verify_control_block(
         return false;
     };
 
-    x_only == *expected_output_key && parity == expected_parity
+    ct_eq_32(&x_only, expected_output_key) && parity == expected_parity
 }
