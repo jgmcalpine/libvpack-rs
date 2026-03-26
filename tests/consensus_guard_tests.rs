@@ -623,4 +623,87 @@ mod engine_schnorr {
             sec
         );
     }
+
+    /// x-only pubkey for scalar 1 — distinct from `sign_sighash_for_test`'s fixed key (`0x42…`).
+    fn wrong_leaf_commitment_pubkey() -> [u8; 32] {
+        use k256::schnorr::SigningKey;
+        let mut scalar_one = [0u8; 32];
+        scalar_one[31] = 1;
+        let signing_key = SigningKey::from_bytes(&scalar_one[..]).expect("valid test scalar");
+        signing_key.verifying_key().to_bytes().into()
+    }
+
+    #[test]
+    fn test_ark_engine_sabotage_only_key_mismatch() {
+        let pk = test_pubkey();
+        assert_ne!(
+            pk,
+            wrong_leaf_commitment_pubkey(),
+            "sanity: leaf must claim a different key than the one that signed the path"
+        );
+        let p2tr = p2tr_script_for_key(&pk);
+        let (mut tree, anchor_value) = build_engine_schnorr_tree(p2tr);
+
+        tree.leaf.script_pubkey = p2tr_script_for_key(&wrong_leaf_commitment_pubkey());
+
+        let ark = ArkLabsV3.compute_vtxo_id(&tree, Some(anchor_value));
+        assert!(
+            matches!(ark, Err(VPackError::InvalidSignature)),
+            "ArkLabsV3: pubkey in leaf must match signing key; got: {:?}",
+            ark
+        );
+    }
+
+    #[test]
+    fn test_ark_engine_sabotage_only_sig_math_mismatch() {
+        let pk = test_pubkey();
+        let p2tr = p2tr_script_for_key(&pk);
+        let (mut tree, anchor_value) = build_engine_schnorr_tree(p2tr);
+
+        if let Some(ref mut sig) = tree.path[1].signature {
+            sig[31] ^= 0xFF;
+        }
+
+        let ark = ArkLabsV3.compute_vtxo_id(&tree, Some(anchor_value));
+        assert!(
+            matches!(ark, Err(VPackError::InvalidSignature)),
+            "ArkLabsV3: single-byte sig corruption must yield InvalidSignature, got: {:?}",
+            ark
+        );
+    }
+
+    #[test]
+    fn test_second_tech_engine_sabotage_only_key_mismatch() {
+        let pk = test_pubkey();
+        assert_ne!(pk, wrong_leaf_commitment_pubkey());
+        let p2tr = p2tr_script_for_key(&pk);
+        let (mut tree, anchor_value) = build_engine_schnorr_tree(p2tr);
+
+        tree.leaf.script_pubkey = p2tr_script_for_key(&wrong_leaf_commitment_pubkey());
+
+        let sec = SecondTechV3.compute_vtxo_id(&tree, Some(anchor_value));
+        assert!(
+            matches!(sec, Err(VPackError::InvalidSignature)),
+            "SecondTechV3: leaf key commitment must match signer; got: {:?}",
+            sec
+        );
+    }
+
+    #[test]
+    fn test_second_tech_engine_sabotage_only_sig_math_mismatch() {
+        let pk = test_pubkey();
+        let p2tr = p2tr_script_for_key(&pk);
+        let (mut tree, anchor_value) = build_engine_schnorr_tree(p2tr);
+
+        if let Some(ref mut sig) = tree.path[1].signature {
+            sig[31] ^= 0xFF;
+        }
+
+        let sec = SecondTechV3.compute_vtxo_id(&tree, Some(anchor_value));
+        assert!(
+            matches!(sec, Err(VPackError::InvalidSignature)),
+            "SecondTechV3: single-byte sig corruption must yield InvalidSignature, got: {:?}",
+            sec
+        );
+    }
 }
