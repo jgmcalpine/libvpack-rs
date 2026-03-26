@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           # Sovereignty boundary: mutate only validate_*, verify_*, compute_vtxo_id, reconstruct_*, audit_*.
           # cargo-mutants matches this via -F/--re against `cargo mutants --list` lines (not a separate --function flag).
-          cargo mutants --package vpack --file "src/consensus/*" \
+          cargo mutants --package vpack --all-features --file "src/consensus/*" \
             -F "validate_.*|verify_.*|compute_vtxo_id|reconstruct_.*|audit_.*" \
             --baseline skip \
             --jobs 4

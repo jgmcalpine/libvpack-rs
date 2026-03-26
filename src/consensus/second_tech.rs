@@ -22,6 +22,11 @@ use crate::consensus::taproot_sighash::{
     extract_verify_key, taproot_sighash, verify_schnorr_bip340,
 };
 
+struct ReconstructedOutput {
+    value: u64,
+    script_pubkey: Vec<u8>,
+}
+
 /// Second Tech V3-Plain consensus engine (Variant 0x03).
 ///
 /// Reconstructs VTXO identity via the **Recursive Transaction Chain**: each path step is a
@@ -46,8 +51,7 @@ impl ConsensusEngine for SecondTechV3 {
         // Top-down chaining: start with on-chain anchor
         let mut current_prevout = tree.anchor;
         let mut last_outpoint = None;
-        let mut prev_output_values: Option<Vec<u64>> = None;
-        let mut prev_output_scripts: Option<Vec<Vec<u8>>> = None;
+        let mut prev_outputs: Option<Vec<ReconstructedOutput>> = None;
         let mut input_amount: Option<u64> = anchor_value;
         let mut signed_txs = Vec::with_capacity(tree.path.len() + 1);
 
@@ -91,18 +95,13 @@ impl ConsensusEngine for SecondTechV3 {
                             }
                         });
                     let verify_key = verify_key.ok_or(VPackError::InvalidSignature)?;
-                    let vals = prev_output_values
-                        .as_ref()
-                        .ok_or(VPackError::EncodingError)?;
-                    let scripts = prev_output_scripts
-                        .as_ref()
-                        .ok_or(VPackError::EncodingError)?;
+                    let prev = prev_outputs.as_ref().ok_or(VPackError::EncodingError)?;
                     let idx = current_prevout.vout as usize;
-                    if idx >= vals.len() || idx >= scripts.len() {
+                    if idx >= prev.len() {
                         return Err(VPackError::InvalidVout(current_prevout.vout));
                     }
-                    let parent_amount = vals[idx];
-                    let parent_script = scripts[idx].as_slice();
+                    let parent_amount = prev[idx].value;
+                    let parent_script = prev[idx].script_pubkey.as_slice();
                     let sighash =
                         taproot_sighash(3, 0, &input, parent_amount, parent_script, &outputs, 0x00);
                     verify_schnorr_bip340(&verify_key, &sighash, &sig)?;
@@ -127,8 +126,15 @@ impl ConsensusEngine for SecondTechV3 {
             // Store the last transaction's OutPoint
             last_outpoint = Some(OutPoint { txid, vout });
 
-            prev_output_values = Some(outputs.iter().map(|o| o.value).collect());
-            prev_output_scripts = Some(outputs.iter().map(|o| o.script_pubkey.to_vec()).collect());
+            prev_outputs = Some(
+                outputs
+                    .iter()
+                    .map(|o| ReconstructedOutput {
+                        value: o.value,
+                        script_pubkey: o.script_pubkey.to_vec(),
+                    })
+                    .collect(),
+            );
 
             // Hand-off: Convert to OutPoint for next step
             current_prevout = OutPoint { txid, vout };
