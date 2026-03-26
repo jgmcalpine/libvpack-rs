@@ -6,7 +6,8 @@
 #![cfg(feature = "schnorr-verify")]
 
 use vpack::consensus::taproot_sighash::{
-    audit_sighash_policy, sign_sighash_for_test, taproot_sighash,
+    audit_sighash_policy, extract_verify_key, sign_sighash_for_test, taproot_sighash,
+    verify_schnorr_bip340,
 };
 use vpack::consensus::{TxInPreimage, TxOutPreimage};
 use vpack::error::VPackError;
@@ -467,5 +468,233 @@ fn test_sighash_auditor_step2_forgery_with_valid_step1_and_step3() {
         result,
         Err(VPackError::InvalidSignature),
         "Forgery at step 2 must be caught even when steps 1 and 3 are valid"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Root G: extract_verify_key edge cases
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_extract_verify_key_rejects_34_byte_non_p2tr() {
+    let mut script = [0u8; 34];
+    script[0] = 0x00;
+    script[1] = 0x20;
+    script[2..].copy_from_slice(&[0xAA; 32]);
+
+    assert_eq!(
+        extract_verify_key(&script),
+        None,
+        "34-byte script not starting with P2TR prefix must return None"
+    );
+}
+
+#[test]
+fn test_extract_verify_key_32_byte_raw_key_roundtrip() {
+    let pk = test_pubkey();
+
+    let extracted = extract_verify_key(&pk);
+    assert!(extracted.is_some(), "32-byte raw key must be accepted");
+    assert_eq!(extracted.unwrap(), pk, "Extracted key must match input");
+
+    let dummy_msg = [0x99u8; 32];
+    let (sig, _) = sign_sighash_for_test(&dummy_msg);
+    let result = verify_schnorr_bip340(&extracted.unwrap(), &dummy_msg, &sig);
+    assert!(
+        result.is_ok(),
+        "Signature verification with extracted 32-byte key must pass: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn test_extract_verify_key_accepts_valid_p2tr() {
+    let pk = test_pubkey();
+    let script = p2tr_script(&pk);
+
+    let extracted = extract_verify_key(&script);
+    assert!(extracted.is_some(), "Valid P2TR script must yield Some");
+    assert_eq!(
+        extracted.unwrap(),
+        pk,
+        "Extracted key must match embedded key"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Root H: V3Plain audit branch — build_signed_tree_v3plain
+// ---------------------------------------------------------------------------
+
+fn build_signed_tree_v3plain() -> (VPackTree, u64, Vec<u8>) {
+    use vpack::consensus::tx_factory::tx_preimage;
+    use vpack::types::hashes::{sha256d, Hash};
+
+    let pk = test_pubkey();
+    let script = p2tr_script(&pk);
+    let anchor_script = script.clone();
+    let anchor_value: u64 = 20_000;
+    let fee_script = fee_anchor_script();
+
+    let child_amount_0: u64 = 12_000;
+    let sibling_a_value: u64 = 8_000;
+
+    let child_amount_1: u64 = 5_000;
+    let sibling_c_value: u64 = 3_000;
+
+    // --- Step 0: parent_index = 0, 2 siblings ---
+    // Outputs: [child, sibling_a(P2TR), sibling_b(fee)]
+    let step0_outputs = vec![
+        TxOutPreimage {
+            value: child_amount_0,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: sibling_a_value,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: 0,
+            script_pubkey: fee_script.as_slice(),
+        },
+    ];
+    let step0_input = TxInPreimage {
+        prev_out_txid: [0u8; 32],
+        prev_out_vout: 0,
+        sequence: 0xFFFF_FFFF,
+    };
+    let step0_sighash = taproot_sighash(
+        3,
+        0,
+        &step0_input,
+        anchor_value,
+        &anchor_script,
+        &step0_outputs,
+        0x00,
+    );
+    let (sig_0, _) = sign_sighash_for_test(&step0_sighash);
+
+    let step0_txid =
+        sha256d::Hash::hash(&tx_preimage(3, &[step0_input], &step0_outputs, 0)).to_byte_array();
+
+    // Hand-off: vout = path[1].parent_index = 1
+    // Next prevout: sibling_a (8000, P2TR)
+
+    // --- Step 1: parent_index = 1, 2 siblings ---
+    // Outputs: [sibling_c(P2TR), child, sibling_d(fee)]
+    let step1_outputs = vec![
+        TxOutPreimage {
+            value: sibling_c_value,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: child_amount_1,
+            script_pubkey: script.as_slice(),
+        },
+        TxOutPreimage {
+            value: 0,
+            script_pubkey: fee_script.as_slice(),
+        },
+    ];
+    let step1_input = TxInPreimage {
+        prev_out_txid: step0_txid,
+        prev_out_vout: 1,
+        sequence: 0xFFFF_FFFF,
+    };
+    let step1_sighash = taproot_sighash(
+        3,
+        0,
+        &step1_input,
+        sibling_a_value,
+        &script,
+        &step1_outputs,
+        0x00,
+    );
+    let (sig_1, _) = sign_sighash_for_test(&step1_sighash);
+
+    let sibling_a = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: sibling_a_value,
+        script: script.clone(),
+    };
+    let sibling_b = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: fee_script.clone(),
+    };
+    let sibling_c = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: sibling_c_value,
+        script: script.clone(),
+    };
+    let sibling_d = SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: fee_script.clone(),
+    };
+
+    let tree = VPackTree {
+        leaf: VtxoLeaf {
+            amount: child_amount_1,
+            vout: 0,
+            sequence: 0xFFFF_FFFF,
+            expiry: 0,
+            exit_delta: 0,
+            script_pubkey: script.clone(),
+        },
+        leaf_siblings: vec![],
+        path: vec![
+            GenesisItem {
+                siblings: vec![sibling_a, sibling_b],
+                parent_index: 0,
+                sequence: 0xFFFF_FFFF,
+                child_amount: child_amount_0,
+                child_script_pubkey: script.clone(),
+                signature: Some(sig_0),
+                sighash_flag: 0x00,
+            },
+            GenesisItem {
+                siblings: vec![sibling_c, sibling_d],
+                parent_index: 1,
+                sequence: 0xFFFF_FFFF,
+                child_amount: child_amount_1,
+                child_script_pubkey: script.clone(),
+                signature: Some(sig_1),
+                sighash_flag: 0x00,
+            },
+        ],
+        anchor: dummy_anchor(),
+        asset_id: None,
+        fee_anchor_script: fee_script,
+        internal_key: [0u8; 32],
+        asp_expiry_script: vec![],
+    };
+
+    (tree, anchor_value, anchor_script)
+}
+
+#[test]
+fn test_audit_v3plain_valid() {
+    let (tree, anchor_value, anchor_script) = build_signed_tree_v3plain();
+    let result = audit_sighash_policy(&tree, TxVariant::V3Plain, anchor_value, &anchor_script);
+    assert!(
+        result.is_ok(),
+        "V3Plain 2-step tree with valid signatures must pass audit: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn test_audit_v3plain_corrupted_sig_step1() {
+    let (mut tree, anchor_value, anchor_script) = build_signed_tree_v3plain();
+
+    if let Some(ref mut sig) = tree.path[1].signature {
+        sig[31] ^= 0x01;
+    }
+
+    let result = audit_sighash_policy(&tree, TxVariant::V3Plain, anchor_value, &anchor_script);
+    assert_eq!(
+        result,
+        Err(VPackError::InvalidSignature),
+        "V3Plain: corrupted sig at step 1 must be detected as forgery"
     );
 }

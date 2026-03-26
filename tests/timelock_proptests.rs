@@ -375,3 +375,65 @@ fn test_timelock_boundary_negation_disable_bit() {
         disabled_seq,
     );
 }
+
+// ---------------------------------------------------------------------------
+// Root E: CSV *seconds* boundary (kills timelocks:247 mutants)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_timelock_csv_seconds_boundary() {
+    let required: u32 = 100;
+    let csv_operand = SEQUENCE_TYPE_SECONDS | required;
+
+    let failing_seq = SEQUENCE_TYPE_SECONDS | (required - 1);
+    let mut tree_fail = base_tree();
+    tree_fail.asp_expiry_script = asp_script_csv_minimal_push(csv_operand);
+    tree_fail.path = vec![GenesisItem {
+        sequence: failing_seq,
+        ..Default::default()
+    }];
+    tree_fail.leaf.sequence = failing_seq;
+
+    assert_eq!(
+        validate_timelocks(&tree_fail),
+        Err(VPackError::TimelockViolation {
+            expected: required,
+            actual: required - 1,
+            is_relative: true,
+            reason: TimelockViolationReason::ValueTooLow,
+        }),
+        "CSV seconds: magnitude 99 must fail when script requires 100"
+    );
+
+    let passing_seq = SEQUENCE_TYPE_SECONDS | required;
+    let mut tree_pass = base_tree();
+    tree_pass.asp_expiry_script = asp_script_csv_minimal_push(csv_operand);
+    tree_pass.path = vec![GenesisItem {
+        sequence: passing_seq,
+        ..Default::default()
+    }];
+    tree_pass.leaf.sequence = passing_seq;
+
+    assert!(
+        validate_timelocks(&tree_pass).is_ok(),
+        "CSV seconds: magnitude 100 must pass when script requires exactly 100"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Root F: CLTV type boundary at LOCKTIME_THRESHOLD (kills timelocks:281)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_timelock_cltv_type_boundary_at_threshold() {
+    let server_key = [0x77u8; 32];
+
+    let mut tree = base_tree();
+    tree.asp_expiry_script = compile_bark_expiry_script(LOCKTIME_THRESHOLD, &server_key);
+    tree.leaf.expiry = LOCKTIME_THRESHOLD;
+
+    assert!(
+        validate_timelocks(&tree).is_ok(),
+        "CLTV at exact threshold boundary (500_000_000) must pass when expiry == required"
+    );
+}
