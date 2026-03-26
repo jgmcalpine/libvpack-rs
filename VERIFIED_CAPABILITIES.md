@@ -11,12 +11,13 @@
 |---|----------|------------------|--------------------|
 | 1 | [Cryptographic Primitives (BIP-341)](#1-cryptographic-primitives-bip-341) | TapLeaf hash, TapBranch sorting, Taproot tweak, balanced Merkle root | `tests/taproot_reconstruction.rs` |
 | 2 | [Tree Reconstruction & VTXO ID Computation](#2-tree-reconstruction--vtxo-id-computation) | Full tree rebuild, Merkle root derivation, VTXO ID parity for both Ark Labs and Second Tech | `tests/taproot_reconstruction.rs`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs` |
-| 3 | [Sabotage Detection & Path Exclusivity](#3-sabotage-detection--path-exclusivity) | Internal key mutation, expiry backdoor, fake P2TR, inflation, sequence tampering, Schnorr forgery | `tests/taproot_reconstruction.rs`, `tests/conformance/mod.rs`, `tests/forensic_verification.rs`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs` |
+| 3 | [Sabotage Detection & Path Exclusivity](#3-sabotage-detection--path-exclusivity) | Internal key mutation, expiry backdoor, fake P2TR, inflation, sequence tampering, Schnorr forgery, engine Schnorr split-sabotage | `tests/taproot_reconstruction.rs`, `tests/conformance/mod.rs`, `tests/forensic_verification.rs`, `tests/consensus_guard_tests.rs`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs` |
 | 3.1 | [Sovereignty & Inclusion Guarantees](#31-sovereignty--inclusion-guarantees) | Shadow key injection, sibling substitution, path truncation/extension, BIP-341 sorting integrity | `tests/taproot_reconstruction.rs` |
 | 4 | [JSON Conformance & Cross-Implementation Standardization](#4-json-conformance--cross-implementation-standardization) | Ark Labs and Second Tech JSON vector parsing, public API pipeline, WASM adapter auto-inference | `tests/conformance/mod.rs`, `tests/export_tests/mod.rs`, `src/lib.rs` |
 | 5 | [Forensic Hash Verification](#5-forensic-hash-verification) | Naked sha256d parity, version sensitivity (V2 vs V3), virtual tx reconstruction | `tests/forensic_verification.rs`, `tests/conformance/mod.rs` |
 | 6 | [Transaction Factory & Wire Format](#6-transaction-factory--wire-format) | Preimage byte parity, SegWit signed layout, legacy unsigned format | `src/consensus/tx_factory.rs` |
 | 7 | [Serialization & Identity Roundtrips](#7-serialization--identity-roundtrips) | VtxoId parse/display, VPackTree pack/parse, end-to-end pack-then-verify | `src/consensus/mod.rs`, `src/payload/tests.rs`, `tests/conformance/mod.rs` |
+| 8 | [Mutation Testing & Consensus Hardening](#8-mutation-testing--consensus-hardening) | cargo-mutants audit (`audit.yml`), `compute_vtxo_id` output-vector refactor, Schnorr split-sabotage on path steps | `.github/workflows/audit.yml`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs`, `tests/consensus_guard_tests.rs` |
 
 **Error Variant Cross-Reference** (search this document for any of these to find the test that guards it):
 `IdMismatch` | `ValueMismatch` | `SequenceMismatch` | `PolicyMismatch` | `InvalidVout` | `InvalidSignature` | `PathExclusivityViolation` | `MissingExclusivityData` | `InvalidArkLabsScript` | `InvalidBarkScript`
@@ -93,35 +94,41 @@
 ### Ark Labs V3 Leaf VTXO ID Computation
 
 * **Description:** Loads the `round_leaf_v3.json` conformance vector (a real leaf-level VTXO from the Ark Labs builder), constructs a `VPackTree` from its `reconstruction_ingredients`, and calls `ArkLabsV3.compute_vtxo_id()`. Asserts the computed 32-byte VTXO ID matches the `expected_vtxo_id` from the vector file.
-* **Test Location:** [`src/consensus/ark_labs.rs::test_ark_labs_v3_leaf_verification`](src/consensus/ark_labs.rs#L464)
+* **Test Location:** [`src/consensus/ark_labs.rs::test_ark_labs_v3_leaf_verification`](src/consensus/ark_labs.rs#L496)
 * **Vectors:** `tests/conformance/vectors/ark_labs/round_leaf_v3.json`
 * **What this proves:** For the simplest Ark Labs VTXO type (a direct leaf with no intermediate branch nodes), the library computes the correct sha256d transaction hash. This is the "Gold Standard" parity test: if this passes, the library agrees with `arkd` on what this VTXO's identity is.
 
 ### Ark Labs V3 Branch VTXO ID Computation
 
 * **Description:** Loads `round_branch_v3.json` (a branch-level VTXO containing sibling outputs). Constructs siblings with their canonical `hash_sibling_birth_tx` hashes, builds the tree with a 1-step path, and computes the VTXO ID. Asserts the ID matches the expected value and that `Display` formatting (reversed byte order) matches the expected string.
-* **Test Location:** [`src/consensus/ark_labs.rs::test_ark_labs_v3_branch_verification`](src/consensus/ark_labs.rs#L631)
+* **Test Location:** [`src/consensus/ark_labs.rs::test_ark_labs_v3_branch_verification`](src/consensus/ark_labs.rs#L663)
 * **Vectors:** `tests/conformance/vectors/ark_labs/round_branch_v3.json`
 * **What this proves:** The library correctly handles branch-level VTXOs where the virtual transaction has multiple outputs (user output + sibling outputs + fee anchor). The sibling birth-tx hashing and top-down chaining logic produce the correct intermediate transaction IDs.
 
 ### Ark Labs V3 Deep Recursion (3-Level Path)
 
 * **Description:** Manually constructs a 3-level tree: an anchor transaction spawns a Level 1 branch (from `round_branch_v3.json` data), which spawns a Level 2 intermediate node, which spawns the final leaf. Each level has its own siblings and fee anchor. Calls `compute_vtxo_id` and asserts the result is a non-zero `VtxoId::Raw` hash.
-* **Test Location:** [`src/consensus/ark_labs.rs::test_ark_labs_v3_deep_recursion`](src/consensus/ark_labs.rs#L738)
+* **Test Location:** [`src/consensus/ark_labs.rs::test_ark_labs_v3_deep_recursion`](src/consensus/ark_labs.rs#L769)
 * **What this proves:** The top-down chaining logic -- where each level's transaction ID becomes the next level's input -- works correctly for multi-level Ark trees. This matters for round transactions where a user's VTXO is several branches deep in the tree; all intermediate virtual transactions must chain correctly for the final VTXO ID to be valid.
 
 ### Second Tech V3 Link VTXO ID Computation
 
 * **Description:** Loads the `second_tech_round1_step0.json` fixture (a real Step 0 genesis item from a Second Tech round). Constructs the tree with one path step containing multiple sibling scripts and a grandparent hash as anchor. Calls `SecondTechV3.compute_vtxo_id()` and asserts: (1) the computed ID matches `expected_vtxo_id`, (2) the ID is an `OutPoint` variant (not `Raw`), (3) the TxID hash portion and vout match independently.
-* **Test Location:** [`src/consensus/second_tech.rs::test_second_tech_v3_link_verification`](src/consensus/second_tech.rs#L547)
+* **Test Location:** [`src/consensus/second_tech.rs::test_second_tech_v3_link_verification`](src/consensus/second_tech.rs#L584)
 * **Vectors:** `tests/fixtures/second_tech_round1_step0.json`
 * **What this proves:** For Second Tech's `OutPoint`-based VTXO identity scheme (where the ID is a `TxID:vout` pair rather than a raw hash), the library computes the correct virtual transaction ID. The `OutPoint` format difference from Ark Labs is correctly handled.
 
 ### Second Tech V3 Deep Recursion (5-Step Path)
 
 * **Description:** Constructs a 5-step genesis path (the deepest path tested in the suite). Step 0 uses real fixture data; Steps 1-4 use intermediate scripts with decreasing child amounts (20000, 19000, 18000, 17000). Computes the VTXO ID and asserts: (1) `signed_txs` has exactly 6 entries (5 path steps + 1 leaf), (2) each signed tx starts with version 3 LE bytes in legacy format, (3) the ID is an `OutPoint` with a non-zero TxID, and (4) `vout` matches `leaf.vout`.
-* **Test Location:** [`src/consensus/second_tech.rs::test_second_tech_v3_deep_recursion`](src/consensus/second_tech.rs#L778)
+* **Test Location:** [`src/consensus/second_tech.rs::test_second_tech_v3_deep_recursion`](src/consensus/second_tech.rs#L815)
 * **What this proves:** The library handles deep genesis paths where a VTXO was created through many levels of virtual transaction splitting. Each step in the chain produces a correctly formatted transaction whose ID feeds into the next step's input. The `signed_txs` output provides the full chain of virtual transactions needed for an L1 exit.
+
+### Previous-link outputs in `compute_vtxo_id` (implementation invariant)
+
+* **Description:** During top-down path traversal, each virtual transaction’s outputs are fed into the *next* step as the “previous outputs” used for parent amount/script and (when `schnorr-verify` is enabled) BIP-341 Taproot sighash verification. This state is stored as a single `Vec<ReconstructedOutput>` (`value` + `script_pubkey` per output), not as two parallel vectors. The Schnorr gate uses one bounds check: `idx >= prev_outputs.len()` before indexing.
+* **Code:** [`src/consensus/ark_labs.rs`](src/consensus/ark_labs.rs), [`src/consensus/second_tech.rs`](src/consensus/second_tech.rs) — private `ReconstructedOutput` struct and `prev_outputs: Option<Vec<ReconstructedOutput>>` in `ConsensusEngine::compute_vtxo_id`.
+* **What this proves:** Values and scripts for the same logical output are always paired; there is no separate invariant that two parallel slices stay the same length. Mutation testing no longer sees an equivalent `replace || with &&` mutant on two redundant `.len()` checks for the same conceptual boundary.
 
 ---
 
@@ -177,8 +184,8 @@
 
 * **Description:** For Ark Labs: constructs a valid tree, computes the expected VTXO ID, then replaces the fee anchor sibling's script with `vec![0x00]` (a single-byte garbage script). Calls `verify` and asserts `Err(VPackError::IdMismatch)`. For Second Tech: same approach, replacing the fee anchor script in a genesis item's siblings. Both test via the `ConsensusEngine::verify` method.
 * **Test Locations:**
-  * [`src/consensus/ark_labs.rs::test_ark_labs_v3_leaf_sabotage_anchor_mismatch`](src/consensus/ark_labs.rs#L543)
-  * [`src/consensus/second_tech.rs::test_second_tech_v3_link_sabotage_anchor_mismatch`](src/consensus/second_tech.rs#L649)
+  * [`src/consensus/ark_labs.rs::test_ark_labs_v3_leaf_sabotage_anchor_mismatch`](src/consensus/ark_labs.rs#L575)
+  * [`src/consensus/second_tech.rs::test_second_tech_v3_link_sabotage_anchor_mismatch`](src/consensus/second_tech.rs#L686)
 * **What this proves:** The sibling scripts directly affect the virtual transaction's outputs. Changing any sibling's script changes the birth transaction hash, which changes the VTXO ID. An ASP cannot substitute a different fee anchor or sibling output without the verifier detecting `IdMismatch`.
 
 ### Sabotage: Inflation (+1 Satoshi)
@@ -229,6 +236,13 @@
 * **Test Location:** [`tests/forensic_verification.rs::test_sabotage_invalid_signature`](tests/forensic_verification.rs#L264)
 * **Feature Gate:** `#[cfg(feature = "schnorr-verify")]`
 * **What this proves:** When Schnorr signature verification is enabled, the library validates that all signatures in the genesis path are cryptographically valid. A forged or corrupted signature is caught before the VTXO is accepted, preventing an ASP from serving pre-signed exit transactions with invalid signatures.
+
+### Engine Schnorr verification: split sabotage on a path step (`consensus_guard_tests`)
+
+* **Description:** Under `#[cfg(feature = "schnorr-verify")]`, the `engine_schnorr` module builds a **two-step** signed path with a valid BIP-340 signature on `path[1]`, then applies two independent failure modes that both exercise the `i > 0` Schnorr branch inside `ArkLabsV3::compute_vtxo_id` and `SecondTechV3::compute_vtxo_id`: (1) **output commitment mismatch** — replace `path[1].child_script_pubkey` with a P2TR script for a different x-only key than the one used to sign, so the recomputed Taproot sighash no longer matches the stored signature; (2) **signature math mismatch** — keep scripts consistent but flip a byte in `path[1].signature`. Separate tests call each engine so a regression in either engine’s loop is visible. Additional tests cover valid P2TR and 33-byte leaf keys and a shared corrupted-signature case.
+* **Test Locations:** [`tests/consensus_guard_tests.rs`](tests/consensus_guard_tests.rs) — `engine_schnorr::test_ark_engine_sabotage_only_key_mismatch`, `test_ark_engine_sabotage_only_sig_math_mismatch`, `test_second_tech_engine_sabotage_only_key_mismatch`, `test_second_tech_engine_sabotage_only_sig_math_mismatch`, plus `test_engine_schnorr_valid_*` and `test_engine_schnorr_corrupted_sig`.
+* **Feature Gate:** `#[cfg(feature = "schnorr-verify")]`
+* **What this proves:** Schnorr verification is tied to the **path step** under test (intermediate link), not only the leaf. Each failure mode returns `InvalidSignature` (or the same engine error surface as production), so tests distinguish “wrong output script commitment in the virtual tx” from “broken signature bytes” while keeping the rest of the tree valid.
 
 ---
 
@@ -319,8 +333,8 @@
 
 * **Description:** Two tests load JSON conformance vectors (one Ark Labs, one Second Tech) and pass them through the `LogicAdapter` auto-inference pipeline. The pipeline tries `ArkLabsAdapter::map_ingredients` first, then `SecondTechAdapter::map_ingredients`. For each, it asserts: (1) `verify()` succeeds, (2) the inferred variant string is correct (`"0x04"` for Ark Labs, `"0x03"` for Second Tech). *These tests require the `adapter` feature flag plus `bitcoin` or `wasm`.*
 * **Test Locations:**
-  * [`src/lib.rs::wasm_verify_auto_inference_ark_labs_round_leaf_v3`](src/lib.rs#L184) -- asserts variant `"0x04"`
-  * [`src/lib.rs::wasm_verify_auto_inference_second_round_v3_borsh`](src/lib.rs#L192) -- asserts variant `"0x03"`
+  * [`src/lib.rs::wasm_verify_auto_inference_ark_labs_round_leaf_v3`](src/lib.rs#L193) -- asserts variant `"0x04"`
+  * [`src/lib.rs::wasm_verify_auto_inference_second_round_v3_borsh`](src/lib.rs#L201) -- asserts variant `"0x03"`
 * **Feature Gate:** `#[cfg(all(test, feature = "adapter", any(feature = "bitcoin", feature = "wasm")))]`
 * **What this proves:** A WASM-based verifier (e.g., a browser wallet) can accept raw JSON without knowing the VTXO type in advance. The adapter layer correctly infers which consensus engine to use and verifies the VTXO, enabling implementation-agnostic verification UIs.
 
@@ -424,19 +438,48 @@
 
 ---
 
+## 8. Mutation testing & consensus hardening
+
+*Beyond unit and integration tests, the project runs [**cargo-mutants**](https://mutants.rs/) to search for “surviving” code changes: if a syntactic mutant (e.g. flipping an operator or eliding a check) still passes the full test suite, that mutant is a **miss** — a sign that tests or structure should be tightened. This section documents how that audit is run and how recent consensus refactors relate to it.*
+
+### CI workflow
+
+* **Workflow:** [`.github/workflows/audit.yml`](.github/workflows/audit.yml) — **Audit (Mutation Testing)**.
+* **Triggers:** `workflow_dispatch` and a **daily** `schedule` (`cron: "0 0 * * *"`).
+* **Command (high level):** `cargo mutants --package vpack --all-features --file "src/consensus/*"` with a **function-name filter** (`-F`) limiting mutations to `validate_.*`, `verify_.*`, `compute_vtxo_id`, `reconstruct_.*`, and `audit_.*` — i.e. consensus validation and reconstruction surfaces, not unrelated crates.
+* **`--all-features`:** Builds **all** optional `vpack` features in the mutants run, including **`schnorr-verify`**. That way BIP-340 Schnorr checks inside `compute_vtxo_id` are compiled and exercised under mutation, reducing **false survivors** that appear only when gated code is left out of the build.
+* **`--baseline skip` / `--jobs 4`:** Skips unchanged baseline bookkeeping where configured; uses parallel workers for throughput on CI.
+
+### Equivalent mutants and the `prev_outputs` refactor
+
+* Previously, `compute_vtxo_id` kept **two** optional vectors (`prev_output_values` and `prev_output_scripts`) and guarded indexing with `idx >= a.len() || idx >= b.len()`. When both vectors are always populated in lockstep from the same reconstructed outputs, `cargo-mutants` could introduce **`replace || with &&`** mutants that were **semantically equivalent** (no test could distinguish them), producing noisy **MISSED** results.
+* The implementation now uses a **single** `Vec<ReconstructedOutput>` (`value` + `script_pubkey`) and a **single** check `idx >= prev.len()`. The redundant `||` gate is gone, so that class of equivalent mutant **no longer exists** in the source.
+
+### Local verification vs. mutants temp dirs
+
+* **Ground truth:** `cargo test -p vpack --all-features` (from a normal checkout) is the authoritative check that consensus, guards, and conformance still pass after changes.
+* **Caveat:** `cargo-mutants` copies the package into a **temporary build tree**. Tests that read files only via paths relative to the **real** repository (e.g. JSON next to `tests/`) may not see those files in the temp tree unless the project configures mutants to copy extra data or uses paths anchored consistently. If an unmutated baseline fails inside mutants but passes in CI/unit tests, investigate fixture visibility rather than consensus logic.
+
+### Related integration tests
+
+* **[`tests/consensus_guard_tests.rs`](tests/consensus_guard_tests.rs)** — variant confusion, `InvalidVout` / `FeeAnchorMissing` / `ValueMismatch`, hand-off `parent_index`, and the **`engine_schnorr`** split-sabotage cases (Section 3) that specifically stress the Schnorr branch on **`path[1]`** for both engines.
+
+---
+
 ## Appendix: Test Coverage Summary
 
 | Category | Tests | Positive | Negative/Sabotage |
 |----------|-------|----------|-------------------|
 | 1. Cryptographic Primitives | 6 | 6 | 0 |
-| 2. Tree Reconstruction & VTXO ID | 7 | 7 | 0 |
-| 3. Sabotage Detection & Path Exclusivity | ~17 | 2 (valid baseline) | ~15 |
+| 2. Tree Reconstruction & VTXO ID | 7 + structural note | 7 + 0 | 0 |
+| 3. Sabotage Detection & Path Exclusivity | ~20 | 2 (valid baseline) | ~18 |
 | 3.1 Sovereignty & Inclusion Guarantees | 6 | 2 (valid baseline + sorting) | 4 |
 | 4. JSON Conformance & Standardization | 6 | 6 | 0 |
 | 5. Forensic Hash Verification | 6 | 6 | 0 |
 | 6. Transaction Factory & Wire Format | 3 | 3 | 0 |
 | 7. Serialization & Identity Roundtrips | 4 | 4 | 0 |
-| **Total** | **~55** | **~36** | **~19** |
+| 8. Mutation testing | process (cargo-mutants) | — | — |
+| **Total** | **~58+** | **~36** | **~22** |
 
 *Note: `run_conformance_vectors` and `run_integrity_sabotage` iterate over all 6 JSON vectors, so their effective test count is higher than the single `#[test]` function suggests. Diagnostic/print-only tests (e.g., `print_computed_vtxo_id`, `vpack_byte_size_summary`) and `#[ignore]`-tagged one-off generators are excluded from this count as they contain no assertions.*
 
@@ -446,7 +489,7 @@
 |-------------|-------------|
 | `bitcoin` or `wasm` | All tests in categories 2-7 (consensus, payload, export) |
 | `adapter` + (`bitcoin` or `wasm`) | WASM auto-inference tests in category 4 |
-| `schnorr-verify` | `test_sabotage_invalid_signature` in category 3; all tests in category 3.1 (Sovereignty & Inclusion Guarantees) |
+| `schnorr-verify` | `test_sabotage_invalid_signature` in category 3; `engine_schnorr` tests in [`tests/consensus_guard_tests.rs`](tests/consensus_guard_tests.rs); all tests in category 3.1 (Sovereignty & Inclusion Guarantees) |
 
 ### Not Yet Covered (Known Gaps)
 
