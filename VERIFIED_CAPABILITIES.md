@@ -12,6 +12,7 @@
 | 1 | [Cryptographic Primitives (BIP-341)](#1-cryptographic-primitives-bip-341) | TapLeaf hash, TapBranch sorting, Taproot tweak, balanced Merkle root | `tests/taproot_reconstruction.rs` |
 | 2 | [Tree Reconstruction & VTXO ID Computation](#2-tree-reconstruction--vtxo-id-computation) | Full tree rebuild, Merkle root derivation, VTXO ID parity for both Ark Labs and Second Tech | `tests/taproot_reconstruction.rs`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs` |
 | 3 | [Sabotage Detection & Path Exclusivity](#3-sabotage-detection--path-exclusivity) | Internal key mutation, expiry backdoor, fake P2TR, inflation, sequence tampering, Schnorr forgery | `tests/taproot_reconstruction.rs`, `tests/conformance/mod.rs`, `tests/forensic_verification.rs`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs` |
+| 3.1 | [Sovereignty & Inclusion Guarantees](#31-sovereignty--inclusion-guarantees) | Shadow key injection, sibling substitution, path truncation/extension, BIP-341 sorting integrity | `tests/taproot_reconstruction.rs` |
 | 4 | [JSON Conformance & Cross-Implementation Standardization](#4-json-conformance--cross-implementation-standardization) | Ark Labs and Second Tech JSON vector parsing, public API pipeline, WASM adapter auto-inference | `tests/conformance/mod.rs`, `tests/export_tests/mod.rs`, `src/lib.rs` |
 | 5 | [Forensic Hash Verification](#5-forensic-hash-verification) | Naked sha256d parity, version sensitivity (V2 vs V3), virtual tx reconstruction | `tests/forensic_verification.rs`, `tests/conformance/mod.rs` |
 | 6 | [Transaction Factory & Wire Format](#6-transaction-factory--wire-format) | Preimage byte parity, SegWit signed layout, legacy unsigned format | `src/consensus/tx_factory.rs` |
@@ -231,6 +232,38 @@
 
 ---
 
+## 3.1 Sovereignty & Inclusion Guarantees
+
+*The tests below form the "Merkle Integrity Audit" — a suite of adversarial tests that prove `verify_path_exclusivity` provides a mathematically complete defense against three classes of Taproot tree tampering. Each test constructs a valid tree, applies a precise, structure-preserving mutation, and asserts that the library detects the tampering at the cryptographic key-comparison stage (not at the parsing stage). Together they guarantee that no hidden spend paths, truncated trees, or injected keys can survive verification.*
+
+### Shadow Key Injection Protection
+
+* **Description:** Path exclusivity recomputes the Taproot output key from the tree's scripts and `internal_key`, then compares it against the P2TR `script_pubkey`. A single-bit flip in `internal_key` (at byte 15, bit 7) cascades through the `TapTweak` derivation into a completely different tweaked key, which no longer matches the leaf's P2TR output. This test uses a 5-leaf Bark tree (1 expiry + 4 unlock siblings) to exercise the full balanced Merkle root computation, including odd-node promotion, before the tweak. A separate "Dual-Sabotage" test independently exercises both arms of the P2TR format guard (`length != 34`, `prefix != [0x51, 0x20]`) and the key-equality comparison, killing `|| -> &&` and `!= -> ==` cargo-mutants.
+* **Test Locations:**
+  * [`tests/taproot_reconstruction.rs::test_internal_key_mutation_fails`](tests/taproot_reconstruction.rs)
+  * [`tests/taproot_reconstruction.rs::test_dual_sabotage_script_validation_gate`](tests/taproot_reconstruction.rs)
+* **What this proves:** An ASP cannot inject a "shadow" internal key — one that would add a hidden key-path spend — without the library detecting the resulting output key mismatch. Even a single-bit change in the key is caught.
+
+### Sibling Substitution Protection
+
+* **Description:** Takes a valid 5-leaf Bark tree and mutates one byte of a sibling's `musig_key` (the last 32 bytes of the unlock script). The mutation preserves all opcodes and push-length prefixes, so the script parser (`parse_bark_unlock_script`) still succeeds — ensuring the failure propagates through the Merkle math, not through a parse rejection. The modified script produces a different `TapLeaf` hash, which changes the balanced Merkle root, which changes the tweaked output key.
+* **Test Location:** [`tests/taproot_reconstruction.rs::test_merkle_sibling_substitution_fails`](tests/taproot_reconstruction.rs)
+* **What this proves:** An ASP cannot substitute a different spend path for an existing sibling without detection. Even a single-bit change in a sibling's cryptographic key material cascades through the Merkle tree to an output key mismatch.
+
+### Path Truncation & Extension Protection
+
+* **Description:** Tests two attacks against the Taproot tree structure: (1) *Truncation* — removing the last `leaf_sibling`, dropping from 5 leaves (odd count, triggering BIP-341 odd-node promotion) to 4 leaves (even count, all paired). (2) *Extension* — appending a duplicate sibling, growing from 5 leaves to 6. Both mutations change the balanced Merkle root because the tree topology (number of leaves, pairing, and promotion) is different.
+* **Test Location:** [`tests/taproot_reconstruction.rs::test_path_truncation_and_extension_fails`](tests/taproot_reconstruction.rs)
+* **What this proves:** An ASP cannot hide a spend path by truncating the tree (removing a leaf the user does not know about) or extend it by adding a leaf (inserting an additional exit path). Both attacks change the Merkle root and are caught by the output key comparison. The 5-leaf baseline specifically exercises BIP-341's odd-node promotion logic, ensuring the library's `compute_balanced_merkle_root` handles the even/odd boundary correctly.
+
+### BIP-341 Lexicographic Sorting Integrity
+
+* **Description:** Constructs two deterministic 32-byte hashes where `A > B` lexicographically and verifies that `tap_branch_hash(A, B)` produces an identical result to `tap_branch_hash(B, A)`. Additionally verifies the result equals the manually computed `tagged_hash("TapBranch", B || A)`, confirming the smaller hash is placed first per BIP-341.
+* **Test Location:** [`tests/taproot_reconstruction.rs::test_taproot_lexicographical_sorting_integrity`](tests/taproot_reconstruction.rs)
+* **What this proves:** The BIP-341 branch sorting rule is enforced internally by the library, not assumed by callers. Two implementations traversing the same tree in different orders will produce identical Merkle roots, ensuring exit transactions are interoperable.
+
+---
+
 ## 4. JSON Conformance & Cross-Implementation Standardization
 
 *The V-PACK format must work identically regardless of which Ark implementation produced the data. These tests verify that JSON-serialized `reconstruction_ingredients` from both the Ark Labs (`arkd`) and Second Tech (`bark`) reference implementations can be parsed, packed into V-PACKs, and verified against the expected VTXO IDs. This is the interoperability guarantee: a VTXO created by `arkd` and a VTXO created by `bark` can both be verified by the same `vpack::verify()` function.*
@@ -381,12 +414,13 @@
 |----------|-------|----------|-------------------|
 | 1. Cryptographic Primitives | 6 | 6 | 0 |
 | 2. Tree Reconstruction & VTXO ID | 7 | 7 | 0 |
-| 3. Sabotage Detection & Path Exclusivity | ~16 | 2 (valid baseline) | ~14 |
+| 3. Sabotage Detection & Path Exclusivity | ~17 | 2 (valid baseline) | ~15 |
+| 3.1 Sovereignty & Inclusion Guarantees | 6 | 2 (valid baseline + sorting) | 4 |
 | 4. JSON Conformance & Standardization | 6 | 6 | 0 |
 | 5. Forensic Hash Verification | 6 | 6 | 0 |
 | 6. Transaction Factory & Wire Format | 3 | 3 | 0 |
 | 7. Serialization & Identity Roundtrips | 4 | 4 | 0 |
-| **Total** | **~48** | **~34** | **~14** |
+| **Total** | **~55** | **~36** | **~19** |
 
 *Note: `run_conformance_vectors` and `run_integrity_sabotage` iterate over all 6 JSON vectors, so their effective test count is higher than the single `#[test]` function suggests. Diagnostic/print-only tests (e.g., `print_computed_vtxo_id`, `vpack_byte_size_summary`) and `#[ignore]`-tagged one-off generators are excluded from this count as they contain no assertions.*
 
@@ -396,7 +430,7 @@
 |-------------|-------------|
 | `bitcoin` or `wasm` | All tests in categories 2-7 (consensus, payload, export) |
 | `adapter` + (`bitcoin` or `wasm`) | WASM auto-inference tests in category 4 |
-| `schnorr-verify` | `test_sabotage_invalid_signature` in category 3 |
+| `schnorr-verify` | `test_sabotage_invalid_signature` in category 3; all tests in category 3.1 (Sovereignty & Inclusion Guarantees) |
 
 ### Not Yet Covered (Known Gaps)
 
