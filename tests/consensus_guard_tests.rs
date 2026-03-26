@@ -3,11 +3,11 @@
 //! Kills "delete !" mutants (variant identity enforcement) and ">/== +/*" mutants
 //! (vout and parent_index bounds checks in `compute_vtxo_id` / `reconstruct_link`).
 
-use bitcoin::hashes::Hash;
 use vpack::consensus::{ArkLabsV3, ConsensusEngine, SecondTechV3, VtxoId};
 use vpack::error::VPackError;
 use vpack::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
-use vpack::types::{OutPoint, Txid};
+use vpack::types::hashes::Hash;
+use vpack::types::{Amount, OutPoint, ScriptBuf, TxOut, Txid};
 
 fn dummy_anchor() -> OutPoint {
     OutPoint {
@@ -97,10 +97,7 @@ fn test_ark_labs_tree_rejected_by_second_tech() {
 
 #[test]
 fn test_second_tech_tree_uses_full_sibling_rejected_by_ark_labs() {
-    use bitcoin::blockdata::script::ScriptBuf;
-    use bitcoin::Amount;
-
-    let full_txout = bitcoin::TxOut {
+    let full_txout = TxOut {
         value: Amount::from_sat(500),
         script_pubkey: ScriptBuf::from_bytes(vec![0x51, 0x01, 0x00]),
     };
