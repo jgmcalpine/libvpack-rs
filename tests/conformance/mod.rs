@@ -179,7 +179,7 @@ fn run_integrity_sabotage(path: &Path) {
             assert!(
                 matches!(
                     result,
-                    Err(VPackError::IdMismatch) | Err(VPackError::ValueMismatch)
+                    Err(VPackError::IdMismatch { .. }) | Err(VPackError::ValueMismatch { .. })
                 ),
                 "corrupted amount should yield IdMismatch or ValueMismatch, got {:?}",
                 result
@@ -204,7 +204,7 @@ fn run_integrity_sabotage(path: &Path) {
         assert!(
             matches!(
                 result,
-                Err(VPackError::IdMismatch) | Err(VPackError::SequenceMismatch(_))
+                Err(VPackError::IdMismatch { .. }) | Err(VPackError::SequenceMismatch(_))
             ),
             "corrupted sequence should yield IdMismatch or SequenceMismatch, got {:?}",
             result
@@ -239,7 +239,7 @@ fn run_integrity_sabotage(path: &Path) {
             create_vpack_from_tree(&tree, TxVariant::V3Anchored, false).expect("pack mutated tree");
         let result = vpack::verify(&bad_bytes, &expected_id, anchor_value);
         assert!(
-            matches!(result, Err(VPackError::IdMismatch)),
+            matches!(result, Err(VPackError::IdMismatch { .. })),
             "sabotaged sibling script should yield IdMismatch, got {:?}",
             result
         );
@@ -377,7 +377,11 @@ fn test_sabotage_inflation() {
     let bad_bytes_leaf = create_vpack_ark_labs(bad_ingredients_leaf).expect("pack");
     let result_leaf = vpack::verify(&bad_bytes_leaf, &expected_id, ANCHOR_ROUND_LEAF);
     assert!(
-        matches!(result_leaf, Err(VPackError::ValueMismatch)),
+        matches!(
+            result_leaf,
+            Err(VPackError::ValueMismatch { expected, actual })
+                if expected == ANCHOR_ROUND_LEAF && actual == ANCHOR_ROUND_LEAF + 1
+        ),
         "leaf amount +1 sat with fixed anchor must yield ValueMismatch, got {:?}",
         result_leaf
     );
@@ -413,7 +417,11 @@ fn test_sabotage_inflation() {
     let bad_bytes_branch = create_vpack_ark_labs(bad_ingredients_branch).expect("pack");
     let result_branch = vpack::verify(&bad_bytes_branch, &branch_expected_id, ANCHOR_ROUND_BRANCH);
     assert!(
-        matches!(result_branch, Err(VPackError::ValueMismatch)),
+        matches!(
+            result_branch,
+            Err(VPackError::ValueMismatch { expected, actual })
+                if expected == ANCHOR_ROUND_BRANCH && actual == ANCHOR_ROUND_BRANCH + 1
+        ),
         "sibling value +1 sat with fixed anchor must yield ValueMismatch, got {:?}",
         result_branch
     );

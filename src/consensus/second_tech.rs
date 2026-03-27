@@ -64,8 +64,17 @@ impl ConsensusEngine for SecondTechV3 {
                     .iter()
                     .try_fold(0u64, |acc, o| acc.checked_add(o.value));
                 match sum {
-                    None => return Err(VPackError::ValueMismatch),
-                    Some(s) if s != expected => return Err(VPackError::ValueMismatch),
+                    None => {
+                        return Err(crate::consensus::value_mismatch_for_output_sum(
+                            expected, &outputs,
+                        ));
+                    }
+                    Some(s) if s != expected => {
+                        return Err(VPackError::ValueMismatch {
+                            expected,
+                            actual: s,
+                        });
+                    }
                     Some(_) => {}
                 }
                 let vout = if i + 1 < tree.path.len() {
@@ -220,8 +229,17 @@ impl SecondTechV3 {
                 .iter()
                 .try_fold(0u64, |acc, o| acc.checked_add(o.value));
             match sum {
-                None => return Err(VPackError::ValueMismatch),
-                Some(s) if s != expected => return Err(VPackError::ValueMismatch),
+                None => {
+                    return Err(crate::consensus::value_mismatch_for_output_sum(
+                        expected, &outputs,
+                    ));
+                }
+                Some(s) if s != expected => {
+                    return Err(VPackError::ValueMismatch {
+                        expected,
+                        actual: s,
+                    });
+                }
                 Some(_) => {}
             }
         }
@@ -803,9 +821,28 @@ mod tests {
             .compute_vtxo_id(&good_tree, Some(anchor_value))
             .expect("good tree")
             .id;
+        let computed_bad = engine
+            .compute_vtxo_id(&bad_tree, Some(anchor_value))
+            .expect("compute sabotaged tree")
+            .id;
         let result = engine.verify(&bad_tree, &expected_id, anchor_value);
         assert!(
-            matches!(result, Err(VPackError::IdMismatch)),
+            matches!(
+                result,
+                Err(VPackError::IdMismatch {
+                    computed,
+                    expected,
+                    computed_vout,
+                    expected_vout,
+                }) if computed
+                    == crate::consensus::vtxo_id_mismatch_diagnostic_bytes(&computed_bad)
+                    && expected
+                        == crate::consensus::vtxo_id_mismatch_diagnostic_bytes(&expected_id)
+                    && computed_vout
+                        == crate::consensus::vtxo_id_mismatch_diagnostic_vout(&computed_bad)
+                    && expected_vout
+                        == crate::consensus::vtxo_id_mismatch_diagnostic_vout(&expected_id)
+            ),
             "Sabotage test: wrong fee anchor script must yield IdMismatch, got {:?}",
             result
         );

@@ -37,6 +37,24 @@ pub use second_tech::compute_bark_merkle_root;
 pub use second_tech::SecondTechV3;
 pub use tx_factory::{tx_preimage, tx_signed_hex, TxInPreimage, TxOutPreimage};
 
+/// Conservation-of-value failure with summed output totals for auditing.
+pub(crate) fn value_mismatch_for_output_sum(
+    expected: u64,
+    outputs: &[TxOutPreimage<'_>],
+) -> VPackError {
+    let actual = match outputs
+        .iter()
+        .try_fold(0u64, |acc, o| acc.checked_add(o.value))
+    {
+        Some(s) => s,
+        None => {
+            let total: u128 = outputs.iter().map(|o| o.value as u128).sum();
+            u64::try_from(total).unwrap_or(u64::MAX)
+        }
+    };
+    VPackError::ValueMismatch { expected, actual }
+}
+
 // -----------------------------------------------------------------------------
 // VtxoId
 // -----------------------------------------------------------------------------
@@ -48,6 +66,25 @@ pub enum VtxoId {
     Raw([u8; 32]),
     /// Object-native: OutPoint as Hash:Index (Variant 0x03).
     OutPoint(OutPoint),
+}
+
+/// 32-byte slice for [`crate::error::VPackError::IdMismatch`] diagnostics (internal wire order).
+///
+/// [`VtxoId::Raw`] returns the raw hash bytes. [`VtxoId::OutPoint`] returns the **txid only**
+/// (pair with [`vtxo_id_mismatch_diagnostic_vout`] for the full Second Tech identity).
+pub fn vtxo_id_mismatch_diagnostic_bytes(id: &VtxoId) -> [u8; 32] {
+    match id {
+        VtxoId::Raw(b) => *b,
+        VtxoId::OutPoint(op) => op.txid.to_byte_array(),
+    }
+}
+
+/// vout for [`crate::error::VPackError::IdMismatch`] when the ID is [`VtxoId::OutPoint`]; else `None`.
+pub fn vtxo_id_mismatch_diagnostic_vout(id: &VtxoId) -> Option<u32> {
+    match id {
+        VtxoId::Raw(_) => None,
+        VtxoId::OutPoint(op) => Some(op.vout),
+    }
 }
 
 impl fmt::Display for VtxoId {
@@ -184,7 +221,12 @@ pub trait ConsensusEngine {
         if computed.id == *expected {
             Ok(())
         } else {
-            Err(VPackError::IdMismatch)
+            Err(VPackError::IdMismatch {
+                computed: vtxo_id_mismatch_diagnostic_bytes(&computed.id),
+                expected: vtxo_id_mismatch_diagnostic_bytes(expected),
+                computed_vout: vtxo_id_mismatch_diagnostic_vout(&computed.id),
+                expected_vout: vtxo_id_mismatch_diagnostic_vout(expected),
+            })
         }
     }
 }
@@ -195,6 +237,17 @@ pub trait ConsensusEngine {
 
 /// P2TR scriptPubKey prefix: OP_1 (0x51) OP_PUSHBYTES_32 (0x20).
 const P2TR_PREFIX: [u8; 2] = [0x51, 0x20];
+
+#[cfg(feature = "schnorr-verify")]
+fn p2tr_embedded_xonly_key(script: &[u8]) -> [u8; 32] {
+    if script.len() == 34 && script[..2] == P2TR_PREFIX {
+        let mut k = [0u8; 32];
+        k.copy_from_slice(&script[2..34]);
+        k
+    } else {
+        [0u8; 32]
+    }
+}
 
 /// Zero-trust verification that the VTXO leaf's Taproot tree contains only the
 /// expected spend paths. Recomputes the Merkle root from `asp_expiry_script`,
@@ -219,19 +272,33 @@ pub fn verify_path_exclusivity(
         crate::header::TxVariant::V3Plain => compute_bark_merkle_root(tree)?,
     };
 
-    let derived_key = taproot::compute_taproot_tweak(tree.internal_key, merkle_root)
-        .ok_or(VPackError::PathExclusivityViolation)?;
+    let expected_from_script = p2tr_embedded_xonly_key(&tree.leaf.script_pubkey);
+
+    let derived_key = match taproot::compute_taproot_tweak(tree.internal_key, merkle_root) {
+        Some(k) => k,
+        None => {
+            return Err(VPackError::PathExclusivityViolation {
+                derived_key: [0u8; 32],
+                expected_key: expected_from_script,
+            });
+        }
+    };
 
     let script = &tree.leaf.script_pubkey;
     if script.len() != 34 || script[..2] != P2TR_PREFIX {
-        return Err(VPackError::PathExclusivityViolation);
+        return Err(VPackError::PathExclusivityViolation {
+            derived_key,
+            expected_key: expected_from_script,
+        });
     }
-    let expected_key: [u8; 32] = script[2..34]
-        .try_into()
-        .map_err(|_| VPackError::PathExclusivityViolation)?;
+    let mut expected_key = [0u8; 32];
+    expected_key.copy_from_slice(&script[2..34]);
 
     if derived_key != expected_key {
-        return Err(VPackError::PathExclusivityViolation);
+        return Err(VPackError::PathExclusivityViolation {
+            derived_key,
+            expected_key,
+        });
     }
 
     Ok(())

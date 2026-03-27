@@ -323,14 +323,26 @@ fn test_value_conservation_wrong_anchor() {
 
     let sec_err = SecondTechV3.compute_vtxo_id(&tree, Some(wrong_value));
     assert!(
-        matches!(sec_err, Err(VPackError::ValueMismatch)),
+        matches!(
+            sec_err,
+            Err(VPackError::ValueMismatch {
+                expected: 2001,
+                actual: 2000
+            })
+        ),
         "SecondTechV3: wrong anchor value must yield ValueMismatch, got: {:?}",
         sec_err
     );
 
     let ark_err = ArkLabsV3.compute_vtxo_id(&tree, Some(wrong_value));
     assert!(
-        matches!(ark_err, Err(VPackError::ValueMismatch)),
+        matches!(
+            ark_err,
+            Err(VPackError::ValueMismatch {
+                expected: 2001,
+                actual: 2000
+            })
+        ),
         "ArkLabsV3: wrong anchor value must yield ValueMismatch, got: {:?}",
         ark_err
     );

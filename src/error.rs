@@ -1,5 +1,15 @@
 // src/error.rs
 
+use core::fmt;
+
+/// Writes a 32-byte value as a full 64-character lowercase hex string (forensic / audit output).
+pub(crate) fn fmt_hash32_full(f: &mut fmt::Formatter<'_>, bytes: &[u8; 32]) -> fmt::Result {
+    for b in bytes {
+        write!(f, "{:02x}", b)?;
+    }
+    Ok(())
+}
+
 /// Why [`VPackError::TimelockViolation`] was raised (BIP-68 CSV / BIP-113 CLTV audit).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimelockViolationReason {
@@ -64,10 +74,20 @@ pub enum VPackError {
     PolicyMismatch,
 
     /// Reconstructed VTXO ID did not match the expected ID (verification gate).
-    IdMismatch,
+    ///
+    /// `computed` / `expected` are **internal wire-order** bytes: the raw VTXO hash for
+    /// [`crate::consensus::VtxoId::Raw`], or the **txid** for [`crate::consensus::VtxoId::OutPoint`].
+    /// `computed_vout` / `expected_vout` are `Some` only for [`crate::consensus::VtxoId::OutPoint`]
+    /// (Second Tech); [`Display`](core::fmt::Display) prints them so txid-only equality cannot hide a vout bug.
+    IdMismatch {
+        computed: [u8; 32],
+        expected: [u8; 32],
+        computed_vout: Option<u32>,
+        expected_vout: Option<u32>,
+    },
 
     /// Output sum did not equal input amount (conservation of value); or overflow when summing outputs.
-    ValueMismatch,
+    ValueMismatch { expected: u64, actual: u64 },
 
     /// VTXO ID string could not be parsed (expected raw 64-char hex or "Hash:Index").
     InvalidVtxoIdFormat,
@@ -92,7 +112,10 @@ pub enum VPackError {
     MissingExclusivityData,
 
     /// Derived Taproot tweaked key does not match the x-only key in the leaf P2TR scriptPubKey.
-    PathExclusivityViolation,
+    PathExclusivityViolation {
+        derived_key: [u8; 32],
+        expected_key: [u8; 32],
+    },
 
     /// BIP-341 control block could not be reconstructed from the tree (no matching Taproot layout).
     ControlBlockReconstructionFailed,
@@ -154,14 +177,49 @@ impl core::fmt::Display for VPackError {
                 f,
                 "Policy invariant violated (fee_anchor, sequence, or exit_delta inconsistency)"
             ),
-            Self::IdMismatch => write!(
-                f,
-                "VTXO ID mismatch: reconstructed ID does not match expected"
-            ),
-            Self::ValueMismatch => write!(
-                f,
-                "Output sum did not equal input amount (conservation of value)"
-            ),
+            Self::IdMismatch {
+                computed,
+                expected,
+                computed_vout,
+                expected_vout,
+            } => {
+                write!(f, "VTXO ID mismatch: computed ")?;
+                fmt_hash32_full(f, computed)?;
+                if let Some(v) = computed_vout {
+                    write!(f, ":{}", v)?;
+                }
+                write!(f, ", expected ")?;
+                fmt_hash32_full(f, expected)?;
+                if let Some(v) = expected_vout {
+                    write!(f, ":{}", v)?;
+                }
+                if computed == expected {
+                    if let (Some(cv), Some(ev)) = (computed_vout, expected_vout) {
+                        if cv != ev {
+                            write!(
+                                f,
+                                " (identical 32-byte id bytes; vout differs: computed {cv}, expected {ev})"
+                            )?;
+                        }
+                    }
+                }
+                Ok(())
+            }
+            Self::ValueMismatch { expected, actual } => {
+                let delta = i128::from(*expected) - i128::from(*actual);
+                write!(
+                    f,
+                    "Value mismatch: expected {} sats from anchor/parent, outputs sum to {} (expected - actual = {} sats",
+                    expected, actual, delta
+                )?;
+                if delta > 0 {
+                    write!(f, "; outputs short by {} sats)", delta)
+                } else if delta < 0 {
+                    write!(f, "; outputs exceed by {} sats)", -delta)
+                } else {
+                    write!(f, ")")
+                }
+            }
             Self::InvalidVtxoIdFormat => write!(
                 f,
                 "Invalid VTXO ID format (expected 64-char hex or Hash:Index)"
@@ -188,10 +246,18 @@ impl core::fmt::Display for VPackError {
                 f,
                 "Path exclusivity data missing: internal_key and asp_expiry_script are required"
             ),
-            Self::PathExclusivityViolation => write!(
-                f,
-                "Path exclusivity mathematically violated: derived Taproot key does not match L1 anchor script"
-            ),
+            Self::PathExclusivityViolation {
+                derived_key,
+                expected_key,
+            } => {
+                write!(
+                    f,
+                    "Path exclusivity violation: derived Taproot output key "
+                )?;
+                fmt_hash32_full(f, derived_key)?;
+                write!(f, " does not match scriptPubKey x-only key ")?;
+                fmt_hash32_full(f, expected_key)
+            }
             Self::ControlBlockReconstructionFailed => write!(
                 f,
                 "BIP-341 control block reconstruction failed: tree Taproot layout does not match P2TR output"

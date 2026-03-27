@@ -404,25 +404,39 @@ fn test_path_exclusivity_missing_data() {
 
 #[test]
 fn test_path_exclusivity_sabotage_mutated_internal_key_ark_labs() {
+    let good_tweaked = hex_to_32(ARKD_2_LEAF_TREE.tweaked_pubkey);
     let mut tree = build_valid_ark_labs_tree();
     tree.internal_key[0] ^= 0x01;
     let result = verify_path_exclusivity(&tree, TxVariant::V3Anchored);
-    assert_eq!(
-        result,
-        Err(VPackError::PathExclusivityViolation),
-        "flipping one bit in internal_key must cascade into a different tweaked key"
+    assert!(
+        matches!(
+            result,
+            Err(VPackError::PathExclusivityViolation {
+                derived_key,
+                expected_key
+            }) if expected_key == good_tweaked && derived_key != good_tweaked
+        ),
+        "flipping one bit in internal_key must cascade into a different tweaked key: {:?}",
+        result
     );
 }
 
 #[test]
 fn test_path_exclusivity_sabotage_mutated_internal_key_bark() {
+    let good_tweaked = hex_to_32(BARK_COSIGN_TAPROOT.tweaked_pubkey);
     let mut tree = build_valid_bark_tree();
     tree.internal_key[0] ^= 0x01;
     let result = verify_path_exclusivity(&tree, TxVariant::V3Plain);
-    assert_eq!(
-        result,
-        Err(VPackError::PathExclusivityViolation),
-        "flipping one bit in internal_key must cascade into a different tweaked key"
+    assert!(
+        matches!(
+            result,
+            Err(VPackError::PathExclusivityViolation {
+                derived_key,
+                expected_key
+            }) if expected_key == good_tweaked && derived_key != good_tweaked
+        ),
+        "flipping one bit in internal_key must cascade into a different tweaked key: {:?}",
+        result
     );
 }
 
@@ -439,7 +453,8 @@ fn test_path_exclusivity_sabotage_backdoored_expiry_ark_labs() {
     assert!(
         matches!(
             result,
-            Err(VPackError::PathExclusivityViolation) | Err(VPackError::InvalidArkLabsScript)
+            Err(VPackError::PathExclusivityViolation { .. })
+                | Err(VPackError::InvalidArkLabsScript)
         ),
         "mutating a byte inside asp_expiry_script must fail: got {:?}",
         result
@@ -455,7 +470,7 @@ fn test_path_exclusivity_sabotage_backdoored_expiry_bark() {
     assert!(
         matches!(
             result,
-            Err(VPackError::PathExclusivityViolation) | Err(VPackError::InvalidBarkScript)
+            Err(VPackError::PathExclusivityViolation { .. }) | Err(VPackError::InvalidBarkScript)
         ),
         "mutating a byte inside asp_expiry_script must fail: got {:?}",
         result
@@ -469,32 +484,51 @@ fn test_path_exclusivity_sabotage_backdoored_expiry_bark() {
 #[test]
 fn test_path_exclusivity_sabotage_fake_anchor_ark_labs() {
     let mut tree = build_valid_ark_labs_tree();
+    let merkle =
+        vpack::compute_ark_labs_merkle_root(&tree).expect("merkle root for valid Ark tree");
+    let derived_good =
+        vpack::taproot::compute_taproot_tweak(tree.internal_key, merkle).expect("tap tweak");
     let mut fake_key = [0xABu8; 32];
     fake_key[0] = 0x02;
     let mut fake_p2tr = vec![0x51, 0x20];
     fake_p2tr.extend_from_slice(&fake_key);
     tree.leaf.script_pubkey = fake_p2tr;
     let result = verify_path_exclusivity(&tree, TxVariant::V3Anchored);
-    assert_eq!(
-        result,
-        Err(VPackError::PathExclusivityViolation),
-        "replacing the P2TR key with a fake must be detected"
+    assert!(
+        matches!(
+            result,
+            Err(VPackError::PathExclusivityViolation {
+                derived_key,
+                expected_key
+            }) if derived_key == derived_good && expected_key == fake_key
+        ),
+        "replacing the P2TR key with a fake must be detected: {:?}",
+        result
     );
 }
 
 #[test]
 fn test_path_exclusivity_sabotage_fake_anchor_bark() {
     let mut tree = build_valid_bark_tree();
+    let merkle = vpack::compute_bark_merkle_root(&tree).expect("merkle root for valid Bark tree");
+    let derived_good =
+        vpack::taproot::compute_taproot_tweak(tree.internal_key, merkle).expect("tap tweak");
     let mut fake_key = [0xCDu8; 32];
     fake_key[0] = 0x02;
     let mut fake_p2tr = vec![0x51, 0x20];
     fake_p2tr.extend_from_slice(&fake_key);
     tree.leaf.script_pubkey = fake_p2tr;
     let result = verify_path_exclusivity(&tree, TxVariant::V3Plain);
-    assert_eq!(
-        result,
-        Err(VPackError::PathExclusivityViolation),
-        "replacing the P2TR key with a fake must be detected"
+    assert!(
+        matches!(
+            result,
+            Err(VPackError::PathExclusivityViolation {
+                derived_key,
+                expected_key
+            }) if derived_key == derived_good && expected_key == fake_key
+        ),
+        "replacing the P2TR key with a fake must be detected: {:?}",
+        result
     );
 }
 
@@ -510,10 +544,16 @@ fn test_path_exclusivity_sabotage_non_p2tr_script() {
         0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
     ];
     let result = verify_path_exclusivity(&tree, TxVariant::V3Anchored);
-    assert_eq!(
-        result,
-        Err(VPackError::PathExclusivityViolation),
-        "non-P2TR script_pubkey must be rejected"
+    assert!(
+        matches!(
+            result,
+            Err(VPackError::PathExclusivityViolation {
+                derived_key,
+                expected_key
+            }) if expected_key == [0u8; 32] && derived_key != [0u8; 32]
+        ),
+        "non-P2TR script_pubkey must be rejected: {:?}",
+        result
     );
 }
 
@@ -529,9 +569,11 @@ fn test_dual_sabotage_script_validation_gate() {
     let mut wrong_prefix = tree_a.leaf.script_pubkey.clone();
     wrong_prefix[0] = 0x00;
     tree_a.leaf.script_pubkey = wrong_prefix;
-    assert_eq!(
-        verify_path_exclusivity(&tree_a, TxVariant::V3Anchored),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&tree_a, TxVariant::V3Anchored),
+            Err(VPackError::PathExclusivityViolation { .. })
+        ),
         "(A) correct length but wrong prefix must be rejected at the guard"
     );
 
@@ -540,20 +582,32 @@ fn test_dual_sabotage_script_validation_gate() {
     let mut short_script = vec![0x51, 0x20];
     short_script.extend_from_slice(&[0xAA; 31]);
     tree_b.leaf.script_pubkey = short_script;
-    assert_eq!(
-        verify_path_exclusivity(&tree_b, TxVariant::V3Anchored),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&tree_b, TxVariant::V3Anchored),
+            Err(VPackError::PathExclusivityViolation { .. })
+        ),
         "(B) correct prefix but wrong length (33) must be rejected at the guard"
     );
 
     // (C) Correct format (34 bytes, valid P2TR prefix), wrong key — kills `!= -> ==`.
     let mut tree_c = build_valid_ark_labs_tree();
+    let merkle_c =
+        vpack::compute_ark_labs_merkle_root(&tree_c).expect("merkle root for tree_c baseline");
+    let derived_c =
+        vpack::taproot::compute_taproot_tweak(tree_c.internal_key, merkle_c).expect("tweak");
+    let wrong_embedded = [0xFFu8; 32];
     let mut wrong_key_script = vec![0x51, 0x20];
-    wrong_key_script.extend_from_slice(&[0xFF; 32]);
+    wrong_key_script.extend_from_slice(&wrong_embedded);
     tree_c.leaf.script_pubkey = wrong_key_script;
-    assert_eq!(
-        verify_path_exclusivity(&tree_c, TxVariant::V3Anchored),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&tree_c, TxVariant::V3Anchored),
+            Err(VPackError::PathExclusivityViolation {
+                derived_key,
+                expected_key
+            }) if derived_key == derived_c && expected_key == wrong_embedded
+        ),
         "(C) correct P2TR format but wrong embedded key must be rejected at comparison"
     );
 }
@@ -583,9 +637,11 @@ fn test_merkle_sibling_substitution_fails() {
     } else {
         panic!("expected Compact sibling");
     }
-    assert_eq!(
-        verify_path_exclusivity(&tree, TxVariant::V3Plain),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&tree, TxVariant::V3Plain),
+            Err(VPackError::PathExclusivityViolation { .. })
+        ),
         "substituting one musig_key byte in a sibling must invalidate the Merkle root"
     );
 }
@@ -598,9 +654,11 @@ fn test_path_truncation_and_extension_fails() {
     // --- Truncation: remove the last unlock sibling (5 leaves → 4) ---
     let mut truncated = build_valid_bark_tree_with_unlock_siblings();
     truncated.leaf_siblings.pop();
-    assert_eq!(
-        verify_path_exclusivity(&truncated, TxVariant::V3Plain),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&truncated, TxVariant::V3Plain),
+            Err(VPackError::PathExclusivityViolation { .. })
+        ),
         "truncating a Taproot leaf must change the Merkle root and fail exclusivity"
     );
 
@@ -608,9 +666,11 @@ fn test_path_truncation_and_extension_fails() {
     let mut extended = build_valid_bark_tree_with_unlock_siblings();
     let dup = extended.leaf_siblings[0].clone();
     extended.leaf_siblings.push(dup);
-    assert_eq!(
-        verify_path_exclusivity(&extended, TxVariant::V3Plain),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&extended, TxVariant::V3Plain),
+            Err(VPackError::PathExclusivityViolation { .. })
+        ),
         "extending the Taproot tree with a duplicate leaf must fail exclusivity"
     );
 }
@@ -621,9 +681,11 @@ fn test_path_truncation_and_extension_fails() {
 fn test_internal_key_mutation_fails() {
     let mut tree = build_valid_bark_tree_with_unlock_siblings();
     tree.internal_key[15] ^= 0x80;
-    assert_eq!(
-        verify_path_exclusivity(&tree, TxVariant::V3Plain),
-        Err(VPackError::PathExclusivityViolation),
+    assert!(
+        matches!(
+            verify_path_exclusivity(&tree, TxVariant::V3Plain),
+            Err(VPackError::PathExclusivityViolation { .. })
+        ),
         "flipping bit 7 of internal_key[15] must cascade into a different tweaked key"
     );
 }

@@ -46,8 +46,9 @@ pub use consensus::verify_path_exclusivity;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::{
     compute_ark_labs_merkle_root, compute_bark_merkle_root, validate_exit_ready_completeness,
-    validate_timelocks, validate_tree_completeness, ArkLabsV3, ConsensusEngine, SecondTechV3,
-    VerificationOutput, VtxoId,
+    validate_timelocks, validate_tree_completeness, vtxo_id_mismatch_diagnostic_bytes,
+    vtxo_id_mismatch_diagnostic_vout, ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput,
+    VtxoId,
 };
 #[cfg(feature = "bitcoin")]
 pub use consensus::{reconstruct_control_block, verify_control_block};
