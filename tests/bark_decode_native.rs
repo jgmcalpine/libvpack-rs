@@ -42,15 +42,17 @@ fn decode_vtxo_with_arklib() {
     println!("\n  nb_exit_txs:     {}", txs.len());
 
     // Show first 3 and last 3 exit txs
-    for i in 0..txs.len().min(3) {
-        print_tx_info(i, &txs[i]);
+    for (i, item) in txs.iter().take(3).enumerate() {
+        print_tx_info(i, item);
     }
     if txs.len() > 6 {
         println!("  ... ({} more) ...", txs.len() - 6);
     }
-    for i in txs.len().saturating_sub(3)..txs.len() {
+    let last_start = txs.len().saturating_sub(3);
+    for (offset, item) in txs[last_start..].iter().enumerate() {
+        let i = last_start + offset;
         if i >= 3 {
-            print_tx_info(i, &txs[i]);
+            print_tx_info(i, item);
         }
     }
 
