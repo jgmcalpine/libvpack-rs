@@ -1,8 +1,10 @@
-//! Second Tech (bark) dialect adapter: deserializes "Silo Dialect" into V-PACK standard grammar.
+//! Second Tech (bark) dialect adapter: deserializes Bark `ProtocolEncoding` into V-PACK standard
+//! grammar.
 //!
-//! Bark's Borsh layout differs from V-PACK: different field order, CompactSize for genesis
-//! vector length, Bitcoin consensus OutPoints, and a policy enum. This module parses the
-//! shadow layout and maps to VPackTree.
+//! Bark's serialization is: version(u16) + amount(u64) + expiry_height(u32) +
+//! server_pubkey(33B) + exit_delta(u16) + anchor_point(36B) + genesis chain(CompactSize count +
+//! items) + policy + point(36B). Each genesis item is a `GenesisTransition` (tag + variant data)
+//! followed by `nb_outputs`(u8), `output_idx`(u8), `other_outputs`(TxOut[]), `fee_amount`(u64).
 
 use crate::types::{decode_outpoint, OutPoint};
 use alloc::vec::Vec;
@@ -12,33 +14,9 @@ use crate::compact_size::read_compact_size;
 use crate::error::VPackError;
 use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
 
-// -----------------------------------------------------------------------------
-// Policy shadow: only variant 0x00 (Pubkey) supported for current vectors.
-// -----------------------------------------------------------------------------
-
-/// Bark policy enum. Borsh: 1-byte tag then variant payload.
-#[derive(Debug)]
-enum BarkPolicyShadow {
-    /// Variant 0x00: Pubkey (no payload for our use).
-    Pubkey,
-    /// Other variants (e.g. 0x05): consume tag only so cursor stays aligned for following point.
-    Unknown(()),
-}
-
-fn parse_policy(data: &[u8]) -> Result<(BarkPolicyShadow, usize), VPackError> {
-    if data.is_empty() {
-        return Err(VPackError::IncompleteData);
-    }
-    let tag = data[0];
-    match tag {
-        0x00 => Ok((BarkPolicyShadow::Pubkey, 1)),
-        _ => Ok((BarkPolicyShadow::Unknown(()), 1)),
-    }
-}
-
-// -----------------------------------------------------------------------------
-// OutPoint: Bitcoin consensus (32B hash + 4B vout LE).
-// -----------------------------------------------------------------------------
+const GENESIS_TRANSITION_COSIGNED: u8 = 1;
+const GENESIS_TRANSITION_ARKOOR: u8 = 2;
+const GENESIS_TRANSITION_HASH_LOCKED: u8 = 3;
 
 fn parse_outpoint_consensus(data: &[u8]) -> Result<(OutPoint, usize), VPackError> {
     const OUTPOINT_LEN: usize = 36;
@@ -50,173 +28,248 @@ fn parse_outpoint_consensus(data: &[u8]) -> Result<(OutPoint, usize), VPackError
     Ok((op, OUTPOINT_LEN))
 }
 
-// -----------------------------------------------------------------------------
-// Genesis item shadow: siblings (u8 len + compact siblings), then
-// parent_index, sequence, child_amount, child_script_pubkey, signature.
-// -----------------------------------------------------------------------------
-
-fn parse_borsh_u32(data: &[u8]) -> Result<(u32, usize), VPackError> {
-    if data.len() < 4 {
+fn skip_pubkey(data: &[u8]) -> Result<usize, VPackError> {
+    if data.len() < 33 {
         return Err(VPackError::IncompleteData);
     }
-    let n = LittleEndian::read_u32(&data[0..4]);
-    Ok((n, 4))
+    Ok(33)
 }
 
-/// Bark uses u8 for siblings_len in genesis transitions (per Second Technologies lead).
-fn parse_borsh_u8(data: &[u8]) -> Result<(u8, usize), VPackError> {
-    if data.is_empty() {
+fn skip_optional_sig(data: &[u8]) -> Result<(Option<[u8; 64]>, usize), VPackError> {
+    if data.len() < 64 {
         return Err(VPackError::IncompleteData);
     }
-    Ok((data[0], 1))
+    let all_zero = data[..64].iter().all(|b| *b == 0);
+    if all_zero {
+        Ok((None, 64))
+    } else {
+        let mut arr = [0u8; 64];
+        arr.copy_from_slice(&data[..64]);
+        Ok((Some(arr), 64))
+    }
 }
 
-fn parse_borsh_vec_u8(data: &[u8]) -> Result<(Vec<u8>, usize), VPackError> {
-    let (len, n) = parse_borsh_u32(data)?;
-    let len = len as usize;
-    let rest = &data[n..];
-    if rest.len() < len {
+fn read_cs(data: &[u8]) -> Result<(u64, usize), VPackError> {
+    read_compact_size(data).ok_or(VPackError::IncompleteData)
+}
+
+/// Parse a Bitcoin consensus-encoded TxOut: u64 LE amount + CompactSize script_len + script.
+fn parse_txout(data: &[u8]) -> Result<(u64, Vec<u8>, usize), VPackError> {
+    if data.len() < 8 {
         return Err(VPackError::IncompleteData);
     }
-    let bytes = rest[..len].to_vec();
-    Ok((bytes, n + len))
-}
-
-/// One compact sibling: 32B hash + 8B value LE + Borsh Vec<u8> script.
-fn parse_sibling(data: &[u8]) -> Result<(SiblingNode, usize), VPackError> {
-    if data.len() < 32 + 8 + 4 {
+    let amount = LittleEndian::read_u64(&data[0..8]);
+    let (script_len, cs_len) = read_cs(&data[8..])?;
+    let start = 8 + cs_len;
+    let end = start + script_len as usize;
+    if data.len() < end {
         return Err(VPackError::IncompleteData);
     }
-    let mut hash = [0u8; 32];
-    hash.copy_from_slice(&data[0..32]);
-    let value = LittleEndian::read_u64(&data[32..40]);
-    let (script, script_consumed) = parse_borsh_vec_u8(&data[40..])?;
-    let consumed = 40 + script_consumed;
-    Ok((
-        SiblingNode::Compact {
-            hash,
-            value,
-            script,
-        },
-        consumed,
-    ))
+    let script = data[start..end].to_vec();
+    Ok((amount, script, end))
 }
 
-/// One genesis step. Bark uses u8 for siblings_len (1 byte); we consume it and map to standard GenesisItem (u32 lengths in V-PACK).
-fn parse_genesis_item(mut rest: &[u8]) -> Result<(GenesisItem, usize), VPackError> {
+/// Parse one genesis item in Bark ProtocolEncoding format.
+fn parse_genesis_item(mut rest: &[u8]) -> Result<(GenesisItem, Vec<Vec<u8>>, usize), VPackError> {
     let start_len = rest.len();
-    let (siblings_len, n) = parse_borsh_u8(rest)?;
-    rest = &rest[n..];
-    let mut siblings = Vec::with_capacity(siblings_len as usize);
-    for _ in 0..siblings_len {
-        let (sib, consumed) = parse_sibling(rest)?;
-        siblings.push(sib);
-        rest = &rest[consumed..];
-    }
-    // Bark: nb_outputs (u8), output_idx (u8) after transition, before other_outputs.
-    if rest.len() < 2 {
-        return Err(VPackError::IncompleteData);
-    }
-    let _nb_outputs = rest[0];
-    let output_idx = rest[1];
-    rest = &rest[2..];
-    let parent_index = output_idx as u32;
 
-    if rest.len() < 4 + 8 + 4 {
-        return Err(VPackError::IncompleteData);
-    }
-    let sequence = LittleEndian::read_u32(&rest[0..4]);
-    let child_amount = LittleEndian::read_u64(&rest[4..12]);
-    let (child_script_pubkey, script_consumed) = parse_borsh_vec_u8(&rest[12..])?;
-    rest = &rest[12 + script_consumed..];
+    // GenesisTransition tag
     if rest.is_empty() {
         return Err(VPackError::IncompleteData);
     }
-    let sig_tag = rest[0];
-    let sig_consumed = if sig_tag == 0 {
-        1
-    } else if sig_tag == 1 {
-        if rest.len() < 1 + 64 {
-            return Err(VPackError::IncompleteData);
+    let transition_tag = rest[0];
+    rest = &rest[1..];
+
+    let mut cosign_pubkeys: Vec<Vec<u8>> = Vec::new();
+    let signature: Option<[u8; 64]>;
+
+    match transition_tag {
+        GENESIS_TRANSITION_COSIGNED => {
+            let (key_count, cs_len) = read_cs(rest)?;
+            rest = &rest[cs_len..];
+            for _ in 0..key_count {
+                if rest.len() < 33 {
+                    return Err(VPackError::IncompleteData);
+                }
+                cosign_pubkeys.push(rest[..33].to_vec());
+                rest = &rest[33..];
+            }
+            let (sig, sig_consumed) = skip_optional_sig(rest)?;
+            signature = sig;
+            rest = &rest[sig_consumed..];
         }
-        65
-    } else {
-        return Err(VPackError::EncodingError);
-    };
-    let signature = if sig_tag == 0 {
-        None
-    } else {
-        let mut arr = [0u8; 64];
-        arr.copy_from_slice(&rest[1..65]);
-        Some(arr)
-    };
-    rest = &rest[sig_consumed..];
+        GENESIS_TRANSITION_HASH_LOCKED => {
+            let consumed = skip_pubkey(rest)?;
+            rest = &rest[consumed..];
+            let (sig, sig_consumed) = skip_optional_sig(rest)?;
+            signature = sig;
+            rest = &rest[sig_consumed..];
+            // MaybePreimage: u8 tag + 32 bytes
+            if rest.len() < 33 {
+                return Err(VPackError::IncompleteData);
+            }
+            rest = &rest[33..];
+        }
+        GENESIS_TRANSITION_ARKOOR => {
+            let (key_count, cs_len) = read_cs(rest)?;
+            rest = &rest[cs_len..];
+            for _ in 0..key_count {
+                if rest.len() < 33 {
+                    return Err(VPackError::IncompleteData);
+                }
+                cosign_pubkeys.push(rest[..33].to_vec());
+                rest = &rest[33..];
+            }
+            // TapTweakHash (32 bytes)
+            if rest.len() < 32 {
+                return Err(VPackError::IncompleteData);
+            }
+            rest = &rest[32..];
+            let (sig, sig_consumed) = skip_optional_sig(rest)?;
+            signature = sig;
+            rest = &rest[sig_consumed..];
+        }
+        _ => return Err(VPackError::EncodingError),
+    }
+
+    // nb_outputs (u8), output_idx (u8)
+    if rest.len() < 2 {
+        return Err(VPackError::IncompleteData);
+    }
+    let nb_outputs = rest[0] as usize;
+    let output_idx = rest[1];
+    rest = &rest[2..];
+
+    let nb_other = nb_outputs.checked_sub(1).ok_or(VPackError::EncodingError)?;
+
+    let mut other_outputs: Vec<(u64, Vec<u8>)> = Vec::with_capacity(nb_other);
+    for _ in 0..nb_other {
+        let (amt, script, consumed) = parse_txout(rest)?;
+        other_outputs.push((amt, script));
+        rest = &rest[consumed..];
+    }
+
+    // fee_amount (u64)
+    if rest.len() < 8 {
+        return Err(VPackError::IncompleteData);
+    }
+    let _fee_amount = LittleEndian::read_u64(&rest[0..8]);
+    rest = &rest[8..];
+
+    let siblings: Vec<SiblingNode> = other_outputs
+        .iter()
+        .map(|(v, s)| SiblingNode::Compact {
+            hash: [0u8; 32],
+            value: *v,
+            script: s.clone(),
+        })
+        .collect();
+
     let total_consumed = start_len - rest.len();
+
     Ok((
         GenesisItem {
             siblings,
-            parent_index,
-            sequence,
-            child_amount,
-            child_script_pubkey,
+            parent_index: output_idx as u32,
+            sequence: 0x0000_0000, // Bark V3 uses Sequence::ZERO
+            child_amount: 0,
+            child_script_pubkey: Vec::new(),
             signature,
-            ..Default::default()
+            sighash_flag: 0x00,
         },
+        cosign_pubkeys,
         total_consumed,
     ))
 }
 
-// -----------------------------------------------------------------------------
-// Bark top-level: version, amount, expiry_height, server_pubkey, exit_delta,
-// anchor_point (36), genesis (CompactSize count + items), policy, point (36).
-// -----------------------------------------------------------------------------
+/// Parse a Bark VtxoPolicy. Returns (user_pubkey_33B, consumed).
+fn parse_policy(data: &[u8]) -> Result<(Vec<u8>, usize), VPackError> {
+    if data.is_empty() {
+        return Err(VPackError::IncompleteData);
+    }
+    let tag = data[0];
+    let mut consumed = 1usize;
+    match tag {
+        // VTXO_POLICY_PUBKEY = 0x00
+        0x00 => {
+            if data.len() < consumed + 33 {
+                return Err(VPackError::IncompleteData);
+            }
+            let user_pubkey = data[consumed..consumed + 33].to_vec();
+            consumed += 33;
+            Ok((user_pubkey, consumed))
+        }
+        // VTXO_POLICY_SERVER_HTLC_SEND = 0x01
+        0x01 => {
+            consumed += 33 + 32 + 4; // user_pubkey + payment_hash + htlc_expiry
+            if data.len() < consumed {
+                return Err(VPackError::IncompleteData);
+            }
+            let user_pubkey = data[1..34].to_vec();
+            Ok((user_pubkey, consumed))
+        }
+        // VTXO_POLICY_SERVER_HTLC_RECV = 0x02
+        0x02 => {
+            consumed += 33 + 32 + 4 + 2; // user_pubkey + payment_hash + htlc_expiry + htlc_expiry_delta
+            if data.len() < consumed {
+                return Err(VPackError::IncompleteData);
+            }
+            let user_pubkey = data[1..34].to_vec();
+            Ok((user_pubkey, consumed))
+        }
+        _ => {
+            // Unknown policy — skip tag only
+            Ok((Vec::new(), 1))
+        }
+    }
+}
 
-/// Deserializes bark (Second Tech) raw Borsh bytes into V-PACK standard grammar.
-/// Uses CompactSize for genesis vector length and Bitcoin consensus for OutPoints.
-/// nSequence is set to 0x00000000 per Second Tech.
+/// Deserializes bark (Second Tech) raw ProtocolEncoding bytes into V-PACK standard grammar.
 pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPackTree, VPackError> {
     let mut rest = raw_bytes;
 
-    // VTXO_ENCODING_VERSION in bark is u16 (2 bytes), not u8.
+    // Version (u16)
     if rest.len() < 2 {
         return Err(VPackError::IncompleteData);
     }
     let _version = LittleEndian::read_u16(&rest[0..2]);
     rest = &rest[2..];
 
+    // Amount (u64)
     if rest.len() < 8 {
         return Err(VPackError::IncompleteData);
     }
     let amount = LittleEndian::read_u64(&rest[0..8]);
     rest = &rest[8..];
 
+    // Expiry height (u32)
     if rest.len() < 4 {
         return Err(VPackError::IncompleteData);
     }
     let expiry_height = LittleEndian::read_u32(&rest[0..4]);
     rest = &rest[4..];
 
-    // Fixed-length Bitcoin compressed pubkey (33 bytes), not Borsh Vec<u8>.
-    const PUBKEY_LEN: usize = 33;
-    if rest.len() < PUBKEY_LEN {
+    // Server pubkey (33 bytes compressed)
+    if rest.len() < 33 {
         return Err(VPackError::IncompleteData);
     }
-    let (pk_bytes, rest_after_pk) = rest.split_at(PUBKEY_LEN);
-    let server_pubkey = pk_bytes.to_vec();
-    rest = rest_after_pk;
+    let server_pubkey = rest[..33].to_vec();
+    rest = &rest[33..];
 
+    // Exit delta (u16)
     if rest.len() < 2 {
         return Err(VPackError::IncompleteData);
     }
     let exit_delta = LittleEndian::read_u16(&rest[0..2]);
     rest = &rest[2..];
 
+    // Anchor OutPoint (36 bytes: 32B txid + 4B vout LE)
     let (anchor_point, op_consumed) = parse_outpoint_consensus(rest)?;
     rest = &rest[op_consumed..];
 
-    let (genesis_count, compact_consumed) =
-        read_compact_size(rest).ok_or(VPackError::IncompleteData)?;
-    rest = &rest[compact_consumed..];
+    // Genesis chain: CompactSize(nb_items) + items
+    let (genesis_count, cs_consumed) = read_cs(rest)?;
+    rest = &rest[cs_consumed..];
 
     let fee_anchor_script_vec = fee_anchor_script.to_vec();
     let fee_anchor_sibling = SiblingNode::Compact {
@@ -225,17 +278,56 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         script: fee_anchor_script_vec.clone(),
     };
 
-    let mut path = Vec::with_capacity(genesis_count as usize);
+    let mut path: Vec<GenesisItem> = Vec::with_capacity(genesis_count as usize);
+    let mut all_cosign_keys: Vec<Vec<Vec<u8>>> = Vec::new();
+
     for _ in 0..genesis_count {
-        let (mut item, item_consumed) = parse_genesis_item(rest)?;
+        let (mut item, cosign_keys, consumed) = parse_genesis_item(rest)?;
         item.siblings.push(fee_anchor_sibling.clone());
         path.push(item);
-        rest = &rest[item_consumed..];
+        all_cosign_keys.push(cosign_keys);
+        rest = &rest[consumed..];
     }
 
-    let (_, policy_consumed) = parse_policy(rest)?;
+    // Compute child_amount for each genesis item.
+    // chain_anchor_amount = vtxo_amount + sum(all fee_amounts + all other_output values)
+    // We compute backwards: the last child_amount should equal `amount`.
+    // child_amount[i] = child_amount[i-1] - sum(siblings[i+1] values excluding fee anchor)
+    // Actually: go forward, tracking running value.
+    // We don't know the on-chain anchor value, so we compute it:
+    //   anchor_value = amount + sum(other_output_values for all items) + sum(fee_amounts)
+    // Then child_amount[0] = anchor_value - sum(other_outputs[0]) - fee[0]
+    // child_amount[i] = child_amount[i-1] - sum(other_outputs[i]) - fee[i]
+    {
+        let mut total_other: u64 = 0;
+        for item in &path {
+            for sib in &item.siblings {
+                if let SiblingNode::Compact { value, .. } = sib {
+                    total_other = total_other.saturating_add(*value);
+                }
+            }
+        }
+        let anchor_value = amount.saturating_add(total_other);
+        let mut running = anchor_value;
+        for item in path.iter_mut() {
+            let sib_sum: u64 = item
+                .siblings
+                .iter()
+                .map(|s| match s {
+                    SiblingNode::Compact { value, .. } => *value,
+                    SiblingNode::Full(txout) => txout.value.to_sat(),
+                })
+                .sum();
+            running = running.saturating_sub(sib_sum);
+            item.child_amount = running;
+        }
+    }
+
+    // Policy: u8 tag + fields
+    let (user_pubkey, policy_consumed) = parse_policy(rest)?;
     rest = &rest[policy_consumed..];
 
+    // Point: OutPoint (36 bytes) = VtxoId
     let (point, point_consumed) = parse_outpoint_consensus(rest)?;
     rest = &rest[point_consumed..];
 
@@ -243,13 +335,24 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         return Err(VPackError::TrailingData(rest.len()));
     }
 
+    // Build the leaf output scriptPubkey.
+    // For Pubkey policy, the VTXO output is a P2TR with:
+    //   internal_key = MuSig2(user_pubkey, server_pubkey)
+    //   script_tree = exit_clause(user_pubkey, exit_delta)
+    // We can't compute MuSig2 in no_std, so we store the server_pubkey as
+    // script_pubkey for now. The test-level crypto audit uses ark-lib for
+    // full verification.
     let leaf = VtxoLeaf {
         amount,
         vout: point.vout,
         sequence: 0x0000_0000,
         expiry: expiry_height,
         exit_delta,
-        script_pubkey: server_pubkey,
+        script_pubkey: if !user_pubkey.is_empty() {
+            user_pubkey.clone()
+        } else {
+            server_pubkey.clone()
+        },
     };
 
     let leaf_siblings = Vec::from([fee_anchor_sibling]);
