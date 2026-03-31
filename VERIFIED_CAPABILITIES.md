@@ -18,9 +18,10 @@
 | 6 | [Transaction Factory & Wire Format](#6-transaction-factory--wire-format) | Preimage byte parity, SegWit signed layout, legacy unsigned format | `src/consensus/tx_factory.rs` |
 | 7 | [Serialization & Identity Roundtrips](#7-serialization--identity-roundtrips) | VtxoId parse/display, VPackTree pack/parse, end-to-end pack-then-verify | `src/consensus/mod.rs`, `src/payload/tests.rs`, `tests/conformance/mod.rs` |
 | 8 | [Mutation Testing & Consensus Hardening](#8-mutation-testing--consensus-hardening) | cargo-mutants audit (`audit.yml`), `compute_vtxo_id` output-vector refactor, Schnorr split-sabotage on path steps | `.github/workflows/audit.yml`, `src/consensus/ark_labs.rs`, `src/consensus/second_tech.rs`, `tests/consensus_guard_tests.rs` |
+| 9 | [Bark VTXO Dehydration & HWW Integration](#9-bark-vtxo-dehydration--hardware-wallet-integration) | Real QA vector dehydration, Taproot exclusivity proof against ark-lib, dust stripping, byte-budget enforcement, HWW capacity guard | `tests/dehydration_tests.rs`, `src/dehydration/`, `src/consensus/second_tech.rs` |
 
 **Error Variant Cross-Reference** (search this document for any of these to find the test that guards it):
-`IdMismatch` | `ValueMismatch` | `SequenceMismatch` | `PolicyMismatch` | `InvalidVout` | `InvalidSignature` | `PathExclusivityViolation` | `MissingExclusivityData` | `InvalidArkLabsScript` | `InvalidBarkScript`
+`IdMismatch` | `ValueMismatch` | `SequenceMismatch` | `PolicyMismatch` | `InvalidVout` | `InvalidSignature` | `PathExclusivityViolation` | `MissingExclusivityData` | `InvalidArkLabsScript` | `InvalidBarkScript` | `ExceedsHWWCapacity`
 
 **Test Vector Files** used across the suite:
 
@@ -35,6 +36,8 @@
 | `tests/fixtures/second_tech_round1_step0.json` | Second Tech fixture | Unit verification, sabotage, deep recursion, Schnorr sabotage |
 | `tests/vectors/arkd.rs` | Rust constants | Taproot primitive tests (2-leaf, 6-leaf trees) |
 | `tests/vectors/bark.rs` | Rust constants | Taproot primitive tests (cosign, branch sorting) |
+| `tests/vectors/bark_qa/vtxo_0.bin` | Bark binary (11,196 B) | Dehydration fidelity, exclusivity math, size targets (66-hop chain) |
+| `tests/vectors/bark_qa/vtxo_73.bin` | Bark binary (51,455 B) | HWW capacity enforcement (314-hop OOR chain, `ExceedsHWWCapacity`) |
 
 ---
 
@@ -466,6 +469,87 @@
 
 ---
 
+## 9. Bark VTXO Dehydration & Hardware Wallet Integration
+
+*Bark's native VTXO wire format is 10–51 KB per VTXO — well beyond the RAM available on a Hardware Wallet (HWW). The dehydration layer compresses a Bark VTXO into two fixed-budget structures: a `VpackSovereigntyEnvelope` (214 bytes, `Copy`, zero heap) and a `VpackExitWaterfall` (≤ 8,192 bytes, streaming one hop at a time). Together they preserve every cryptographic property required to prove user sovereignty and execute a unilateral L1 exit without the ASP's cooperation.*
+
+*All tests in this section use `ark-lib` as the ground-truth decoder via `vpack_tree_from_arklib`, which builds a correctly structured `VPackTree` from the VTXO's exit transaction chain. This bypasses the known `bark_to_vpack` limitation — that adapter reads all tree nodes linearly rather than walking the user-specific root-to-leaf path. The adapter limitation is documented and tracked but does not affect any dehydration test results.*
+
+### Bark PubkeyVtxoPolicy Taproot Anatomy (Cryptographic Ground Truth)
+
+* **Description:** Reverse-engineered and verified against `ark-lib`: Bark's standard user VTXO (`PubkeyVtxoPolicy`) has exactly **one** tapscript leaf — no `TapBranch` is needed. The exit script is `<exit_delta> OP_CSV OP_DROP <user_xonly_32B> OP_CHECKSIG`. The internal key `P` is the BIP-327 MuSig2 aggregate of user and server pubkeys (keys sorted by 33-byte serialization before aggregation), giving a 32-byte x-only key. The Merkle root is simply `TapLeafHash(exit_script)`.
+
+  Critical implementation detail: Bitcoin's `push_int` uses `OP_N` shortcodes for values 1–16. For `exit_delta = 12`, the opcode is `OP_12` (`0x5c`), **not** `[0x01, 0x0c]`. `compile_bark_delayed_sign_script` replicates this exactly, matching `ark::scripts::delayed_sign` byte-for-byte.
+
+  **Ground truth for `vtxo_0.bin`** (confirmed by `test_exclusivity_math` against `ark-lib`):
+  - `exit_script` (37 bytes): `5c b2 75 20 <user_xonly_32B> ac`
+  - `merkle_root = TapLeafHash(exit_script)`: `585f5150...769d8a`
+  - `P = MuSig2(user, server).x_only()`: `23688f20...054f6b6`
+  - `Q = TapTweak(P, merkle_root)`: `ff88f63e...aedefc5` ✓ confirmed against `ark-lib`
+
+* **Code:** [`src/consensus/second_tech.rs::compile_bark_delayed_sign_script`](src/consensus/second_tech.rs#L564), [`src/consensus/second_tech.rs::compute_bark_vtxo_tapscript_root`](src/consensus/second_tech.rs#L589)
+* **What this proves:** The exact script encoding (including `OP_N` shortcodes) and single-leaf Taproot structure of Bark PubkeyVtxoPolicy VTXOs. This is the foundational cryptographic specification that the dehydration layer builds on.
+
+### Taproot Exclusivity Proof Against `ark-lib` Ground Truth
+
+* **Description:** `test_exclusivity_math` decodes `vtxo_0.bin` via `ark-lib` to obtain the authoritative `internal_key` P (`23688f...4f6b6`) and `output_key` Q (`ff88f6...defc5`). Then:
+  1. Calls `compute_bark_vtxo_tapscript_root(&tree)` — which calls `compile_bark_delayed_sign_script(exit_delta=12, user_xonly)` then `tap_leaf_hash` — and asserts the result equals `ark-lib`'s `merkle_root`.
+  2. Calls `compute_taproot_tweak(P, merkle_root)` and asserts the result equals `ark-lib`'s `output_key` Q.
+  3. Exercises the full envelope round-trip: calls `bark_dehydrate(&tree, &vtxo_id)`, then `envelope.verify_taproot_exclusivity(&tree)`, asserting it passes.
+
+* **Test Location:** [`tests/dehydration_tests.rs::test_exclusivity_math`](tests/dehydration_tests.rs#L217)
+* **Vectors:** `tests/vectors/bark_qa/vtxo_0.bin`
+* **Feature Gate:** `#[cfg(feature = "schnorr-verify")]` for `verify_taproot_exclusivity`
+* **What this proves:** The equation `TapTweak(P, leaf_hash) == Q` holds end-to-end using our library's own primitives, with `ark-lib` as the external oracle. A user holding a Bark VTXO can independently prove that the on-chain P2TR output is controlled exclusively by their key, with no hidden spending paths.
+
+### Dehydration Fidelity (vtxo_0.bin)
+
+* **Description:** Builds a `VPackTree` from `vtxo_0.bin` using `ark-lib` (66-hop exit chain, `leaf_amount = 1 sat`, `expiry_height = 289,495`, `exit_delta = 12`). Calls `bark_dehydrate(&tree, &vtxo_id)` and asserts:
+  1. `envelope.vtxo_txid` equals the txid component of the `VtxoId::OutPoint` returned by `ark-lib`.
+  2. `envelope.vtxo_vout` equals the vout component.
+  3. `envelope.root_outpoint` is non-zero.
+  4. `envelope.leaf_amount` equals `tree.leaf.amount`.
+  5. `envelope.verify()` passes (non-zero anchor and vtxo_txid).
+
+* **Test Location:** [`tests/dehydration_tests.rs::test_dehydration_fidelity`](tests/dehydration_tests.rs#L157)
+* **Vectors:** `tests/vectors/bark_qa/vtxo_0.bin`
+* **What this proves:** The dehydration entry point (`bark_dehydrate`) faithfully extracts the VTXO identity and leaf value from a real Bark binary. The `VpackSovereigntyEnvelope` is correctly populated: the VTXO's final on-chain identity (txid:vout) and the user's satoshi amount survive compression without corruption.
+
+### Dust Removal (Sibling Stripping)
+
+* **Description:** Constructs a synthetic `VPackTree` with a known structure: 3 path hops, each containing 2 dust sibling outputs (200 sats each) and 1 fee anchor sibling — 3 siblings per hop, 9 total. Calls `bark_dehydrate`. Asserts:
+  1. `waterfall.hop_count()` equals 3 (the number of path hops, not the number of outputs).
+  2. Iterating `waterfall.next_hop()` yields exactly 3 `HopData` records.
+  3. Each `HopData.amount` matches the expected per-hop user output amount (20,000 / 10,000 / 5,000 sats).
+
+  Fee anchors are the 4-byte Ark ephemeral CPFP script `51 02 4e 73` (`OP_1 OP_PUSHBYTES_2 0x4e73`), present in every exit transaction. All sibling outputs — dust change and fee anchors — are completely stripped from the waterfall.
+
+* **Test Location:** [`tests/dehydration_tests.rs::test_dust_removal`](tests/dehydration_tests.rs#L306)
+* **What this proves:** The waterfall records exactly one compressed entry per hop on the user's output path. All sibling TxOuts (dust change, fee anchors) are discarded. A Hardware Wallet processing the waterfall never sees nor stores sibling data.
+
+### Size Targets & HWW Capacity Enforcement
+
+* **Description:** Exercises the full byte-budget spec in a single test. Static checks (compile-time constants):
+  - `VpackSovereigntyEnvelope::serialized_size()` ≤ 500 bytes (actual: 214 bytes).
+  - `core::mem::size_of::<HopData>()` ≤ 1,024 bytes.
+  - `HopData::SERIALIZED_LEN == 105` bytes (worst-case wire: 1 flag + 64 sig + 8 amount + 32 xonly).
+  - `MAX_HWW_HOPS == 75`.
+
+  Live checks against `vtxo_0.bin` (66 hops, 11,196 bytes raw):
+  - `waterfall.serialized_size()` ≤ 8,000 bytes (actual: 6,703 bytes — **40.1% reduction** vs raw Bark binary).
+  - `waterfall.serialized_size()` < raw file size.
+  - `envelope.verify()` passes.
+  - Waterfall serialization round-trip: `from_bytes(to_bytes())` produces identical `hop_count()` and `serialized_size()`.
+
+  HWW capacity guard against `vtxo_73.bin` (314 hops, 51,455 bytes raw):
+  - `bark_dehydrate` returns `Err(VPackError::ExceedsHWWCapacity)` — the device refuses rather than attempting to allocate a 33+ KB structure.
+
+* **Test Location:** [`tests/dehydration_tests.rs::test_size_targets`](tests/dehydration_tests.rs#L411)
+* **Vectors:** `tests/vectors/bark_qa/vtxo_0.bin`, `tests/vectors/bark_qa/vtxo_73.bin`
+* **What this proves:** The dehydration layer satisfies its HWW storage spec against real Bark binaries. A 66-hop chain compresses from 11 KB to 6.7 KB. The library enforces the 75-hop hard cap: deep OOR chains (314 hops) are rejected at build time with `ExceedsHWWCapacity`, preventing stack overflows or heap exhaustion on constrained devices. The waterfall binary format is reversible (round-trip stable).
+
+---
+
 ## Appendix: Test Coverage Summary
 
 | Category | Tests | Positive | Negative/Sabotage |
@@ -479,7 +563,8 @@
 | 6. Transaction Factory & Wire Format | 3 | 3 | 0 |
 | 7. Serialization & Identity Roundtrips | 4 | 4 | 0 |
 | 8. Mutation testing | process (cargo-mutants) | — | — |
-| **Total** | **~58+** | **~36** | **~22** |
+| 9. Bark Dehydration & HWW Integration | 4 | 3 | 1 (ExceedsHWWCapacity) |
+| **Total** | **~62+** | **~39** | **~23** |
 
 *Note: `run_conformance_vectors` and `run_integrity_sabotage` iterate over all 6 JSON vectors, so their effective test count is higher than the single `#[test]` function suggests. Diagnostic/print-only tests (e.g., `print_computed_vtxo_id`, `vpack_byte_size_summary`) and `#[ignore]`-tagged one-off generators are excluded from this count as they contain no assertions.*
 
@@ -489,18 +574,23 @@
 |-------------|-------------|
 | `bitcoin` or `wasm` | All tests in categories 2-7 (consensus, payload, export) |
 | `adapter` + (`bitcoin` or `wasm`) | WASM auto-inference tests in category 4 |
-| `schnorr-verify` | `test_sabotage_invalid_signature` in category 3; `engine_schnorr` tests in [`tests/consensus_guard_tests.rs`](tests/consensus_guard_tests.rs); all tests in category 3.1 (Sovereignty & Inclusion Guarantees) |
+| `schnorr-verify` | `test_sabotage_invalid_signature` in category 3; `engine_schnorr` tests in [`tests/consensus_guard_tests.rs`](tests/consensus_guard_tests.rs); all tests in category 3.1 (Sovereignty & Inclusion Guarantees); `verify_taproot_exclusivity` in `test_exclusivity_math` (category 9) |
+| `ark-lib` dependency | All category 9 dehydration tests (use `ark-lib` as ground-truth decoder for `vtxo_*.bin` vectors) |
 
 ### Not Yet Covered (Known Gaps)
 
-The following protocol features are *not* exercised by the current test suite. 
+The following protocol features are *not* exercised by the current test suite.
 
-- **[HIGH] Tweak parity bit enforcement (BIP-341)**: No test asserts that `compute_taproot_tweak` preserves the correct even/odd Y-coordinate parity. A wrong parity bit produces a valid-looking P2TR address whose Schnorr signatures fail on-chain -- an "unspendable VTXO" the user believes they own.
+- **[HIGH] Tweak parity bit enforcement (BIP-341)**: No test asserts that `compute_taproot_tweak` preserves the correct even/odd Y-coordinate parity. A wrong parity bit produces a valid-looking P2TR address whose Schnorr signatures fail on-chain — an "unspendable VTXO" the user believes they own.
 - **[HIGH] Resource exhaustion / denial of service (hardware security)**: No test feeds pathological inputs (depth-bomb V-PACKs, near-`MAX_PAYLOAD_SIZE` payloads, deeply nested nodes) to the `no_std` parser. A malicious ASP could crash or brick a hardware wallet via stack overflow or heap exhaustion.
 - **[HIGH] Sighash flag conformance**: No test asserts that reconstructed virtual transactions produce the correct sighash preimage for the flag (`SIGHASH_DEFAULT` / `SIGHASH_ALL`) the user's signature was generated against. A structurally valid exit transaction with a mismatched sighash commitment is unsignable.
-- **[HIGH] `exit_delta` and `expiry` fields**: Set to 0 in all test trees; no test verifies non-zero values affect ID computation or exit logic.
+- **[MEDIUM] `exit_delta` and `expiry` in consensus engine tests**: These fields are set to 0 in all V-PACK consensus engine test trees (categories 2–7). Non-zero values are exercised only in the Bark dehydration tests (category 9, where `exit_delta = 12` and `expiry = 289,495` come from real `vtxo_0.bin` data), but no test verifies that non-zero values change the VTXO ID or affect the consensus engine's ID computation path.
+- **[MEDIUM] `bark_to_vpack` tree traversal**: The `src/adapters/second_tech.rs::bark_to_vpack` adapter reads all tree nodes in a single linear pass, producing incorrect results for trees deeper than 32 nodes. All category 9 tests use `ark-lib` directly via `vpack_tree_from_arklib` as a workaround. A proper tree traversal (identify the user's leaf, walk root-to-leaf) has not been implemented.
+- **[MEDIUM] BIP-327 MuSig2 key aggregation**: `compute_bark_vtxo_tapscript_root` and the dehydration layer rely on `tree.internal_key` being pre-populated (currently sourced from `ark-lib`). The library's `bip327_keyagg_xonly` in `taproot.rs` has not been verified against `ark-lib`'s `musig::combine_keys` output.
+- **[MEDIUM] HWW streaming verification logic**: `VpackExitWaterfall::next_hop()` is implemented and tested for correct byte counts and amounts, but the on-device verifier that consumes each hop (verifies the Schnorr signature, confirms the output key, and chains to the next hop's input) has not been written or tested.
 - **Liquid/Elements asset types**: `asset_id` is always `None` in all test vectors.
 - **`Full` sibling variant**: All sibling nodes in tests use `SiblingNode::Compact`; the `SiblingNode::Full(TxOut)` variant is not tested.
 - **Maximum depth/arity limits**: `MAX_TREE_DEPTH` (32) and `MAX_TREE_ARITY` (16) are referenced in headers but no test pushes these boundaries.
-- **Error paths for malformed binary input**: No test feeds truncated, oversized, or garbage bytes to the parser.
+- **Error paths for malformed binary input**: No test feeds truncated, oversized, or garbage bytes to the V-PACK parser.
 - **Checksum validation**: The `checksum` field is always 0 in test headers; no test verifies CRC32 rejection.
+- **vtxo_73.bin partial waterfall / server-assisted exit**: 314-hop chains exceed the 75-hop HWW limit and return `ExceedsHWWCapacity`. No "partial waterfall" or server-assisted exit path exists for deep OOR chains.
