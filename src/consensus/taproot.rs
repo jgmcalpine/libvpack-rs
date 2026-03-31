@@ -154,6 +154,147 @@ pub fn compute_taproot_tweak(internal_key: [u8; 32], merkle_root: [u8; 32]) -> O
     Some(result)
 }
 
+// -----------------------------------------------------------------------------
+// BIP-327 MuSig2 Key Aggregation
+// -----------------------------------------------------------------------------
+
+/// BIP-327 key aggregation: computes the x-only aggregate public key from a set
+/// of 33-byte compressed secp256k1 public keys.
+///
+/// Follows BIP-327: sorts keys by x-only form, computes the "KeyAgg list" hash,
+/// applies per-key coefficients (second-unique-key gets coefficient 1), and sums
+/// the weighted points. Returns the 32-byte x-only coordinate of the aggregate.
+///
+/// Returns `None` if any key is malformed, a coefficient is out-of-range, or the
+/// aggregate is the point at infinity.
+#[cfg(feature = "bitcoin")]
+pub fn bip327_keyagg_xonly(compressed_keys: &[[u8; 33]]) -> Option<[u8; 32]> {
+    use bitcoin::secp256k1::{PublicKey, Scalar, Secp256k1};
+
+    if compressed_keys.is_empty() {
+        return None;
+    }
+
+    let secp = Secp256k1::verification_only();
+
+    let mut xonly_sorted: Vec<[u8; 32]> = compressed_keys
+        .iter()
+        .map(|k| {
+            let mut x = [0u8; 32];
+            x.copy_from_slice(&k[1..33]);
+            x
+        })
+        .collect();
+    xonly_sorted.sort();
+    xonly_sorted.dedup();
+
+    let mut l_input = alloc::vec::Vec::with_capacity(32 * xonly_sorted.len());
+    for x in &xonly_sorted {
+        l_input.extend_from_slice(x);
+    }
+    let l = tagged_hash(b"KeyAgg list", &l_input);
+
+    let second_unique = xonly_sorted
+        .iter()
+        .skip(1)
+        .find(|x| x != &&xonly_sorted[0])
+        .copied();
+
+    let mut aggregate_opt: Option<PublicKey> = None;
+
+    for x in &xonly_sorted {
+        let mut compressed = [0u8; 33];
+        compressed[0] = 0x02;
+        compressed[1..].copy_from_slice(x);
+        let point = PublicKey::from_slice(&compressed).ok()?;
+
+        let weighted = if Some(*x) == second_unique {
+            point
+        } else {
+            let mut coeff_input = [0u8; 64];
+            coeff_input[..32].copy_from_slice(&l);
+            coeff_input[32..].copy_from_slice(x);
+            let hash = tagged_hash(b"KeyAgg coefficient", &coeff_input);
+            let scalar = Scalar::from_be_bytes(hash).ok()?;
+            point.mul_tweak(&secp, &scalar).ok()?
+        };
+
+        aggregate_opt = Some(match aggregate_opt {
+            None => weighted,
+            Some(acc) => acc.combine(&weighted).ok()?,
+        });
+    }
+
+    let agg = aggregate_opt?;
+    let mut result = [0u8; 32];
+    result.copy_from_slice(&agg.serialize()[1..33]);
+    Some(result)
+}
+
+#[cfg(all(feature = "schnorr-verify", not(feature = "bitcoin")))]
+pub fn bip327_keyagg_xonly(compressed_keys: &[[u8; 33]]) -> Option<[u8; 32]> {
+    use k256::elliptic_curve::ff::PrimeField;
+    use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
+    use k256::{AffinePoint, EncodedPoint, ProjectivePoint, Scalar};
+
+    if compressed_keys.is_empty() {
+        return None;
+    }
+
+    let mut xonly_sorted: Vec<[u8; 32]> = compressed_keys
+        .iter()
+        .map(|k| {
+            let mut x = [0u8; 32];
+            x.copy_from_slice(&k[1..33]);
+            x
+        })
+        .collect();
+    xonly_sorted.sort();
+    xonly_sorted.dedup();
+
+    let mut l_input = alloc::vec::Vec::with_capacity(32 * xonly_sorted.len());
+    for x in &xonly_sorted {
+        l_input.extend_from_slice(x);
+    }
+    let l = tagged_hash(b"KeyAgg list", &l_input);
+
+    let second_unique = xonly_sorted
+        .iter()
+        .skip(1)
+        .find(|x| x != &&xonly_sorted[0])
+        .copied();
+
+    let mut aggregate = ProjectivePoint::IDENTITY;
+
+    for x in &xonly_sorted {
+        let mut compressed = [0u8; 33];
+        compressed[0] = 0x02;
+        compressed[1..].copy_from_slice(x);
+        let encoded = EncodedPoint::from_bytes(&compressed).ok()?;
+        let point = Option::<AffinePoint>::from(AffinePoint::from_encoded_point(&encoded))?;
+        let point = ProjectivePoint::from(point);
+
+        let coeff = if Some(*x) == second_unique {
+            Scalar::ONE
+        } else {
+            let mut coeff_input = [0u8; 64];
+            coeff_input[..32].copy_from_slice(&l);
+            coeff_input[32..].copy_from_slice(x);
+            let hash = tagged_hash(b"KeyAgg coefficient", &coeff_input);
+            Scalar::from_repr_vartime(hash.into())?
+        };
+
+        aggregate += point * coeff;
+    }
+
+    let aff = aggregate.to_affine();
+    let encoded = aff.to_encoded_point(false);
+    let x_bytes = encoded.x()?;
+    let mut result = [0u8; 32];
+    result.copy_from_slice(x_bytes.as_ref());
+    Some(result)
+}
+
 /// BIP-341 tweaked output key: x-only coordinate and the parity bit for the taproot control block.
 ///
 /// Implemented with **rust-secp256k1** via the `bitcoin` crate (no k256).

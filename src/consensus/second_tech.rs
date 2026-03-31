@@ -360,6 +360,7 @@ use crate::consensus::taproot::{compute_balanced_merkle_root, tap_leaf_hash};
 // Bark Taproot Script Opcodes
 const OP_CHECKSIG: u8 = 0xac;
 const OP_CLTV: u8 = 0xb1;
+const OP_CSV: u8 = 0xb2;
 const OP_DROP: u8 = 0x75;
 const OP_PUSH32: u8 = 0x20;
 const OP_HASH160: u8 = 0xa9;
@@ -525,6 +526,104 @@ pub fn compile_bark_unlock_script(hash160: &[u8; 20], musig_key: &[u8; 32]) -> V
     script.extend_from_slice(musig_key);
     script.push(OP_CHECKSIG);
     script
+}
+
+/// Encodes a positive `u32` as a Bitcoin script push element.
+///
+/// Matches `bitcoin::Script::builder().push_int(value)`:
+/// - `0` → `OP_0` (`0x00`)
+/// - `1..=16` → `OP_1..OP_16` (`0x51..0x60`) — the Bitcoin "small number" opcodes
+/// - `>16` → `OP_PUSHBYTES_N` + CScriptNum little-endian bytes (with sign-extension if needed)
+fn encode_script_push_int(value: u32) -> Vec<u8> {
+    match value {
+        0 => vec![0x00],
+        1..=16 => vec![0x50 + value as u8],
+        _ => {
+            let mut bytes: Vec<u8> = Vec::with_capacity(5);
+            let mut v = value;
+            while v > 0 {
+                bytes.push((v & 0xff) as u8);
+                v >>= 8;
+            }
+            if bytes.last().copied().unwrap_or(0) & 0x80 != 0 {
+                bytes.push(0x00);
+            }
+            let mut result = Vec::with_capacity(1 + bytes.len());
+            result.push(bytes.len() as u8);
+            result.extend_from_slice(&bytes);
+            result
+        }
+    }
+}
+
+/// Compiles the Bark **delayed-sign** tapscript for a `PubkeyVtxoPolicy` VTXO leaf.
+///
+/// Template: `<csv_val> OP_CSV OP_DROP <user_xonly_32B> OP_CHECKSIG`
+///
+/// This exactly reproduces `ark::scripts::delayed_sign(exit_delta, user_xonly)`.
+pub fn compile_bark_delayed_sign_script(exit_delta: u16, user_xonly: &[u8; 32]) -> Vec<u8> {
+    let push_bytes = encode_script_push_int(exit_delta as u32);
+    let mut script = Vec::with_capacity(push_bytes.len() + 35);
+    script.extend_from_slice(&push_bytes);
+    script.push(OP_CSV);
+    script.push(OP_DROP);
+    script.push(OP_PUSH32);
+    script.extend_from_slice(user_xonly);
+    script.push(OP_CHECKSIG);
+    script
+}
+
+/// Computes the BIP-341 Taproot Merkle root for a Bark `PubkeyVtxoPolicy` VTXO.
+///
+/// A Pubkey-policy VTXO has exactly **one** tapscript leaf:
+/// `<exit_delta> OP_CSV OP_DROP <user_xonly> OP_CHECKSIG`
+///
+/// With a single leaf, `merkle_root = TapLeafHash(exit_script)` (no TapBranch needed).
+///
+/// # Prerequisites
+/// - `tree.leaf.script_pubkey` must be a 33-byte compressed user pubkey; bytes `[1..33]` are
+///   taken as the x-only key.
+/// - `tree.leaf.exit_delta` provides the CSV block count.
+///
+/// Returns `Err(InvalidBarkScript)` if `tree.leaf.script_pubkey.len() < 33`.
+pub fn compute_bark_vtxo_tapscript_root(tree: &VPackTree) -> Result<[u8; 32], VPackError> {
+    if tree.leaf.script_pubkey.len() < 33 {
+        return Err(VPackError::InvalidBarkScript);
+    }
+    let mut user_xonly = [0u8; 32];
+    user_xonly.copy_from_slice(&tree.leaf.script_pubkey[1..33]);
+    let exit_script = compile_bark_delayed_sign_script(tree.leaf.exit_delta, &user_xonly);
+    Ok(tap_leaf_hash(&exit_script))
+}
+
+/// Computes the Taproot Merkle root from raw parts (expiry script + sibling list).
+///
+/// Used by the adapter to compute the P2TR leaf output script without a fully-built `VPackTree`.
+/// Returns `None` if `asp_expiry_script` is empty or unparseable.
+pub fn compute_bark_merkle_root_from_parts(
+    asp_expiry_script: &[u8],
+    leaf_siblings: &[crate::payload::tree::SiblingNode],
+) -> Option<[u8; 32]> {
+    if asp_expiry_script.is_empty() {
+        return None;
+    }
+
+    let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
+
+    let (cltv_value, server_key) = parse_bark_expiry_script(asp_expiry_script).ok()?;
+    let expiry_script = compile_bark_expiry_script(cltv_value, &server_key);
+    leaf_hashes.push(tap_leaf_hash(&expiry_script));
+
+    for sibling in leaf_siblings {
+        if let crate::payload::tree::SiblingNode::Compact { script, .. } = sibling {
+            if let Ok((hash160, musig_key)) = parse_bark_unlock_script(script) {
+                let unlock = compile_bark_unlock_script(&hash160, &musig_key);
+                leaf_hashes.push(tap_leaf_hash(&unlock));
+            }
+        }
+    }
+
+    compute_balanced_merkle_root(&leaf_hashes)
 }
 
 /// Computes the Taproot Merkle root for a Bark VTXO from its `VPackTree`.
