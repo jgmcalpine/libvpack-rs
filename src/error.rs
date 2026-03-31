@@ -138,6 +138,15 @@ pub enum VPackError {
     /// leaf** (`1` = first [`GenesisItem`](crate::payload::tree::GenesisItem) after the leaf,
     /// i.e. index `0` in `tree.path`).
     TreeIncomplete { depth: u16, field: &'static str },
+
+    /// The dehydration compact buffer cannot hold the waterfall (tree depth exceeds capacity).
+    DehydrationBufferFull,
+
+    /// A hop entry in the compact waterfall buffer is truncated or malformed.
+    InsufficientHopData,
+
+    /// The VTXO exit chain exceeds the 75-hop HWW on-device limit.
+    ExceedsHWWCapacity,
 }
 
 // Manual implementation of Display for no_std environments.
@@ -299,6 +308,18 @@ impl core::fmt::Display for VPackError {
                     )
                 }
             }
+            Self::DehydrationBufferFull => write!(
+                f,
+                "Dehydration buffer full: tree depth exceeds WATERFALL_BUF_CAPACITY"
+            ),
+            Self::InsufficientHopData => write!(
+                f,
+                "Insufficient hop data: waterfall buffer entry is truncated or malformed"
+            ),
+            Self::ExceedsHWWCapacity => write!(
+                f,
+                "Exceeds HWW capacity: VTXO exit chain has more than 75 hops"
+            ),
         }
     }
 }
