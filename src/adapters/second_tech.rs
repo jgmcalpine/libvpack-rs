@@ -6,6 +6,7 @@
 //! items) + policy + point(36B). Each genesis item is a `GenesisTransition` (tag + variant data)
 //! followed by `nb_outputs`(u8), `output_idx`(u8), `other_outputs`(TxOut[]), `fee_amount`(u64).
 
+use crate::consensus::second_tech::compile_bark_expiry_script;
 use crate::types::{decode_outpoint, OutPoint};
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
@@ -224,6 +225,75 @@ fn parse_policy(data: &[u8]) -> Result<(Vec<u8>, usize), VPackError> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Leaf crypto helpers (feature-gated)
+// ---------------------------------------------------------------------------
+
+/// BIP-327 MuSig2 key aggregate for the leaf VTXO keypath: MuSig2(server_pk, user_pk).
+/// Returns the x-only aggregate, or `[0u8; 32]` if the feature is disabled or keys are invalid.
+fn compute_leaf_internal_key(server_pubkey: &[u8], user_pubkey: &[u8]) -> [u8; 32] {
+    if server_pubkey.len() != 33 || user_pubkey.len() != 33 {
+        return [0u8; 32];
+    }
+
+    #[cfg(feature = "schnorr-verify")]
+    {
+        let mut s = [0u8; 33];
+        let mut u = [0u8; 33];
+        s.copy_from_slice(server_pubkey);
+        u.copy_from_slice(user_pubkey);
+        crate::consensus::taproot::bip327_keyagg_xonly(&[s, u]).unwrap_or([0u8; 32])
+    }
+
+    #[cfg(not(feature = "schnorr-verify"))]
+    {
+        let _ = (server_pubkey, user_pubkey);
+        [0u8; 32]
+    }
+}
+
+/// Build the Bark unlock-clause sibling (for the leaf tapscript tree):
+/// `OP_HASH160 OP_PUSH20 <hash160(user_pk)> OP_EQUALVERIFY OP_PUSH32 <internal_key> OP_CHECKSIG`
+///
+/// Returns `None` if `user_pubkey` is empty or `internal_key` is all-zero (not computed).
+fn compute_unlock_sibling(user_pubkey: &[u8], internal_key: &[u8; 32]) -> Option<SiblingNode> {
+    if user_pubkey.len() != 33 || *internal_key == [0u8; 32] {
+        return None;
+    }
+
+    let hash160 = compute_hash160(user_pubkey)?;
+    let unlock_script =
+        crate::consensus::second_tech::compile_bark_unlock_script(&hash160, internal_key);
+
+    Some(SiblingNode::Compact {
+        hash: [0u8; 32],
+        value: 0,
+        script: unlock_script,
+    })
+}
+
+/// HASH160 = RIPEMD160(SHA256(data)).
+/// Gated on `bitcoin` (secp256k1) or `wasm` (bitcoin_hashes) features.
+fn compute_hash160(data: &[u8]) -> Option<[u8; 20]> {
+    #[cfg(feature = "bitcoin")]
+    {
+        use bitcoin::hashes::{hash160, Hash};
+        let h = hash160::Hash::hash(data);
+        Some(h.to_byte_array())
+    }
+    #[cfg(all(not(feature = "bitcoin"), feature = "wasm"))]
+    {
+        use bitcoin_hashes::{hash160, Hash};
+        let h = hash160::Hash::hash(data);
+        Some(h.to_byte_array())
+    }
+    #[cfg(not(any(feature = "bitcoin", feature = "wasm")))]
+    {
+        let _ = data;
+        None
+    }
+}
+
 /// Deserializes bark (Second Tech) raw ProtocolEncoding bytes into V-PACK standard grammar.
 pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPackTree, VPackError> {
     let mut rest = raw_bytes;
@@ -335,13 +405,30 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         return Err(VPackError::TrailingData(rest.len()));
     }
 
-    // Build the leaf output scriptPubkey.
-    // For Pubkey policy, the VTXO output is a P2TR with:
-    //   internal_key = MuSig2(user_pubkey, server_pubkey)
-    //   script_tree = exit_clause(user_pubkey, exit_delta)
-    // We can't compute MuSig2 in no_std, so we store the server_pubkey as
-    // script_pubkey for now. The test-level crypto audit uses ark-lib for
-    // full verification.
+    // Compute the ASP expiry script: <expiry_height> OP_CLTV OP_DROP <server_key_xonly> OP_CHECKSIG.
+    // This is deterministic from header fields and required for Taproot merkle root computation.
+    let mut server_xonly = [0u8; 32];
+    server_xonly.copy_from_slice(&server_pubkey[1..33]);
+    let asp_expiry_script_computed = compile_bark_expiry_script(expiry_height, &server_xonly);
+
+    // Compute BIP-327 MuSig2 key aggregate for the leaf VTXO's internal Taproot key.
+    // The leaf keypath is MuSig2(server_pubkey, user_pubkey). Requires schnorr-verify feature.
+    let internal_key = compute_leaf_internal_key(&server_pubkey, &user_pubkey);
+
+    // If the internal_key is known, also compute the leaf unlock clause sibling.
+    // Template: OP_HASH160 OP_PUSH20 <hash160(user_pk)> OP_EQUALVERIFY OP_PUSH32 <internal_key> OP_CHECKSIG
+    let unlock_sibling_opt = compute_unlock_sibling(&user_pubkey, &internal_key);
+
+    let mut leaf_siblings: Vec<SiblingNode> = Vec::new();
+    if let Some(unlock_sibling) = unlock_sibling_opt {
+        leaf_siblings.push(unlock_sibling);
+    }
+    leaf_siblings.push(fee_anchor_sibling.clone());
+
+    // NOTE: leaf.script_pubkey retains the 33-byte compressed user pubkey (not a P2TR script).
+    // The existing consensus engine's signature check in compute_vtxo_id extracts x-only via [1..33].
+    // The Taproot output key Q is computed on-demand in VpackSovereigntyEnvelope using internal_key
+    // and the merkle root, keeping the two concerns separate.
     let leaf = VtxoLeaf {
         amount,
         vout: point.vout,
@@ -355,8 +442,6 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         },
     };
 
-    let leaf_siblings = Vec::from([fee_anchor_sibling]);
-
     Ok(VPackTree {
         leaf,
         leaf_siblings,
@@ -364,7 +449,7 @@ pub fn bark_to_vpack(raw_bytes: &[u8], fee_anchor_script: &[u8]) -> Result<VPack
         anchor: anchor_point,
         asset_id: None,
         fee_anchor_script: fee_anchor_script_vec,
-        internal_key: [0u8; 32],
-        asp_expiry_script: alloc::vec![],
+        internal_key,
+        asp_expiry_script: asp_expiry_script_computed,
     })
 }

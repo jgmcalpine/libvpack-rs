@@ -11,7 +11,10 @@ pub mod adapters;
 pub mod compact_size;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod consensus;
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
+pub mod dehydration;
 pub mod error;
+pub use error::VPackError;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub mod export;
 pub mod header;
@@ -45,13 +48,15 @@ pub use consensus::taproot;
 pub use consensus::verify_path_exclusivity;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use consensus::{
-    compute_ark_labs_merkle_root, compute_bark_merkle_root, validate_exit_ready_completeness,
-    validate_timelocks, validate_tree_completeness, vtxo_id_mismatch_diagnostic_bytes,
-    vtxo_id_mismatch_diagnostic_vout, ArkLabsV3, ConsensusEngine, SecondTechV3, VerificationOutput,
-    VtxoId,
+    compute_ark_labs_merkle_root, compute_bark_merkle_root, compute_bark_vtxo_tapscript_root,
+    validate_exit_ready_completeness, validate_timelocks, validate_tree_completeness,
+    vtxo_id_mismatch_diagnostic_bytes, vtxo_id_mismatch_diagnostic_vout, ArkLabsV3,
+    ConsensusEngine, SecondTechV3, VerificationOutput, VtxoId,
 };
 #[cfg(feature = "bitcoin")]
 pub use consensus::{reconstruct_control_block, verify_control_block};
+#[cfg(any(feature = "bitcoin", feature = "wasm"))]
+pub use dehydration::{bark_dehydrate, HopData, VpackExitWaterfall, VpackSovereigntyEnvelope};
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 pub use export::{
     create_vpack_ark_labs, create_vpack_from_tree, create_vpack_second_tech, ArkLabsIngredients,
@@ -64,7 +69,6 @@ pub use payload::tree::VPackTree;
 pub use state::{VpackImplementation, VpackIngredients, VpackState};
 
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
-use crate::error::VPackError;
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
 use crate::header::{Header, HEADER_SIZE};
 #[cfg(any(feature = "bitcoin", feature = "wasm"))]
