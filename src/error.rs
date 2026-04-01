@@ -145,7 +145,7 @@ pub enum VPackError {
     /// A hop entry in the compact waterfall buffer is truncated or malformed.
     InsufficientHopData,
 
-    /// The VTXO exit chain exceeds the 75-hop HWW on-device limit.
+    /// The VTXO exit chain exceeds the 100-hop HWW on-device limit.
     ExceedsHWWCapacity,
 }
 
@@ -318,7 +318,7 @@ impl core::fmt::Display for VPackError {
             ),
             Self::ExceedsHWWCapacity => write!(
                 f,
-                "Exceeds HWW capacity: VTXO exit chain has more than 75 hops"
+                "Exceeds HWW capacity: VTXO exit chain has more than 100 hops"
             ),
         }
     }

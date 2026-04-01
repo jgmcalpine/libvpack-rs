@@ -10,7 +10,7 @@
 //! ## Wire format (variable-length per hop)
 //! ```text
 //! anchor:    [u8; 36]   — 32-byte txid (LE) + 4-byte vout (LE)
-//! hop_count: u8         — number of hops (≤ MAX_HWW_HOPS = 75)
+//! hop_count: u8         — number of hops (≤ MAX_HWW_HOPS = 100)
 //! hops:      N × variable_hop
 //!
 //! variable_hop:
@@ -21,24 +21,25 @@
 //! ```
 //!
 //! ## Memory budget
-//! - `MAX_HWW_HOPS = 75` hops (enforced — chains longer than this exceed HWW RAM).
+//! - `MAX_HWW_HOPS = 100` hops (enforced — chains longer than this exceed HWW RAM).
 //! - Max per-hop wire size: 105 bytes (has_amount=1: 1+64+8+32).
 //! - Compressed per-hop size: 97 bytes (has_amount=0: 1+64+32).
 //! - Anchor header: 37 bytes.
-//! - Worst case (all amounts different): 37 + 75 × 105 = **8,912 bytes** — fits in `WATERFALL_BUF_CAPACITY`.
-//! - Typical OOR (constant amount): 37 + 105 + 74 × 97 = **7,320 bytes**.
+//! - Worst case (all amounts different): 37 + 100 × 105 = **10,537 bytes**.
+//! - Typical OOR (constant amount): 37 + 105 + 99 × 97 = **9,745 bytes**.
+//! - Safety margin: `WATERFALL_BUF_CAPACITY = 12,288` bytes (12 KB).
 
 use crate::error::VPackError;
 use crate::payload::tree::VPackTree;
 use crate::types::hashes::Hash;
 
-/// Maximum bytes in the compact hop buffer (8 KB).
-pub const WATERFALL_BUF_CAPACITY: usize = 8_192;
+/// Maximum bytes in the compact hop buffer (12 KB).
+pub const WATERFALL_BUF_CAPACITY: usize = 12_288;
 
 /// Maximum number of hops supported on a Hardware Wallet.
 ///
 /// Chains longer than this return [`VPackError::ExceedsHWWCapacity`] at build time.
-pub const MAX_HWW_HOPS: usize = 75;
+pub const MAX_HWW_HOPS: usize = 100;
 
 /// Per-hop in-memory record (`Copy`, 105 bytes in memory).
 ///

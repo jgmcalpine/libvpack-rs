@@ -6,7 +6,7 @@
 //! Success criteria (from spec):
 //! | Metric                | `VpackSovereigntyEnvelope` | `VpackExitWaterfall`  |
 //! |:---                   |:---                        |:---                   |
-//! | Storage Size          | < 500 bytes                | < 8,000 bytes         |
+//! | Storage Size          | < 500 bytes                | < 12,288 bytes        |
 //! | RAM (streaming)       | < 1 KB                     | < 1 KB per hop        |
 
 use std::path::PathBuf;
@@ -218,6 +218,7 @@ fn test_exclusivity_math() {
     use ark::encode::ProtocolEncoding;
     use ark::vtxo::Vtxo;
     use ark::VtxoPolicy;
+    use bitcoin::hashes::Hash as _;
     use vpack::taproot::compute_taproot_tweak;
 
     let path = vtxo_path(0);
@@ -399,13 +400,13 @@ fn test_dust_removal() {
 /// | Structure                    | Budget      |
 /// |:---                          |:---         |
 /// | `VpackSovereigntyEnvelope`   | ≤ 500 B     |
-/// | `VpackExitWaterfall`         | ≤ 8,000 B   |
+/// | `VpackExitWaterfall`         | ≤ 12,288 B  |
 /// | `HopData` in-memory          | ≤ 1,024 B   |
 /// | Max wire bytes per hop       | 105 B       |
-/// | Max on-device chain length   | 75 hops     |
+/// | Max on-device chain length   | 100 hops    |
 ///
 /// Uses vtxo_0.bin (67 hops) for the waterfall budget check and vtxo_73.bin for the
-/// envelope budget check. vtxo_73.bin chains are longer than 75 hops and are expected to
+/// envelope budget check. vtxo_73.bin chains are longer than 100 hops and are expected to
 /// return `ExceedsHWWCapacity` when building the waterfall — this is the enforced HWW limit.
 #[test]
 fn test_size_targets() {
@@ -428,7 +429,7 @@ fn test_size_targets() {
         105,
         "HopData max wire size must be 105 bytes (flags1 + sig64 + amount8 + xonly32)"
     );
-    assert_eq!(MAX_HWW_HOPS, 75, "MAX_HWW_HOPS must be 75");
+    assert_eq!(MAX_HWW_HOPS, 100, "MAX_HWW_HOPS must be 100");
 
     // ── Waterfall budget: vtxo_0.bin (67 hops, within HWW limit) ─────────────
     let path0 = vtxo_path(0);
@@ -445,8 +446,8 @@ fn test_size_targets() {
     let waterfall_bytes = waterfall0.serialized_size();
 
     assert!(
-        waterfall_bytes <= 8_000,
-        "VpackExitWaterfall (vtxo_0, {} hops) = {waterfall_bytes} bytes — exceeds 8,000 B budget",
+        waterfall_bytes <= 12_288,
+        "VpackExitWaterfall (vtxo_0, {} hops) = {waterfall_bytes} bytes — exceeds 12,288 B budget",
         tree0.path.len(),
     );
     assert!(
@@ -480,7 +481,7 @@ fn test_size_targets() {
         "Size budget (vtxo_0.bin, {} hops):\n\
          - Raw Bark:                      {raw_bark_size_0} bytes\n\
          - VpackSovereigntyEnvelope:      {envelope_bytes} bytes  (≤ 500)\n\
-         - VpackExitWaterfall:            {waterfall_bytes} bytes  (≤ 8,000)\n\
+         - VpackExitWaterfall:            {waterfall_bytes} bytes  (≤ 12,288)\n\
          - HopData in-memory:             {hop_data_in_mem} bytes\n\
          - HopData max wire (SERIALIZED_LEN): {} bytes\n\
          - MAX_HWW_HOPS:                  {MAX_HWW_HOPS}\n\
@@ -490,7 +491,7 @@ fn test_size_targets() {
         (1.0 - waterfall_bytes as f64 / raw_bark_size_0 as f64) * 100.0,
     );
 
-    // ── HWW capacity enforcement: vtxo_73.bin (expected to exceed 75 hops) ───
+    // ── HWW capacity enforcement: vtxo_73.bin (expected to exceed 100 hops) ──
     let path73 = vtxo_path(73);
     if !path73.exists() {
         eprintln!("Skipping vtxo_73.bin HWW-limit check: file not found");
@@ -503,11 +504,11 @@ fn test_size_targets() {
 
     match bark_dehydrate(&tree73, &vtxo_id73) {
         Ok((envelope73, waterfall73)) => {
-            // If it fits (chain ≤ 75 hops), assert budget.
+            // If it fits (chain ≤ 100 hops), assert budget.
             let wf73_bytes = waterfall73.serialized_size();
             assert!(
-                wf73_bytes <= 8_000,
-                "vtxo_73 waterfall = {wf73_bytes} B — exceeds 8,000 B budget"
+                wf73_bytes <= 12_288,
+                "vtxo_73 waterfall = {wf73_bytes} B — exceeds 12,288 B budget"
             );
             envelope73.verify().expect("vtxo_73 envelope.verify()");
             println!(
@@ -516,7 +517,7 @@ fn test_size_targets() {
             );
         }
         Err(vpack::VPackError::ExceedsHWWCapacity) => {
-            // Expected: vtxo_73 chain is longer than 75 hops.
+            // Expected: vtxo_73 chain is longer than 100 hops.
             println!(
                 "vtxo_73.bin ({} hops, {raw_bark_size_73} B raw): exceeds HWW capacity \
                  (> {MAX_HWW_HOPS} hops) — ExceedsHWWCapacity returned as expected",

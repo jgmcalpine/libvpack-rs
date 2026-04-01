@@ -7,7 +7,7 @@
 //!
 //! - **[`VpackSovereigntyEnvelope`]** (~214 bytes): a `Copy`, zero-heap proof for balance
 //!   verification and Taproot path-exclusivity checking on a Hardware Wallet.
-//! - **[`VpackExitWaterfall`]** (≤ 8 KB, ≤ 75 hops): a compact, fixed-buffer streaming iterator for
+//! - **[`VpackExitWaterfall`]** (≤ 12 KB, ≤ 100 hops): a compact, fixed-buffer streaming iterator for
 //!   L1 emergency exit verification, one hop at a time.
 //!
 //! # Entry point

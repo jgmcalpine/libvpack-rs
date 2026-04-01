@@ -37,7 +37,7 @@
 | `tests/vectors/arkd.rs` | Rust constants | Taproot primitive tests (2-leaf, 6-leaf trees) |
 | `tests/vectors/bark.rs` | Rust constants | Taproot primitive tests (cosign, branch sorting) |
 | `tests/vectors/bark_qa/vtxo_0.bin` | Bark binary (11,196 B) | Dehydration fidelity, exclusivity math, size targets (66-hop chain) |
-| `tests/vectors/bark_qa/vtxo_73.bin` | Bark binary (51,455 B) | HWW capacity enforcement (314-hop OOR chain, `ExceedsHWWCapacity`) |
+| `tests/vectors/bark_qa/vtxo_73.bin` | Bark binary (51,455 B) | HWW capacity enforcement (314-hop OOR chain, exceeds the 100-hop Bark limit and returns `ExceedsHWWCapacity`) |
 
 ---
 
@@ -471,7 +471,7 @@
 
 ## 9. Bark VTXO Dehydration & Hardware Wallet Integration
 
-*Bark's native VTXO wire format is 10–51 KB per VTXO — well beyond the RAM available on a Hardware Wallet (HWW). The dehydration layer compresses a Bark VTXO into two fixed-budget structures: a `VpackSovereigntyEnvelope` (214 bytes, `Copy`, zero heap) and a `VpackExitWaterfall` (≤ 8,192 bytes, streaming one hop at a time). Together they preserve every cryptographic property required to prove user sovereignty and execute a unilateral L1 exit without the ASP's cooperation.*
+*Bark's native VTXO wire format is 10–51 KB per VTXO — well beyond the RAM available on a Hardware Wallet (HWW). The dehydration layer compresses a Bark VTXO into two fixed-budget structures: a `VpackSovereigntyEnvelope` (214 bytes, `Copy`, zero heap) and a `VpackExitWaterfall` (≤ 12,288 bytes, streaming one hop at a time). Together they preserve every cryptographic property required to prove user sovereignty and execute a unilateral L1 exit without the ASP's cooperation, while matching Bark's 100-hop OOR cap.*
 
 *All tests in this section use `ark-lib` as the ground-truth decoder via `vpack_tree_from_arklib`, which builds a correctly structured `VPackTree` from the VTXO's exit transaction chain. This bypasses the known `bark_to_vpack` limitation — that adapter reads all tree nodes linearly rather than walking the user-specific root-to-leaf path. The adapter limitation is documented and tracked but does not affect any dehydration test results.*
 
@@ -533,10 +533,10 @@
   - `VpackSovereigntyEnvelope::serialized_size()` ≤ 500 bytes (actual: 214 bytes).
   - `core::mem::size_of::<HopData>()` ≤ 1,024 bytes.
   - `HopData::SERIALIZED_LEN == 105` bytes (worst-case wire: 1 flag + 64 sig + 8 amount + 32 xonly).
-  - `MAX_HWW_HOPS == 75`.
+  - `MAX_HWW_HOPS == 100`.
 
   Live checks against `vtxo_0.bin` (66 hops, 11,196 bytes raw):
-  - `waterfall.serialized_size()` ≤ 8,000 bytes (actual: 6,703 bytes — **40.1% reduction** vs raw Bark binary).
+  - `waterfall.serialized_size()` ≤ 12,288 bytes (actual: 6,703 bytes — **40.1% reduction** vs raw Bark binary).
   - `waterfall.serialized_size()` < raw file size.
   - `envelope.verify()` passes.
   - Waterfall serialization round-trip: `from_bytes(to_bytes())` produces identical `hop_count()` and `serialized_size()`.
@@ -546,7 +546,7 @@
 
 * **Test Location:** [`tests/dehydration_tests.rs::test_size_targets`](tests/dehydration_tests.rs#L411)
 * **Vectors:** `tests/vectors/bark_qa/vtxo_0.bin`, `tests/vectors/bark_qa/vtxo_73.bin`
-* **What this proves:** The dehydration layer satisfies its HWW storage spec against real Bark binaries. A 66-hop chain compresses from 11 KB to 6.7 KB. The library enforces the 75-hop hard cap: deep OOR chains (314 hops) are rejected at build time with `ExceedsHWWCapacity`, preventing stack overflows or heap exhaustion on constrained devices. The waterfall binary format is reversible (round-trip stable).
+* **What this proves:** The dehydration layer satisfies its HWW storage spec against real Bark binaries. A 66-hop chain compresses from 11 KB to 6.7 KB. The library now matches Bark's 100-hop protocol cap, and still rejects deep OOR chains (314 hops) at build time with `ExceedsHWWCapacity`, preventing stack overflows or heap exhaustion on constrained devices. The waterfall binary format is reversible (round-trip stable).
 
 ---
 
@@ -593,4 +593,4 @@ The following protocol features are *not* exercised by the current test suite.
 - **Maximum depth/arity limits**: `MAX_TREE_DEPTH` (32) and `MAX_TREE_ARITY` (16) are referenced in headers but no test pushes these boundaries.
 - **Error paths for malformed binary input**: No test feeds truncated, oversized, or garbage bytes to the V-PACK parser.
 - **Checksum validation**: The `checksum` field is always 0 in test headers; no test verifies CRC32 rejection.
-- **vtxo_73.bin partial waterfall / server-assisted exit**: 314-hop chains exceed the 75-hop HWW limit and return `ExceedsHWWCapacity`. No "partial waterfall" or server-assisted exit path exists for deep OOR chains.
+- **vtxo_73.bin partial waterfall / server-assisted exit**: 314-hop chains exceed the 100-hop HWW limit and return `ExceedsHWWCapacity`. No "partial waterfall" or server-assisted exit path exists for deep OOR chains.
