@@ -57,29 +57,58 @@ impl ConsensusEngine for ArkLabsV3 {
         let mut input_amount: Option<u64> = anchor_value;
         let mut signed_txs = Vec::with_capacity(tree.path.len() + 1);
 
-        // Iterate through path (top-down from root to leaf). Outputs = child (if present) + siblings only.
+        // Iterate through path (top-down from root to leaf).
+        //
+        // When `child_script_pubkey` is non-empty, the Arkade / Bitcoin wire order may place the
+        // child at a non-zero `vout` (see `parent_index` of the **next** path step, or `leaf.vout`
+        // for the final hop). Outputs are built in consensus order: siblings before the child
+        // slot, then the child, then siblings after — matching multi-party round templates.
         for (i, genesis_item) in tree.path.iter().enumerate() {
             let mut outputs = Vec::new();
 
-            // Add child output only if present (represents the next level down)
-            if !genesis_item.child_script_pubkey.is_empty() {
-                outputs.push(TxOutPreimage {
-                    value: genesis_item.child_amount,
-                    script_pubkey: genesis_item.child_script_pubkey.as_slice(),
-                });
-            }
-
-            // Add sibling outputs (fee anchor must be in siblings when required; adapter provides it).
-            // Only script and value are used; sibling hash is not cross-verified (chain-of-spends).
-            for sibling in &genesis_item.siblings {
-                match sibling {
-                    SiblingNode::Compact { value, script, .. } => {
-                        outputs.push(TxOutPreimage {
-                            value: *value,
-                            script_pubkey: script.as_slice(),
-                        });
+            if genesis_item.child_script_pubkey.is_empty() {
+                // Branch / internal template: only explicit sibling outputs (e.g. round root tx).
+                for sibling in &genesis_item.siblings {
+                    match sibling {
+                        SiblingNode::Compact { value, script, .. } => {
+                            outputs.push(TxOutPreimage {
+                                value: *value,
+                                script_pubkey: script.as_slice(),
+                            });
+                        }
+                        SiblingNode::Full(_) => return Err(VPackError::EncodingError),
                     }
-                    SiblingNode::Full(_) => return Err(VPackError::EncodingError),
+                }
+            } else {
+                let insert_idx = if i + 1 < tree.path.len() {
+                    tree.path[i + 1].parent_index as usize
+                } else {
+                    tree.leaf.vout as usize
+                };
+                let num_out = 1 + genesis_item.siblings.len();
+                if insert_idx >= num_out {
+                    return Err(VPackError::InvalidVout(insert_idx as u32));
+                }
+                outputs.reserve(num_out);
+                let mut sib_iter = genesis_item.siblings.iter();
+                for j in 0..num_out {
+                    if j == insert_idx {
+                        outputs.push(TxOutPreimage {
+                            value: genesis_item.child_amount,
+                            script_pubkey: genesis_item.child_script_pubkey.as_slice(),
+                        });
+                    } else {
+                        let sibling = sib_iter.next().ok_or(VPackError::EncodingError)?;
+                        match sibling {
+                            SiblingNode::Compact { value, script, .. } => {
+                                outputs.push(TxOutPreimage {
+                                    value: *value,
+                                    script_pubkey: script.as_slice(),
+                                });
+                            }
+                            SiblingNode::Full(_) => return Err(VPackError::EncodingError),
+                        }
+                    }
                 }
             }
 
@@ -101,7 +130,16 @@ impl ConsensusEngine for ArkLabsV3 {
                     }
                     Some(_) => {}
                 }
-                input_amount = outputs.first().map(|o| o.value);
+                input_amount = if genesis_item.child_script_pubkey.is_empty() {
+                    outputs.first().map(|o| o.value)
+                } else {
+                    let insert_idx = if i + 1 < tree.path.len() {
+                        tree.path[i + 1].parent_index as usize
+                    } else {
+                        tree.leaf.vout as usize
+                    };
+                    outputs.get(insert_idx).map(|o| o.value)
+                };
             }
 
             // Build input spending current_prevout
@@ -157,23 +195,60 @@ impl ConsensusEngine for ArkLabsV3 {
                     .collect(),
             );
 
-            // Hand-off: Convert to OutPoint for next step (always vout 0 for Ark Labs)
-            current_prevout = OutPoint { txid, vout: 0 };
+            // Hand-off: spend the child output (the continuation output for this branch).
+            current_prevout = if genesis_item.child_script_pubkey.is_empty() {
+                OutPoint { txid, vout: 0 }
+            } else {
+                let child_vout = if i + 1 < tree.path.len() {
+                    tree.path[i + 1].parent_index
+                } else {
+                    tree.leaf.vout
+                };
+                OutPoint {
+                    txid,
+                    vout: child_vout,
+                }
+            };
         }
 
-        // Final step: Build leaf transaction spending current_prevout (if leaf is valid)
-        // If leaf has empty script_pubkey, return the ID from the last path transaction
+        // Final step: Build leaf transaction spending `current_prevout` when the path has not yet
+        // materialized the user's final VTXO output as a separable UTXO.
+        //
+        // Arkade / round templates often encode the last path step's `child` as the final P2TR
+        // VTXO: `lineage.len() == path.len()` and there is no additional spend. In that case the
+        // VTXO ID is the last **path** transaction hash (not a follow-up "leaf" transaction).
         if tree.leaf.script_pubkey.is_empty() {
-            // Return the Raw hash from the last transaction (no leaf tx in signed_txs)
             Ok(VerificationOutput {
                 id: VtxoId::Raw(last_txid_bytes.expect("path should have at least one item")),
                 signed_txs,
             })
         } else {
-            let (id, leaf_signed_hex) =
-                self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)?;
-            signed_txs.push(leaf_signed_hex);
-            Ok(VerificationOutput { id, signed_txs })
+            let idx = current_prevout.vout as usize;
+            let last_step = tree
+                .path
+                .last()
+                .expect("path should have at least one item");
+            // Round leaves: last path tx is `[user vtxo, fee anchor]` only (two outputs). Branch
+            // nodes include additional sibling VTXO outputs — those still use a follow-up leaf spend
+            // in V-PACK (see `round_branch_v3.json`).
+            let last_path_tx_output_count = 1 + last_step.siblings.len();
+            let already_final = prev_outputs
+                .as_ref()
+                .and_then(|prev| prev.get(idx))
+                .is_some_and(|o| {
+                    o.value == tree.leaf.amount && o.script_pubkey == tree.leaf.script_pubkey
+                });
+            if already_final && last_path_tx_output_count == 2 {
+                Ok(VerificationOutput {
+                    id: VtxoId::Raw(last_txid_bytes.expect("path should have at least one item")),
+                    signed_txs,
+                })
+            } else {
+                let (id, leaf_signed_hex) =
+                    self.compute_leaf_vtxo_id_with_prevout(tree, current_prevout, input_amount)?;
+                signed_txs.push(leaf_signed_hex);
+                Ok(VerificationOutput { id, signed_txs })
+            }
         }
     }
 }
@@ -330,23 +405,15 @@ const OP_DROP: u8 = 0x75;
 /// `OP_PUSH32 <asp_pk> OP_CHECKSIGVERIFY OP_PUSH32 <user_pk> OP_CHECKSIG` (66 bytes).
 const PUBKEY_TAIL_LEN: usize = 1 + 32 + 1 + 1 + 32 + 1; // 68
 
-/// Parses an Ark Labs tapscript to extract the ASP x-only pubkey and user x-only pubkey.
-///
-/// Accepts both the **forfeit** template (no CSV prefix, 70 bytes min) and the
-/// **exit/closure** template (with CSV prefix, 76+ bytes).
-///
-/// Returns `(asp_pubkey, user_pubkey)` or `None` if the script doesn't match
-/// a recognised Ark Labs template.
-pub fn parse_ark_labs_pubkeys(script: &[u8]) -> Option<([u8; 32], [u8; 32])> {
-    if script.len() < 4 || script[0] != OP_1 || script[1] != OP_VERIFY {
+/// Byte offset of `OP_PUSH32 <asp_pk> ... OP_CHECKSIG` tail for recognised templates.
+fn ark_labs_pubkey_tail_start(script: &[u8]) -> Option<usize> {
+    if script.len() < 4 {
         return None;
     }
-
-    let tail_start = if script[2] == OP_PUSH32 {
-        // Forfeit template: OP_1 OP_VERIFY OP_PUSH32 <asp> ...
-        2
-    } else {
-        // Exit template: OP_1 OP_VERIFY <push N> <N bytes CSV> OP_CSV OP_DROP OP_PUSH32 <asp> ...
+    if script[0] == OP_1 && script[1] == OP_VERIFY {
+        if script[2] == OP_PUSH32 {
+            return Some(2);
+        }
         let csv_push_len = script[2] as usize;
         let expected_csv_end = 3 + csv_push_len;
         if script.len() <= expected_csv_end + 2 {
@@ -355,8 +422,35 @@ pub fn parse_ark_labs_pubkeys(script: &[u8]) -> Option<([u8; 32], [u8; 32])> {
         if script[expected_csv_end] != OP_CSV || script[expected_csv_end + 1] != OP_DROP {
             return None;
         }
-        expected_csv_end + 2
-    };
+        return Some(expected_csv_end + 2);
+    }
+    // Arkade wire: `<push N> <CSV minimal number> OP_CSV OP_DROP` without leading `OP_1 OP_VERIFY`.
+    let push_len = script[0] as usize;
+    if push_len == 0 || push_len > 75 {
+        return None;
+    }
+    if script.len() < 1 + push_len + 2 {
+        return None;
+    }
+    let csv_end = 1 + push_len;
+    if script[csv_end] != OP_CSV || script[csv_end + 1] != OP_DROP {
+        return None;
+    }
+    Some(csv_end + 2)
+}
+
+/// Parses an Ark Labs tapscript to extract the ASP x-only pubkey and user x-only pubkey.
+///
+/// Accepts both the **forfeit** template (no CSV prefix, 70 bytes min) and the
+/// **exit/closure** template (with CSV prefix, 76+ bytes).
+///
+/// Also accepts **Arkade-style** exit scripts that omit the leading `OP_1 OP_VERIFY` and begin
+/// with a minimal push of the CSV operand (`<push N> … OP_CSV OP_DROP …`).
+///
+/// Returns `(asp_pubkey, user_pubkey)` or `None` if the script doesn't match
+/// a recognised Ark Labs template.
+pub fn parse_ark_labs_pubkeys(script: &[u8]) -> Option<([u8; 32], [u8; 32])> {
+    let tail_start = ark_labs_pubkey_tail_start(script)?;
 
     // Remaining bytes must be: OP_PUSH32 <asp 32> OP_CHECKSIGVERIFY OP_PUSH32 <user 32> OP_CHECKSIG
     if script.len() < tail_start + PUBKEY_TAIL_LEN {
@@ -417,10 +511,84 @@ pub fn compile_exit_script(asp_pk: &[u8; 32], user_pk: &[u8; 32], csv_bytes: &[u
 /// Detects whether `asp_expiry_script` is the forfeit template (returns `true`)
 /// or the exit/CSV template (returns `false`). Returns `None` if unrecognised.
 fn is_forfeit_template(script: &[u8]) -> Option<bool> {
-    if script.len() < 4 || script[0] != OP_1 || script[1] != OP_VERIFY {
+    if script.len() < 4 {
         return None;
     }
-    Some(script[2] == OP_PUSH32)
+    if script[0] == OP_1 && script[1] == OP_VERIFY {
+        return Some(script[2] == OP_PUSH32);
+    }
+    if ark_labs_pubkey_tail_start(script).is_some() {
+        return Some(false);
+    }
+    None
+}
+
+#[inline]
+fn ark_labs_two_key_tail_valid(script: &[u8], tail_start: usize) -> bool {
+    script.len() >= tail_start + PUBKEY_TAIL_LEN
+        && script[tail_start] == OP_PUSH32
+        && script[tail_start + 33] == OP_CHECKSIGVERIFY
+        && script[tail_start + 34] == OP_PUSH32
+        && script[tail_start + 67] == OP_CHECKSIG
+}
+
+/// Byte length of the **first** tapScript closure when `script` begins a valid Arkade wire script.
+///
+/// Supports:
+/// - CSV-prefixed exits (`<push> … OP_CSV OP_DROP` then 1-key or 2-key multisig tail) as used by
+///   `CSVMultisigClosure`.
+/// - Leading `OP_1 OP_VERIFY` forfeit (`compile_forfeit_script` shape).
+/// - Bare 2-key multisig (`MultisigClosure` / Arkade forfeit leaf) when no CSV prefix is present.
+fn arkade_first_closure_len(script: &[u8]) -> Option<usize> {
+    if let Some(ts) = ark_labs_pubkey_tail_start(script) {
+        if script.len() < ts + 34 || script[ts] != OP_PUSH32 {
+            return None;
+        }
+        if script[ts + 33] == OP_CHECKSIG {
+            return Some(ts + 34);
+        }
+        if script[ts + 33] == OP_CHECKSIGVERIFY && ark_labs_two_key_tail_valid(script, ts) {
+            return Some(ts + PUBKEY_TAIL_LEN);
+        }
+        return None;
+    }
+    if script.len() >= 2 + PUBKEY_TAIL_LEN
+        && script[0] == OP_1
+        && script[1] == OP_VERIFY
+        && ark_labs_two_key_tail_valid(script, 2)
+    {
+        return Some(2 + PUBKEY_TAIL_LEN);
+    }
+    if ark_labs_two_key_tail_valid(script, 0) {
+        return Some(PUBKEY_TAIL_LEN);
+    }
+    None
+}
+
+/// When `asp_expiry_script` is a **concatenation** of multiple Arkade tapscripts (same order as
+/// `TapscriptsVtxoScript.Encode`: exit closures first, then forfeit), peel each closure and return
+/// them verbatim. Requires at least **two** segments (otherwise `None` so pubkey compile path runs).
+fn arkade_verbatim_closure_segments(script: &[u8]) -> Option<Vec<Vec<u8>>> {
+    let mut out: Vec<Vec<u8>> = Vec::new();
+    let mut rest = script;
+    while !rest.is_empty() {
+        let n = arkade_first_closure_len(rest)?;
+        if n == 0 || n > rest.len() {
+            return None;
+        }
+        out.push(rest[..n].to_vec());
+        rest = &rest[n..];
+    }
+    if out.len() < 2 {
+        return None;
+    }
+    Some(out)
+}
+
+fn ark_labs_merkle_from_verbatim_segments(tree: &VPackTree) -> Option<[u8; 32]> {
+    let segs = arkade_verbatim_closure_segments(&tree.asp_expiry_script)?;
+    let hashes: Vec<[u8; 32]> = segs.iter().map(|s| tap_leaf_hash(s)).collect();
+    compute_balanced_merkle_root(&hashes)
 }
 
 /// Computes the Taproot Merkle root for an Ark Labs VTXO from its `VPackTree`.
@@ -430,11 +598,19 @@ fn is_forfeit_template(script: &[u8]) -> Option<bool> {
 /// extracts the embedded pubkeys, compiles the companion script, and builds a
 /// balanced Merkle tree from the resulting TapLeaf hashes.
 ///
+/// **Arkade dialect:** if `asp_expiry_script` is a bytecode concatenation of multiple closures
+/// (CSV exit ‖ multisig forfeit, …), TapLeaf hashes are taken from the verbatim scripts — no
+/// canonical `OP_1 OP_VERIFY` re-encoding — matching Go `TapLeaf` commits.
+///
 /// Returns `None` if `asp_expiry_script` is empty or doesn't match a recognised
 /// Ark Labs template.
 pub fn compute_ark_labs_merkle_root(tree: &VPackTree) -> Option<[u8; 32]> {
     if tree.asp_expiry_script.is_empty() {
         return None;
+    }
+
+    if let Some(root) = ark_labs_merkle_from_verbatim_segments(tree) {
+        return Some(root);
     }
 
     let (asp_pk, user_pk) = parse_ark_labs_pubkeys(&tree.asp_expiry_script)?;
@@ -455,11 +631,19 @@ pub fn compute_ark_labs_merkle_root(tree: &VPackTree) -> Option<[u8; 32]> {
 
 /// Tap leaf hashes in the same order as [`compute_ark_labs_merkle_root`], and the index of the
 /// spend corresponding to `tree.asp_expiry_script` (`0` = forfeit arm, `1` = exit arm).
+///
+/// For **verbatim multi-closure** `asp_expiry_script`, hashes follow Arkade encode order and the
+/// spend index is **`0`** (first closure — the CSV / exit path).
 pub fn ark_labs_tap_leaf_hashes_for_merkle_path(
     tree: &VPackTree,
 ) -> Option<(Vec<[u8; 32]>, usize)> {
     if tree.asp_expiry_script.is_empty() {
         return None;
+    }
+
+    if let Some(segs) = arkade_verbatim_closure_segments(&tree.asp_expiry_script) {
+        let hashes: Vec<[u8; 32]> = segs.iter().map(|s| tap_leaf_hash(s)).collect();
+        return Some((hashes, 0));
     }
 
     let (asp_pk, user_pk) = parse_ark_labs_pubkeys(&tree.asp_expiry_script)?;
@@ -504,11 +688,53 @@ mod tests {
     use super::*;
     use crate::consensus::hash_sibling_birth_tx;
     use crate::payload::tree::{GenesisItem, SiblingNode, VPackTree, VtxoLeaf};
+    use crate::types::{OutPoint, Txid};
     use alloc::format;
     use alloc::vec;
     use core::str::FromStr;
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn arkade_verbatim_two_closure_merkle_matches_fire_escape_audit() {
+        let mut asp = hex::decode(
+            "029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac",
+        )
+        .expect("exit hex");
+        asp.extend_from_slice(
+            &hex::decode(
+                "2042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ad20161c98b390c66973b5a01abbd0ad5f312f85e44b8e30a2d1e22351639e029a1cac",
+            )
+            .expect("forfeit hex"),
+        );
+        let tree = VPackTree {
+            leaf: VtxoLeaf {
+                amount: 0,
+                vout: 0,
+                sequence: 0,
+                expiry: 0,
+                exit_delta: 0,
+                script_pubkey: Vec::new(),
+            },
+            leaf_siblings: Vec::new(),
+            path: Vec::new(),
+            anchor: OutPoint {
+                txid: Txid::from_byte_array([0u8; 32]),
+                vout: 0,
+            },
+            asset_id: None,
+            fee_anchor_script: Vec::new(),
+            internal_key: [0u8; 32],
+            asp_expiry_script: asp,
+        };
+        let got = compute_ark_labs_merkle_root(&tree).expect("merkle from verbatim concat");
+        let want: [u8; 32] =
+            hex::decode("2765bde6e989487fe5125ee89b2ba2c21b4117c7102d93da94873cebd63d4f0b")
+                .expect("want merkle hex")
+                .try_into()
+                .expect("32 bytes");
+        assert_eq!(got, want);
+    }
 
     #[test]
     fn test_ark_labs_v3_leaf_verification() {

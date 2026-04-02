@@ -1,0 +1,1721 @@
+{
+  "schema": "arkade_v3_anchored_audit_v1",
+  "dialect": "arkade_v3_anchored",
+  "txid_encoding": "bitcoin_wire_hash256_le_bytes_hex",
+  "vectors": [
+    {
+      "vector_id": "balanced_binary_01_leaf_0",
+      "category": "round_leaf",
+      "scenario": "balanced_binary_01",
+      "participant_count": 1,
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 1000,
+        "script_pubkey": "5120971daff8013a1f41d3d6beea26bc756230e398b0b4d18d39d6da5996c572e6f4",
+        "vout": 0,
+        "exit_delta": 512,
+        "sequence": 4194305,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "03010040b2752014e2270d85aaabb9cd84365f018f2c6c498381b81b2831e5726df352582d676fac",
+        "path": [
+          {
+            "other_outputs": [
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "02000cf414fb32b0a259c5a146311630ee3d02cd43657f97e71992e531655f020cd53a0661cf6882cdba49a8542a19cc275fd5891464fa2e171accdc22866b31",
+            "parent_index": 0
+          }
+        ],
+        "anchor_outpoint": {
+          "txid": "4e6ab106d179a097c624b7500b0c1486e0ba86baa9e7f8ef943fb890ba36add9",
+          "txid_display_hex": "d9ad36ba90b83f94eff8e7a9ba86bae086140c0b50b724c697a079d106b16a4e",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "03010040b2752014e2270d85aaabb9cd84365f018f2c6c498381b81b2831e5726df352582d676fac",
+        "exit_delta_raw": 512,
+        "exit_locktime_type": "seconds",
+        "legacy_lineage": [
+          {
+            "txid": "4168fe603847c785ee06a6bef0c3437336c93b4f7e39608e5fb800553e66ae69",
+            "txid_display_hex": "69ae663e5500b85f8e60397e4f3bc9367343c3f0bea606ee85c7473860fe6841",
+            "input_previous_outpoint": {
+              "txid": "4e6ab106d179a097c624b7500b0c1486e0ba86baa9e7f8ef943fb890ba36add9",
+              "txid_display_hex": "d9ad36ba90b83f94eff8e7a9ba86bae086140c0b50b724c697a079d106b16a4e",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "02000cf414fb32b0a259c5a146311630ee3d02cd43657f97e71992e531655f020cd53a0661cf6882cdba49a8542a19cc275fd5891464fa2e171accdc22866b31",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120971daff8013a1f41d3d6beea26bc756230e398b0b4d18d39d6da5996c572e6f4",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {}
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 1,
+        "receiver_script_closures": [
+          "03010040b2752014e2270d85aaabb9cd84365f018f2c6c498381b81b2831e5726df352582d676fac",
+          "2014e2270d85aaabb9cd84365f018f2c6c498381b81b2831e5726df352582d676fad209f2b9c5edff6606fe902bd389dfbff53d03815b328dedfc249b598d0b3dd9d38ac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "03010040b2752014e2270d85aaabb9cd84365f018f2c6c498381b81b2831e5726df352582d676fac",
+            "tapleaf_hash": "ddcfb2c5a69f6137eb9e3b7e5b9e05b86b25f28af44f745e70936754254d9bf9",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac017db53d585db1737694fdfc7905babc9c57595aa5ad93b4dca03a3e2a0e8a4cb"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "2014e2270d85aaabb9cd84365f018f2c6c498381b81b2831e5726df352582d676fad209f2b9c5edff6606fe902bd389dfbff53d03815b328dedfc249b598d0b3dd9d38ac",
+            "tapleaf_hash": "17db53d585db1737694fdfc7905babc9c57595aa5ad93b4dca03a3e2a0e8a4cb",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0ddcfb2c5a69f6137eb9e3b7e5b9e05b86b25f28af44f745e70936754254d9bf9"
+          }
+        ],
+        "taproot_merkle_root": "c3249d8727673405f189610e6d1d20c012791c1e52e1242a8aafd4549d16a5d3",
+        "taproot_output_key": "971daff8013a1f41d3d6beea26bc756230e398b0b4d18d39d6da5996c572e6f4",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "4168fe603847c785ee06a6bef0c3437336c93b4f7e39608e5fb800553e66ae69",
+          "root_txid_display_hex": "69ae663e5500b85f8e60397e4f3bc9367343c3f0bea606ee85c7473860fe6841",
+          "leaf_count": 1,
+          "serialized_nodes": 1
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "69ae663e5500b85f8e60397e4f3bc9367343c3f0bea606ee85c7473860fe6841",
+        "vtxo_id_wire_hex": "4168fe603847c785ee06a6bef0c3437336c93b4f7e39608e5fb800553e66ae69"
+      }
+    },
+    {
+      "vector_id": "balanced_binary_02_leaf_0",
+      "category": "round_leaf",
+      "scenario": "balanced_binary_02",
+      "participant_count": 2,
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 1000,
+        "script_pubkey": "5120dc1fd5a8c1e5c3515409ac535bce3feb1cf6323b30b05fc6ddb67192b452a39d",
+        "vout": 0,
+        "exit_delta": 512,
+        "sequence": 4194305,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "03010040b2752060c7e78df2e15f77ca1572e4be459038b1e5b656b7cc14924011818f731a0ecfac",
+        "path": [
+          {
+            "other_outputs": [
+              {
+                "value": 2000,
+                "script_pubkey": "51204da9add6f7cdb192317a909f90438392d368911423b2d7ecc9d8e0143d1ed56e"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "8cce8d97df74380afa0eb6e2f67d8b27f7aae827ede03e90cc4685201362fe8222675f70aa0abee2f8672bbba1621b279b71a52808cde1c55658e5626b3b2e3d",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "625a1a3f1976776d060603a69864ba16f4a76f81e0950a4af4dd0acc3faab0f7749fb667a4b0b5b51d486c071a2a93801ae226589c2235b3e509335433379286",
+            "parent_index": 0
+          }
+        ],
+        "anchor_outpoint": {
+          "txid": "e77258833e67383dfdcf4b2aa8290c9895748d084fca47cc51b6c1d1284de1c4",
+          "txid_display_hex": "c4e14d28d1c1b651cc47ca4f088d7495980c29a82a4bcffd3d38673e835872e7",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "03010040b2752060c7e78df2e15f77ca1572e4be459038b1e5b656b7cc14924011818f731a0ecfac",
+        "exit_delta_raw": 512,
+        "exit_locktime_type": "seconds",
+        "legacy_lineage": [
+          {
+            "txid": "c3864e00a783711b5c21001ec433b4dc81aae2363f29428df4f4bb66e03fedc6",
+            "txid_display_hex": "c6ed3fe066bbf4f48d42293f36e2aa81dcb433c41e00215c1b7183a7004e86c3",
+            "input_previous_outpoint": {
+              "txid": "e77258833e67383dfdcf4b2aa8290c9895748d084fca47cc51b6c1d1284de1c4",
+              "txid_display_hex": "c4e14d28d1c1b651cc47ca4f088d7495980c29a82a4bcffd3d38673e835872e7",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "8cce8d97df74380afa0eb6e2f67d8b27f7aae827ede03e90cc4685201362fe8222675f70aa0abee2f8672bbba1621b279b71a52808cde1c55658e5626b3b2e3d",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120844664104d733f66920ad611e7da68cded8f0d9f78117313b1b833555cded636",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 2000,
+                "script_pubkey": "51204da9add6f7cdb192317a909f90438392d368911423b2d7ecc9d8e0143d1ed56e",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "4afbe7208f981b953d2713b317dd78afbb90244da4a6b677b09db2248d9c612b",
+              "1": "3b3e9f2c8c66dc536595925a83d50508c42574c9bc337f5b79e5f54924095919"
+            },
+            "children_display_hex": {
+              "0": "2b619c8d24b29db077b6a6a44d2490bbaf78dd17b313273d951b988f20e7fb4a",
+              "1": "1959092449f5e5795b7f33bcc97425c40805d5835a92956553dc668c2c9f3e3b"
+            }
+          },
+          {
+            "txid": "4afbe7208f981b953d2713b317dd78afbb90244da4a6b677b09db2248d9c612b",
+            "txid_display_hex": "2b619c8d24b29db077b6a6a44d2490bbaf78dd17b313273d951b988f20e7fb4a",
+            "input_previous_outpoint": {
+              "txid": "c3864e00a783711b5c21001ec433b4dc81aae2363f29428df4f4bb66e03fedc6",
+              "txid_display_hex": "c6ed3fe066bbf4f48d42293f36e2aa81dcb433c41e00215c1b7183a7004e86c3",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "625a1a3f1976776d060603a69864ba16f4a76f81e0950a4af4dd0acc3faab0f7749fb667a4b0b5b51d486c071a2a93801ae226589c2235b3e509335433379286",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120dc1fd5a8c1e5c3515409ac535bce3feb1cf6323b30b05fc6ddb67192b452a39d",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {}
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 2,
+        "receiver_script_closures": [
+          "03010040b2752060c7e78df2e15f77ca1572e4be459038b1e5b656b7cc14924011818f731a0ecfac",
+          "2060c7e78df2e15f77ca1572e4be459038b1e5b656b7cc14924011818f731a0ecfad20d4f2429efc1f62a4a766cf14197a1d70ebc40b75eaeebbc3f0df81e09e5d784aac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "03010040b2752060c7e78df2e15f77ca1572e4be459038b1e5b656b7cc14924011818f731a0ecfac",
+            "tapleaf_hash": "d691ea4ce9f3cbddb04a6a79daf513561fab88eb740d3deae2ca77224fbf15a8",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac066d21ff6354658ddfa1046be971f421b293396e6cc425b1a7fbdeea6689ae03a"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "2060c7e78df2e15f77ca1572e4be459038b1e5b656b7cc14924011818f731a0ecfad20d4f2429efc1f62a4a766cf14197a1d70ebc40b75eaeebbc3f0df81e09e5d784aac",
+            "tapleaf_hash": "66d21ff6354658ddfa1046be971f421b293396e6cc425b1a7fbdeea6689ae03a",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0d691ea4ce9f3cbddb04a6a79daf513561fab88eb740d3deae2ca77224fbf15a8"
+          }
+        ],
+        "taproot_merkle_root": "5c2d6f2d3962cd42c7026f9822f27f703eaef71481748fdc1399cceb2c34376a",
+        "taproot_output_key": "dc1fd5a8c1e5c3515409ac535bce3feb1cf6323b30b05fc6ddb67192b452a39d",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "c3864e00a783711b5c21001ec433b4dc81aae2363f29428df4f4bb66e03fedc6",
+          "root_txid_display_hex": "c6ed3fe066bbf4f48d42293f36e2aa81dcb433c41e00215c1b7183a7004e86c3",
+          "leaf_count": 2,
+          "serialized_nodes": 3
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "2b619c8d24b29db077b6a6a44d2490bbaf78dd17b313273d951b988f20e7fb4a",
+        "vtxo_id_wire_hex": "4afbe7208f981b953d2713b317dd78afbb90244da4a6b677b09db2248d9c612b"
+      }
+    },
+    {
+      "vector_id": "balanced_binary_03_leaf_0",
+      "category": "round_leaf",
+      "scenario": "balanced_binary_03",
+      "participant_count": 3,
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 1000,
+        "script_pubkey": "51209b851f4ae177a0f15af8323265bc793e9679c906ccfba8ce6d1a7bf48496bd2a",
+        "vout": 0,
+        "exit_delta": 512,
+        "sequence": 4194305,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "03010040b275208db905f846e76228a914d7443f53f0e17f77bfa2f2e730d2d0cfb0c4642ca7e0ac",
+        "path": [
+          {
+            "other_outputs": [
+              {
+                "value": 3000,
+                "script_pubkey": "5120a85d108af51b612b0f0e51285fde0f49fdcc66c8962ed3aa6b887707422483dd"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "356abf45b312e3b6329d781b00a0f431a080a637d077c8099f90a2fd277ef951192a0e33266bb25b31aeeef7d4e64d0654b315d645d47b52535e6bc917fce855",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 2000,
+                "script_pubkey": "51202fcac48918f8c22daf8cd1fcc40d589e0c97399a23dfbd5fe050b1b532ce5e36"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "c9d6b214786ef8dffbcc2583076f62886395112df81147cb904015ecd2cc235f75539245e5c849d0e664f8bedfb2547d73c6c8b9e827e4d31f72e82913599d83",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "0bdd32d6003c2d6ae4adb16636a96d8fbd03e34cefe52c57092e4afda8ae750ad6fc4f1759380cbbc6a70c36546311fd9a4b1b0183724e7454ea6e8908142e82",
+            "parent_index": 0
+          }
+        ],
+        "anchor_outpoint": {
+          "txid": "be810e3e5e865b17268ee5d16a67c4000dc764877b3add9588b28dea79d959ec",
+          "txid_display_hex": "ec59d979ea8db28895dd3a7b8764c70d00c4676ad1e58e26175b865e3e0e81be",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "03010040b275208db905f846e76228a914d7443f53f0e17f77bfa2f2e730d2d0cfb0c4642ca7e0ac",
+        "exit_delta_raw": 512,
+        "exit_locktime_type": "seconds",
+        "legacy_lineage": [
+          {
+            "txid": "9d34840c2aa70d4145b6f2c900fa7cfd4f9940249eef40ecb560725b2082f219",
+            "txid_display_hex": "19f282205b7260b5ec40ef9e2440994ffd7cfa00c9f2b645410da72a0c84349d",
+            "input_previous_outpoint": {
+              "txid": "be810e3e5e865b17268ee5d16a67c4000dc764877b3add9588b28dea79d959ec",
+              "txid_display_hex": "ec59d979ea8db28895dd3a7b8764c70d00c4676ad1e58e26175b865e3e0e81be",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "356abf45b312e3b6329d781b00a0f431a080a637d077c8099f90a2fd277ef951192a0e33266bb25b31aeeef7d4e64d0654b315d645d47b52535e6bc917fce855",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 3000,
+                "script_pubkey": "5120f8cb61b070e9beb93ddab10175808f12493a06e0cb3d35589b4ec15cfa39e689",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 3000,
+                "script_pubkey": "5120a85d108af51b612b0f0e51285fde0f49fdcc66c8962ed3aa6b887707422483dd",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "edeffe0206483ef0affeaed090600d317f183e5a53fe309426d11c115b6769e6",
+              "1": "3a835753d9cd9085a658c462cbd045da3a68b5d14655116b92c92c47b701a373"
+            },
+            "children_display_hex": {
+              "0": "e669675b111cd1269430fe535a3e187f310d6090d0aefeaff03e480602feefed",
+              "1": "73a301b7472cc9926b115546d1b5683ada45d0cb62c458a68590cdd95357833a"
+            }
+          },
+          {
+            "txid": "edeffe0206483ef0affeaed090600d317f183e5a53fe309426d11c115b6769e6",
+            "txid_display_hex": "e669675b111cd1269430fe535a3e187f310d6090d0aefeaff03e480602feefed",
+            "input_previous_outpoint": {
+              "txid": "9d34840c2aa70d4145b6f2c900fa7cfd4f9940249eef40ecb560725b2082f219",
+              "txid_display_hex": "19f282205b7260b5ec40ef9e2440994ffd7cfa00c9f2b645410da72a0c84349d",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "c9d6b214786ef8dffbcc2583076f62886395112df81147cb904015ecd2cc235f75539245e5c849d0e664f8bedfb2547d73c6c8b9e827e4d31f72e82913599d83",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120396a31d43ad535f1089f5c6fd8cda674f88f52d28937556c7a72192ac7769196",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 2000,
+                "script_pubkey": "51202fcac48918f8c22daf8cd1fcc40d589e0c97399a23dfbd5fe050b1b532ce5e36",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "3759cb49c91cdc0feef10a87fbc06c4721ebecb0c113320141343acf3628e2f2",
+              "1": "5049cbf38b1be74271d361d870f608eb87b0bd52f100dcb451022eee49ef6265"
+            },
+            "children_display_hex": {
+              "0": "f2e22836cf3a3441013213c1b0eceb21476cc0fb870af1ee0fdc1cc949cb5937",
+              "1": "6562ef49ee2e0251b4dc00f152bdb087eb08f670d861d37142e71b8bf3cb4950"
+            }
+          },
+          {
+            "txid": "3759cb49c91cdc0feef10a87fbc06c4721ebecb0c113320141343acf3628e2f2",
+            "txid_display_hex": "f2e22836cf3a3441013213c1b0eceb21476cc0fb870af1ee0fdc1cc949cb5937",
+            "input_previous_outpoint": {
+              "txid": "edeffe0206483ef0affeaed090600d317f183e5a53fe309426d11c115b6769e6",
+              "txid_display_hex": "e669675b111cd1269430fe535a3e187f310d6090d0aefeaff03e480602feefed",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "0bdd32d6003c2d6ae4adb16636a96d8fbd03e34cefe52c57092e4afda8ae750ad6fc4f1759380cbbc6a70c36546311fd9a4b1b0183724e7454ea6e8908142e82",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "51209b851f4ae177a0f15af8323265bc793e9679c906ccfba8ce6d1a7bf48496bd2a",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {}
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 3,
+        "receiver_script_closures": [
+          "03010040b275208db905f846e76228a914d7443f53f0e17f77bfa2f2e730d2d0cfb0c4642ca7e0ac",
+          "208db905f846e76228a914d7443f53f0e17f77bfa2f2e730d2d0cfb0c4642ca7e0ad20e1ddb448a241ea863780960dac8552d0ed97c824dbb884db70d56e1892cbbd84ac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "03010040b275208db905f846e76228a914d7443f53f0e17f77bfa2f2e730d2d0cfb0c4642ca7e0ac",
+            "tapleaf_hash": "79308763f5030ba0473112c2dd15168f27b52258312ad3fb908e89aff3e5ed11",
+            "control_block": "c150929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0614f54f3688f71d7f04819a54b13ba77890f83d9e2138a4696c2c557bf21b753"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "208db905f846e76228a914d7443f53f0e17f77bfa2f2e730d2d0cfb0c4642ca7e0ad20e1ddb448a241ea863780960dac8552d0ed97c824dbb884db70d56e1892cbbd84ac",
+            "tapleaf_hash": "614f54f3688f71d7f04819a54b13ba77890f83d9e2138a4696c2c557bf21b753",
+            "control_block": "c150929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac079308763f5030ba0473112c2dd15168f27b52258312ad3fb908e89aff3e5ed11"
+          }
+        ],
+        "taproot_merkle_root": "244b96b53350f4aa2d58888c5cfdde93f36c6b417759bccf5365aac26d53cdb0",
+        "taproot_output_key": "9b851f4ae177a0f15af8323265bc793e9679c906ccfba8ce6d1a7bf48496bd2a",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "9d34840c2aa70d4145b6f2c900fa7cfd4f9940249eef40ecb560725b2082f219",
+          "root_txid_display_hex": "19f282205b7260b5ec40ef9e2440994ffd7cfa00c9f2b645410da72a0c84349d",
+          "leaf_count": 3,
+          "serialized_nodes": 5
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "f2e22836cf3a3441013213c1b0eceb21476cc0fb870af1ee0fdc1cc949cb5937",
+        "vtxo_id_wire_hex": "3759cb49c91cdc0feef10a87fbc06c4721ebecb0c113320141343acf3628e2f2"
+      }
+    },
+    {
+      "vector_id": "balanced_binary_03_branch_root",
+      "category": "round_branch",
+      "scenario": "balanced_binary_03",
+      "participant_count": 3,
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "",
+        "exit_delta_raw": 0,
+        "exit_locktime_type": "",
+        "legacy_lineage": [
+          {
+            "txid": "9d34840c2aa70d4145b6f2c900fa7cfd4f9940249eef40ecb560725b2082f219",
+            "txid_display_hex": "19f282205b7260b5ec40ef9e2440994ffd7cfa00c9f2b645410da72a0c84349d",
+            "input_previous_outpoint": {
+              "txid": "be810e3e5e865b17268ee5d16a67c4000dc764877b3add9588b28dea79d959ec",
+              "txid_display_hex": "ec59d979ea8db28895dd3a7b8764c70d00c4676ad1e58e26175b865e3e0e81be",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "356abf45b312e3b6329d781b00a0f431a080a637d077c8099f90a2fd277ef951192a0e33266bb25b31aeeef7d4e64d0654b315d645d47b52535e6bc917fce855",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 3000,
+                "script_pubkey": "5120f8cb61b070e9beb93ddab10175808f12493a06e0cb3d35589b4ec15cfa39e689",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 3000,
+                "script_pubkey": "5120a85d108af51b612b0f0e51285fde0f49fdcc66c8962ed3aa6b887707422483dd",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "edeffe0206483ef0affeaed090600d317f183e5a53fe309426d11c115b6769e6",
+              "1": "3a835753d9cd9085a658c462cbd045da3a68b5d14655116b92c92c47b701a373"
+            },
+            "children_display_hex": {
+              "0": "e669675b111cd1269430fe535a3e187f310d6090d0aefeaff03e480602feefed",
+              "1": "73a301b7472cc9926b115546d1b5683ada45d0cb62c458a68590cdd95357833a"
+            }
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 3,
+        "receiver_script_closures": null,
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "",
+        "taproot_leaves": null,
+        "taproot_merkle_root": "",
+        "taproot_output_key": "",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "9d34840c2aa70d4145b6f2c900fa7cfd4f9940249eef40ecb560725b2082f219",
+          "root_txid_display_hex": "19f282205b7260b5ec40ef9e2440994ffd7cfa00c9f2b645410da72a0c84349d",
+          "leaf_count": 3,
+          "serialized_nodes": 5
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "19f282205b7260b5ec40ef9e2440994ffd7cfa00c9f2b645410da72a0c84349d",
+        "vtxo_id_wire_hex": "9d34840c2aa70d4145b6f2c900fa7cfd4f9940249eef40ecb560725b2082f219",
+        "vtxo_ingredient_omitted_reason": "Internal tree node script is an aggregated taproot; use round_leaf vectors for a full VtxoIngredient."
+      }
+    },
+    {
+      "vector_id": "balanced_binary_05_leaf_0",
+      "category": "round_leaf",
+      "scenario": "balanced_binary_05",
+      "participant_count": 5,
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 2000,
+        "script_pubkey": "51209f17167c58c177d780916938a1533b9e52622c9e0ce7de8818fbe0da7711031e",
+        "vout": 0,
+        "exit_delta": 512,
+        "sequence": 4194305,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "03010040b27520073cad2e32ea36feddb60a56e3e6abdeff7dfc74e7a3a9f625a27088872fcc31ac",
+        "path": [
+          {
+            "other_outputs": [
+              {
+                "value": 5000,
+                "script_pubkey": "5120f4b28d92f63d408c6ff4ffcfa584ad07a98c23b317bed20e2b36ba95516f9e0f"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "9ebd1192ef2c21a87868ffd7dad45a561ef06aa6ec3df36f412942f837830586fc44c5df044694c7fae53b4a21e4b3788d807b70de91fd88125e3f85de9e54b7",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 7000,
+                "script_pubkey": "51209f4d9eb6c7c456dfe363246f4fdd677b06ad4a9abd34dbb05f41724f6529e57a"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "ac3a05f51617ed57e6228ab1959068dd2d5482231d52f98714e19fc35334e8adbe15b65a79503b7d2725ad1377e58573bd70e82322e67ae0a72a6917a0e406c5",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 1000,
+                "script_pubkey": "5120346ed736165acaf485411e6bfba883c09b98e365c17e11deb383f7af276bd630"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "378f873add7d278aaaca3773a94fa8b04402bd60be40135f2cb75c57b219c27cff9cadcadf0b35374d2e9d65b49848d366942327ff40f3087684e360b470a144",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "92ccac8de2361585b48797c1e8e73deb166815cb765c0d4bc2b47f316663557207bc4cd1d8737e278024ff5d30a123f97ce1ad7eafc0649830b3fc4912eb5d58",
+            "parent_index": 1
+          }
+        ],
+        "anchor_outpoint": {
+          "txid": "393d5b553b1d6882d231d764365af47226a4194e79ff3ffe2473855977a6781e",
+          "txid_display_hex": "1e78a67759857324fe3fff794e19a42672f45a3664d731d282681d3b555b3d39",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "03010040b27520073cad2e32ea36feddb60a56e3e6abdeff7dfc74e7a3a9f625a27088872fcc31ac",
+        "exit_delta_raw": 512,
+        "exit_locktime_type": "seconds",
+        "legacy_lineage": [
+          {
+            "txid": "188862a5ad1854b0fe6cd04722117575d71995d19f3a6f4ba567334dc6e3b1c0",
+            "txid_display_hex": "c0b1e3c64d3367a54b6f3a9fd19519d77575112247d06cfeb05418ada5628818",
+            "input_previous_outpoint": {
+              "txid": "393d5b553b1d6882d231d764365af47226a4194e79ff3ffe2473855977a6781e",
+              "txid_display_hex": "1e78a67759857324fe3fff794e19a42672f45a3664d731d282681d3b555b3d39",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "9ebd1192ef2c21a87868ffd7dad45a561ef06aa6ec3df36f412942f837830586fc44c5df044694c7fae53b4a21e4b3788d807b70de91fd88125e3f85de9e54b7",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 10000,
+                "script_pubkey": "5120519cc86bf61375e54fb53ce64f3248778088eec7d8240922ddb534259566f049",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 5000,
+                "script_pubkey": "5120f4b28d92f63d408c6ff4ffcfa584ad07a98c23b317bed20e2b36ba95516f9e0f",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "16703051f6c16f051337e2ba36a3b8f0eb444037a10373caaa66f606c5be9222",
+              "1": "6bcec1af4b852e68d56a47ef968abde77fd0de20615fedecaf3ae910a6436707"
+            },
+            "children_display_hex": {
+              "0": "2292bec506f666aaca7303a1374044ebf0b8a336bae23713056fc1f651307016",
+              "1": "076743a610e93aafeced5f6120ded07fe7bd8a96ef476ad5682e854bafc1ce6b"
+            }
+          },
+          {
+            "txid": "16703051f6c16f051337e2ba36a3b8f0eb444037a10373caaa66f606c5be9222",
+            "txid_display_hex": "2292bec506f666aaca7303a1374044ebf0b8a336bae23713056fc1f651307016",
+            "input_previous_outpoint": {
+              "txid": "188862a5ad1854b0fe6cd04722117575d71995d19f3a6f4ba567334dc6e3b1c0",
+              "txid_display_hex": "c0b1e3c64d3367a54b6f3a9fd19519d77575112247d06cfeb05418ada5628818",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "ac3a05f51617ed57e6228ab1959068dd2d5482231d52f98714e19fc35334e8adbe15b65a79503b7d2725ad1377e58573bd70e82322e67ae0a72a6917a0e406c5",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 3000,
+                "script_pubkey": "5120f1406e13892b5794a24aff94158d6288bd36dd532066da967b55f0520e5dacbb",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 7000,
+                "script_pubkey": "51209f4d9eb6c7c456dfe363246f4fdd677b06ad4a9abd34dbb05f41724f6529e57a",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "60d3f4b4bc9a3ef1d990e663387e9dd84d0ae2ece7e9148bac258b34325e3b17",
+              "1": "c8b48828679ad84052df80499901a68b550f6c2c0f0929052d16a933d94444db"
+            },
+            "children_display_hex": {
+              "0": "173b5e32348b25ac8b14e9e7ece20a4dd89d7e3863e690d9f13e9abcb4f4d360",
+              "1": "db4444d933a9162d0529090f2c6c0f558ba601994980df5240d89a672888b4c8"
+            }
+          },
+          {
+            "txid": "60d3f4b4bc9a3ef1d990e663387e9dd84d0ae2ece7e9148bac258b34325e3b17",
+            "txid_display_hex": "173b5e32348b25ac8b14e9e7ece20a4dd89d7e3863e690d9f13e9abcb4f4d360",
+            "input_previous_outpoint": {
+              "txid": "16703051f6c16f051337e2ba36a3b8f0eb444037a10373caaa66f606c5be9222",
+              "txid_display_hex": "2292bec506f666aaca7303a1374044ebf0b8a336bae23713056fc1f651307016",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "378f873add7d278aaaca3773a94fa8b04402bd60be40135f2cb75c57b219c27cff9cadcadf0b35374d2e9d65b49848d366942327ff40f3087684e360b470a144",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120346ed736165acaf485411e6bfba883c09b98e365c17e11deb383f7af276bd630",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 2000,
+                "script_pubkey": "512046b57896156e319954a13d8410b66743b3f3684d0ce0fd6e13efc0a391563683",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "ceaec0e467e5b72b595ab8f4e7111b9a3258a35176a826d2bce9cde7ea49fb0a",
+              "1": "ebb2e3a8bcb030d705a8fd44f6f84eaccbfaf42c33a1750c8e32bce74a794980"
+            },
+            "children_display_hex": {
+              "0": "0afb49eae7cde9bcd226a87651a358329a1b11e7f4b85a592bb7e567e4c0aece",
+              "1": "8049794ae7bc328e0c75a1332cf4facbac4ef8f644fda805d730b0bca8e3b2eb"
+            }
+          },
+          {
+            "txid": "ebb2e3a8bcb030d705a8fd44f6f84eaccbfaf42c33a1750c8e32bce74a794980",
+            "txid_display_hex": "8049794ae7bc328e0c75a1332cf4facbac4ef8f644fda805d730b0bca8e3b2eb",
+            "input_previous_outpoint": {
+              "txid": "60d3f4b4bc9a3ef1d990e663387e9dd84d0ae2ece7e9148bac258b34325e3b17",
+              "txid_display_hex": "173b5e32348b25ac8b14e9e7ece20a4dd89d7e3863e690d9f13e9abcb4f4d360",
+              "vout": 1
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "92ccac8de2361585b48797c1e8e73deb166815cb765c0d4bc2b47f316663557207bc4cd1d8737e278024ff5d30a123f97ce1ad7eafc0649830b3fc4912eb5d58",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 2000,
+                "script_pubkey": "5120f60c141101f383847ca182d01f8491826645db7a983fe24bcb58f4191b329f5c",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {}
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 5,
+        "receiver_script_closures": [
+          "03010040b27520073cad2e32ea36feddb60a56e3e6abdeff7dfc74e7a3a9f625a27088872fcc31ac",
+          "20073cad2e32ea36feddb60a56e3e6abdeff7dfc74e7a3a9f625a27088872fcc31ad20e5acb000bb0cfb13296979d081a8ca2f16813b1d01a5cfd2f365596cbf9dd89cac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "03010040b27520073cad2e32ea36feddb60a56e3e6abdeff7dfc74e7a3a9f625a27088872fcc31ac",
+            "tapleaf_hash": "f03a8da0af4ad9b98d695ed3c2f710b85acd18083b76680dc597f9a68caad2eb",
+            "control_block": "c150929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac04562bfb5c0699fd3c74dab87813fc5ce7ee42eb191b60f665e916b4b81f3ec6f"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "20073cad2e32ea36feddb60a56e3e6abdeff7dfc74e7a3a9f625a27088872fcc31ad20e5acb000bb0cfb13296979d081a8ca2f16813b1d01a5cfd2f365596cbf9dd89cac",
+            "tapleaf_hash": "4562bfb5c0699fd3c74dab87813fc5ce7ee42eb191b60f665e916b4b81f3ec6f",
+            "control_block": "c150929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0f03a8da0af4ad9b98d695ed3c2f710b85acd18083b76680dc597f9a68caad2eb"
+          }
+        ],
+        "taproot_merkle_root": "74b474a866a7b7b4d66cedbd5ccc77bb7b1631f8ec0189d44c2ecab30c43f1a0",
+        "taproot_output_key": "9f17167c58c177d780916938a1533b9e52622c9e0ce7de8818fbe0da7711031e",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "188862a5ad1854b0fe6cd04722117575d71995d19f3a6f4ba567334dc6e3b1c0",
+          "root_txid_display_hex": "c0b1e3c64d3367a54b6f3a9fd19519d77575112247d06cfeb05418ada5628818",
+          "leaf_count": 5,
+          "serialized_nodes": 9
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "a6c89fa4454a1fe8ad6215db547f7e39e4726630c385b007f65dd29dee2cc786",
+        "vtxo_id_wire_hex": "86c72cee9dd25df607b085c3306672e4397e7f54db1562ade81f4a45a49fc8a6"
+      }
+    },
+    {
+      "vector_id": "balanced_binary_05_branch_root",
+      "category": "round_branch",
+      "scenario": "balanced_binary_05",
+      "participant_count": 5,
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "",
+        "exit_delta_raw": 0,
+        "exit_locktime_type": "",
+        "legacy_lineage": [
+          {
+            "txid": "188862a5ad1854b0fe6cd04722117575d71995d19f3a6f4ba567334dc6e3b1c0",
+            "txid_display_hex": "c0b1e3c64d3367a54b6f3a9fd19519d77575112247d06cfeb05418ada5628818",
+            "input_previous_outpoint": {
+              "txid": "393d5b553b1d6882d231d764365af47226a4194e79ff3ffe2473855977a6781e",
+              "txid_display_hex": "1e78a67759857324fe3fff794e19a42672f45a3664d731d282681d3b555b3d39",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "9ebd1192ef2c21a87868ffd7dad45a561ef06aa6ec3df36f412942f837830586fc44c5df044694c7fae53b4a21e4b3788d807b70de91fd88125e3f85de9e54b7",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 10000,
+                "script_pubkey": "5120519cc86bf61375e54fb53ce64f3248778088eec7d8240922ddb534259566f049",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 5000,
+                "script_pubkey": "5120f4b28d92f63d408c6ff4ffcfa584ad07a98c23b317bed20e2b36ba95516f9e0f",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "16703051f6c16f051337e2ba36a3b8f0eb444037a10373caaa66f606c5be9222",
+              "1": "6bcec1af4b852e68d56a47ef968abde77fd0de20615fedecaf3ae910a6436707"
+            },
+            "children_display_hex": {
+              "0": "2292bec506f666aaca7303a1374044ebf0b8a336bae23713056fc1f651307016",
+              "1": "076743a610e93aafeced5f6120ded07fe7bd8a96ef476ad5682e854bafc1ce6b"
+            }
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 5,
+        "receiver_script_closures": null,
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "",
+        "taproot_leaves": null,
+        "taproot_merkle_root": "",
+        "taproot_output_key": "",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "188862a5ad1854b0fe6cd04722117575d71995d19f3a6f4ba567334dc6e3b1c0",
+          "root_txid_display_hex": "c0b1e3c64d3367a54b6f3a9fd19519d77575112247d06cfeb05418ada5628818",
+          "leaf_count": 5,
+          "serialized_nodes": 9
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "c0b1e3c64d3367a54b6f3a9fd19519d77575112247d06cfeb05418ada5628818",
+        "vtxo_id_wire_hex": "188862a5ad1854b0fe6cd04722117575d71995d19f3a6f4ba567334dc6e3b1c0",
+        "vtxo_ingredient_omitted_reason": "Internal tree node script is an aggregated taproot; use round_leaf vectors for a full VtxoIngredient."
+      }
+    },
+    {
+      "vector_id": "balanced_binary_07_leaf_0",
+      "category": "round_leaf",
+      "scenario": "balanced_binary_07",
+      "participant_count": 7,
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 2000,
+        "script_pubkey": "51206846b9da660ac26020e3e4c8c337de1704c1f85bae5393394de344730fe0f15d",
+        "vout": 0,
+        "exit_delta": 512,
+        "sequence": 4194305,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "03010040b27520cf3de8b0e8a1ada87e8fb0a13acf07fcc22ebcde877f379003f6b6f2e84a8e4fac",
+        "path": [
+          {
+            "other_outputs": [
+              {
+                "value": 18000,
+                "script_pubkey": "5120ff196e62461a8a654d50e40e9ab58c126901a2707c7f42f6631c381fdd963b52"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "5cd098d13e601e51f0b96d308cb96ec69d6f78f3c58a06a9171efc4d571148b076e9a4d76f29890da6503b87cc43d2c2fd92bb16fbbc6bf04aa1c6ca9976f639",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 7000,
+                "script_pubkey": "51204a249100ed2ebc47154d93e6c693baf7fa2cb86256ca06a6b3db565a76461935"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "df3d19f4350a51d9011b4ea6995b5fc52570766f7ef81afb29d35cd5df8a242236d5bbce3a92a74cff9c30a9cbe4f5b849695ede1e74e1b670a4e5dc8b759846",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 1000,
+                "script_pubkey": "5120a8b918d9950584926b5b167703f2e852286de217d158bb574c434d637771f6ea"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "cf7aaa08911b6a9b8891b0cd36d916fe51bd6f374c216f18fe512e68d3d74439c8625869fbf0f63a8a25773b5263e8177043c306122538d1169cf4044418b09e",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "a6b4729042b710df5b4b978efcb0c894c90bda5c9f610b48a2ab989a4f13fb02aeb1357dc914336aa6a0dd87197094e5120c47accbc43626f85db1220f9ce2f1",
+            "parent_index": 1
+          }
+        ],
+        "anchor_outpoint": {
+          "txid": "d4ea8e0212e887e059d9625c0d297c3fa8e65383d1642e1c646fcf0ebe48e5fe",
+          "txid_display_hex": "fee548be0ecf6f641c2e64d18353e6a83f7c290d5c62d959e087e812028eead4",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "03010040b27520cf3de8b0e8a1ada87e8fb0a13acf07fcc22ebcde877f379003f6b6f2e84a8e4fac",
+        "exit_delta_raw": 512,
+        "exit_locktime_type": "seconds",
+        "legacy_lineage": [
+          {
+            "txid": "23841b49d3a258aa7d312fb479835a56514ec9bca9492fb35346d766ca6df748",
+            "txid_display_hex": "48f76dca66d74653b32f49a9bcc94e51565a8379b42f317daa58a2d3491b8423",
+            "input_previous_outpoint": {
+              "txid": "d4ea8e0212e887e059d9625c0d297c3fa8e65383d1642e1c646fcf0ebe48e5fe",
+              "txid_display_hex": "fee548be0ecf6f641c2e64d18353e6a83f7c290d5c62d959e087e812028eead4",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "5cd098d13e601e51f0b96d308cb96ec69d6f78f3c58a06a9171efc4d571148b076e9a4d76f29890da6503b87cc43d2c2fd92bb16fbbc6bf04aa1c6ca9976f639",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 10000,
+                "script_pubkey": "512016cd007d9c06ac7a5482ed710a2616edad0b6f0518079d1e1ded9dfae229b301",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 18000,
+                "script_pubkey": "5120ff196e62461a8a654d50e40e9ab58c126901a2707c7f42f6631c381fdd963b52",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "e0b766c1e79d39e70428bd960ad96f72f767d257acf96534671267bb91006333",
+              "1": "40110447fc492f643c1f87d9ba0d022e31b23093390701e43ce2f136c102d207"
+            },
+            "children_display_hex": {
+              "0": "33630091bb6712673465f9ac57d267f7726fd90a96bd2804e7399de7c166b7e0",
+              "1": "07d202c136f1e23ce40107399330b2312e020dbad9871f3c642f49fc47041140"
+            }
+          },
+          {
+            "txid": "e0b766c1e79d39e70428bd960ad96f72f767d257acf96534671267bb91006333",
+            "txid_display_hex": "33630091bb6712673465f9ac57d267f7726fd90a96bd2804e7399de7c166b7e0",
+            "input_previous_outpoint": {
+              "txid": "23841b49d3a258aa7d312fb479835a56514ec9bca9492fb35346d766ca6df748",
+              "txid_display_hex": "48f76dca66d74653b32f49a9bcc94e51565a8379b42f317daa58a2d3491b8423",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "df3d19f4350a51d9011b4ea6995b5fc52570766f7ef81afb29d35cd5df8a242236d5bbce3a92a74cff9c30a9cbe4f5b849695ede1e74e1b670a4e5dc8b759846",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 3000,
+                "script_pubkey": "5120e494317454bc989f0f3292e39751e26afed89cb95692c0781d182671568498bb",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 7000,
+                "script_pubkey": "51204a249100ed2ebc47154d93e6c693baf7fa2cb86256ca06a6b3db565a76461935",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "add3b240c432e745e48c083bea9688bd3bb3c4a67e9801e4ae6477be2c8b5010",
+              "1": "f608c687b2dc4a58a60570b890b00fcfac3f45e4a6acb8ab28701a329c166a42"
+            },
+            "children_display_hex": {
+              "0": "10508b2cbe7764aee401987ea6c4b33bbd8896ea3b088ce445e732c440b2d3ad",
+              "1": "426a169c321a7028abb8aca6e4453faccf0fb090b87005a6584adcb287c608f6"
+            }
+          },
+          {
+            "txid": "add3b240c432e745e48c083bea9688bd3bb3c4a67e9801e4ae6477be2c8b5010",
+            "txid_display_hex": "10508b2cbe7764aee401987ea6c4b33bbd8896ea3b088ce445e732c440b2d3ad",
+            "input_previous_outpoint": {
+              "txid": "e0b766c1e79d39e70428bd960ad96f72f767d257acf96534671267bb91006333",
+              "txid_display_hex": "33630091bb6712673465f9ac57d267f7726fd90a96bd2804e7399de7c166b7e0",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "cf7aaa08911b6a9b8891b0cd36d916fe51bd6f374c216f18fe512e68d3d74439c8625869fbf0f63a8a25773b5263e8177043c306122538d1169cf4044418b09e",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120a8b918d9950584926b5b167703f2e852286de217d158bb574c434d637771f6ea",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 2000,
+                "script_pubkey": "512058cc68672f7682017d2c4d24c1856554c889d29b51ac2ea2b3d2222fffe5c587",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "f77b1afaba2ccb5d28868c95259366434b4220551e124e4132724123186c4927",
+              "1": "f8e56dd82874b29d7b1a5d076b25b7fbbed9fb26491338fadf5f5cb41e4c22fc"
+            },
+            "children_display_hex": {
+              "0": "27496c1823417232414e121e5520424b43669325958c86285dcb2cbafa1a7bf7",
+              "1": "fc224c1eb45c5fdffa38134926fbd9befbb7256b075d1a7b9db27428d86de5f8"
+            }
+          },
+          {
+            "txid": "f8e56dd82874b29d7b1a5d076b25b7fbbed9fb26491338fadf5f5cb41e4c22fc",
+            "txid_display_hex": "fc224c1eb45c5fdffa38134926fbd9befbb7256b075d1a7b9db27428d86de5f8",
+            "input_previous_outpoint": {
+              "txid": "add3b240c432e745e48c083bea9688bd3bb3c4a67e9801e4ae6477be2c8b5010",
+              "txid_display_hex": "10508b2cbe7764aee401987ea6c4b33bbd8896ea3b088ce445e732c440b2d3ad",
+              "vout": 1
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "a6b4729042b710df5b4b978efcb0c894c90bda5c9f610b48a2ab989a4f13fb02aeb1357dc914336aa6a0dd87197094e5120c47accbc43626f85db1220f9ce2f1",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 2000,
+                "script_pubkey": "5120203d045e892a69cbbab64852aa6a7740beb510931c048e08d2fcdba1be2f2be3",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {}
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 7,
+        "receiver_script_closures": [
+          "03010040b27520cf3de8b0e8a1ada87e8fb0a13acf07fcc22ebcde877f379003f6b6f2e84a8e4fac",
+          "20cf3de8b0e8a1ada87e8fb0a13acf07fcc22ebcde877f379003f6b6f2e84a8e4fad20ee135de4bc0ae4ca728a9c1184aad07544a293fa8d39cb118872fd2813825e71ac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "03010040b27520cf3de8b0e8a1ada87e8fb0a13acf07fcc22ebcde877f379003f6b6f2e84a8e4fac",
+            "tapleaf_hash": "d4c6205f878f5863da4312ef91c3976e0d7b4f70d91f61160ddc375a362e8004",
+            "control_block": "c150929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac012387562e698d96c68ab194692076b8f431f77f916510f53f76543858e2a825f"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "20cf3de8b0e8a1ada87e8fb0a13acf07fcc22ebcde877f379003f6b6f2e84a8e4fad20ee135de4bc0ae4ca728a9c1184aad07544a293fa8d39cb118872fd2813825e71ac",
+            "tapleaf_hash": "12387562e698d96c68ab194692076b8f431f77f916510f53f76543858e2a825f",
+            "control_block": "c150929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0d4c6205f878f5863da4312ef91c3976e0d7b4f70d91f61160ddc375a362e8004"
+          }
+        ],
+        "taproot_merkle_root": "7e8ecdae0ec81f2dad2a40d6df0c4add69b1c4557a9e8a47871fc073b26cdcd3",
+        "taproot_output_key": "6846b9da660ac26020e3e4c8c337de1704c1f85bae5393394de344730fe0f15d",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "23841b49d3a258aa7d312fb479835a56514ec9bca9492fb35346d766ca6df748",
+          "root_txid_display_hex": "48f76dca66d74653b32f49a9bcc94e51565a8379b42f317daa58a2d3491b8423",
+          "leaf_count": 7,
+          "serialized_nodes": 13
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "0550869c09dd350e77d1be9bca0f8f7796ff074688f641213e0f59393aefa4787",
+        "vtxo_id_wire_hex": "8747faae93590f3e2141f6884607ff96778f0fca9bbed1770e35dd099c865005"
+      }
+    },
+    {
+      "vector_id": "balanced_binary_07_branch_root",
+      "category": "round_branch",
+      "scenario": "balanced_binary_07",
+      "participant_count": 7,
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "",
+        "exit_delta_raw": 0,
+        "exit_locktime_type": "",
+        "legacy_lineage": [
+          {
+            "txid": "23841b49d3a258aa7d312fb479835a56514ec9bca9492fb35346d766ca6df748",
+            "txid_display_hex": "48f76dca66d74653b32f49a9bcc94e51565a8379b42f317daa58a2d3491b8423",
+            "input_previous_outpoint": {
+              "txid": "d4ea8e0212e887e059d9625c0d297c3fa8e65383d1642e1c646fcf0ebe48e5fe",
+              "txid_display_hex": "fee548be0ecf6f641c2e64d18353e6a83f7c290d5c62d959e087e812028eead4",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "5cd098d13e601e51f0b96d308cb96ec69d6f78f3c58a06a9171efc4d571148b076e9a4d76f29890da6503b87cc43d2c2fd92bb16fbbc6bf04aa1c6ca9976f639",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 10000,
+                "script_pubkey": "512016cd007d9c06ac7a5482ed710a2616edad0b6f0518079d1e1ded9dfae229b301",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 18000,
+                "script_pubkey": "5120ff196e62461a8a654d50e40e9ab58c126901a2707c7f42f6631c381fdd963b52",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "e0b766c1e79d39e70428bd960ad96f72f767d257acf96534671267bb91006333",
+              "1": "40110447fc492f643c1f87d9ba0d022e31b23093390701e43ce2f136c102d207"
+            },
+            "children_display_hex": {
+              "0": "33630091bb6712673465f9ac57d267f7726fd90a96bd2804e7399de7c166b7e0",
+              "1": "07d202c136f1e23ce40107399330b2312e020dbad9871f3c642f49fc47041140"
+            }
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 7,
+        "receiver_script_closures": null,
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "",
+        "taproot_leaves": null,
+        "taproot_merkle_root": "",
+        "taproot_output_key": "",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "23841b49d3a258aa7d312fb479835a56514ec9bca9492fb35346d766ca6df748",
+          "root_txid_display_hex": "48f76dca66d74653b32f49a9bcc94e51565a8379b42f317daa58a2d3491b8423",
+          "leaf_count": 7,
+          "serialized_nodes": 13
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "48f76dca66d74653b32f49a9bcc94e51565a8379b42f317daa58a2d3491b8423",
+        "vtxo_id_wire_hex": "23841b49d3a258aa7d312fb479835a56514ec9bca9492fb35346d766ca6df748",
+        "vtxo_ingredient_omitted_reason": "Internal tree node script is an aggregated taproot; use round_leaf vectors for a full VtxoIngredient."
+      }
+    },
+    {
+      "vector_id": "balanced_binary_13_leaf_0",
+      "category": "round_leaf",
+      "scenario": "balanced_binary_13",
+      "participant_count": 13,
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 1000,
+        "script_pubkey": "5120f21efc6efb61aedbb97f65fc280585da4ea18dec030d31569c35622e4eec426c",
+        "vout": 0,
+        "exit_delta": 512,
+        "sequence": 4194305,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "03010040b27520c28687482d959d60d4f7dbdc45a67653def9c5095b2d4843412995c9acda5cc9ac",
+        "path": [
+          {
+            "other_outputs": [
+              {
+                "value": 55000,
+                "script_pubkey": "51202e5abee1a05eea2cd1cf401ea05ce31c37225f6b3cceef8a25d4a438c617c909"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "a4dce0a7dd7a89f68ac6a2b8065e36e6444db68a948284b983467c3596204065a28a83af02bd82439f3f27ad4f9f1dd05ec6beab2e20a31a70111ed48561c425",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 26000,
+                "script_pubkey": "5120065188d1cb775b04e5e579af07ea5b6148e9785469c7ac5fa2fb8345349ecd46"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "bc85eb951c10930570e29f1750b2f026491bf3da579564a16fba0d98550acacae69d32b8da8999f00d768c33ac5dedc8caf04d989a2bef14372de503db1acb53",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 7000,
+                "script_pubkey": "51208eae0b447cca15881b798955c00d6b17a4e26c88a7a9408f2891f6ce8fecbeb5"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "14dc278100ecce72d44c59d1ccf675a247fc5bd929504d23e75601a49f5cabe3124db481032aba5496c1cc7f1290b8b331a6edca369197c7bff117acf0634658",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 2000,
+                "script_pubkey": "5120cd03ef84dd585f3737326fbd21f3b82b0935197544172e10333fb7d33dc0cbf8"
+              },
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "5ccb27f024fc1c6b0fcebbd435fadc107889c7819ca66e8b53181336e86fe051e08fa44ebb495702a8b1f71912e4328e28b399a53be94f47d6b2214a8ad77608",
+            "parent_index": 0
+          },
+          {
+            "other_outputs": [
+              {
+                "value": 0,
+                "script_pubkey": "51024e73"
+              }
+            ],
+            "signature": "1f61cd39fda436a58cbdc6ef1c6f468a245b9d25cb151c99bbc831ad676499deb66613d95dc6d59761d3fa5cb09da07438c7733bb7d237670c59f803d53d2aae",
+            "parent_index": 0
+          }
+        ],
+        "anchor_outpoint": {
+          "txid": "5037e17477099f3304a6fb2a11e0bf7e0215936d8c866aeb3ebfed8e223ba363",
+          "txid_display_hex": "63a33b228eedbf3eeb6a868c6d9315027ebfe0112afba604339f097774e13750",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "03010040b27520c28687482d959d60d4f7dbdc45a67653def9c5095b2d4843412995c9acda5cc9ac",
+        "exit_delta_raw": 512,
+        "exit_locktime_type": "seconds",
+        "legacy_lineage": [
+          {
+            "txid": "55732b61eaa57041c986bf02a03995174c4a0761999d09f3cc8af690a7aa073e",
+            "txid_display_hex": "3e07aaa790f68accf3099d9961074a4c179539a002bf86c94170a5ea612b7355",
+            "input_previous_outpoint": {
+              "txid": "5037e17477099f3304a6fb2a11e0bf7e0215936d8c866aeb3ebfed8e223ba363",
+              "txid_display_hex": "63a33b228eedbf3eeb6a868c6d9315027ebfe0112afba604339f097774e13750",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "a4dce0a7dd7a89f68ac6a2b8065e36e6444db68a948284b983467c3596204065a28a83af02bd82439f3f27ad4f9f1dd05ec6beab2e20a31a70111ed48561c425",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 36000,
+                "script_pubkey": "51200a122917f6f6b7821645bd2811a57ff599f15ec5513ecbcaf5ce858937a526a4",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 55000,
+                "script_pubkey": "51202e5abee1a05eea2cd1cf401ea05ce31c37225f6b3cceef8a25d4a438c617c909",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "ea9ce72cbe7d3f940186af0bb6639fe7261940f299ea3694cf0a13bd9c4f4aae",
+              "1": "a4bbc3a123b62f4932db341b6704752c32bde87887dc6bf95dcf36ba5959a50c"
+            },
+            "children_display_hex": {
+              "0": "ae4a4f9cbd130acf9436ea99f2401926e79f63b60baf8601943f7dbe2ce79cea",
+              "1": "0ca55959ba36cf5df96bdc8778e8bd322c7504671b34db32492fb623a1c3bba4"
+            }
+          },
+          {
+            "txid": "ea9ce72cbe7d3f940186af0bb6639fe7261940f299ea3694cf0a13bd9c4f4aae",
+            "txid_display_hex": "ae4a4f9cbd130acf9436ea99f2401926e79f63b60baf8601943f7dbe2ce79cea",
+            "input_previous_outpoint": {
+              "txid": "55732b61eaa57041c986bf02a03995174c4a0761999d09f3cc8af690a7aa073e",
+              "txid_display_hex": "3e07aaa790f68accf3099d9961074a4c179539a002bf86c94170a5ea612b7355",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "bc85eb951c10930570e29f1750b2f026491bf3da579564a16fba0d98550acacae69d32b8da8999f00d768c33ac5dedc8caf04d989a2bef14372de503db1acb53",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 10000,
+                "script_pubkey": "512055edb2f2c674a4a4e21851c89630a8456f7daf88a4cae18d214140b50d70255a",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 26000,
+                "script_pubkey": "5120065188d1cb775b04e5e579af07ea5b6148e9785469c7ac5fa2fb8345349ecd46",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "b6c0992fcc321b2f6aba9641f08bc6ba416a5e8a6d19e2eab4c3b25942c0b9b1",
+              "1": "1aaad0b6cbe2b4764c4b111bf4aa448d070b06426001b849eed88713d8155cb8"
+            },
+            "children_display_hex": {
+              "0": "b1b9c04259b2c3b4eae2196d8a5e6a41bac68bf04196ba6a2f1b32cc2f99c0b6",
+              "1": "b85c15d81387d8ee49b8016042060b078d44aaf41b114b4c76b4e2cbb6d0aa1a"
+            }
+          },
+          {
+            "txid": "b6c0992fcc321b2f6aba9641f08bc6ba416a5e8a6d19e2eab4c3b25942c0b9b1",
+            "txid_display_hex": "b1b9c04259b2c3b4eae2196d8a5e6a41bac68bf04196ba6a2f1b32cc2f99c0b6",
+            "input_previous_outpoint": {
+              "txid": "ea9ce72cbe7d3f940186af0bb6639fe7261940f299ea3694cf0a13bd9c4f4aae",
+              "txid_display_hex": "ae4a4f9cbd130acf9436ea99f2401926e79f63b60baf8601943f7dbe2ce79cea",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "14dc278100ecce72d44c59d1ccf675a247fc5bd929504d23e75601a49f5cabe3124db481032aba5496c1cc7f1290b8b331a6edca369197c7bff117acf0634658",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 3000,
+                "script_pubkey": "5120c45765f1f50561da53b40842ef502ed4783e2f166815aba0722a3aaceb80a1a1",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 7000,
+                "script_pubkey": "51208eae0b447cca15881b798955c00d6b17a4e26c88a7a9408f2891f6ce8fecbeb5",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "6f11b615e2243c624bc86be625e982c585dae2f2d74e0aaf24a1545e68ba5372",
+              "1": "353731aa22a4ea000bd6d8bf9ca50c8fde02fc9089b1afc844715a73853bd524"
+            },
+            "children_display_hex": {
+              "0": "7253ba685e54a124af0a4ed7f2e2da85c582e925e66bc84b623c24e215b6116f",
+              "1": "24d53b85735a7144c8afb18990fc02de8f0ca59cbfd8d60b00eaa422aa313735"
+            }
+          },
+          {
+            "txid": "6f11b615e2243c624bc86be625e982c585dae2f2d74e0aaf24a1545e68ba5372",
+            "txid_display_hex": "7253ba685e54a124af0a4ed7f2e2da85c582e925e66bc84b623c24e215b6116f",
+            "input_previous_outpoint": {
+              "txid": "b6c0992fcc321b2f6aba9641f08bc6ba416a5e8a6d19e2eab4c3b25942c0b9b1",
+              "txid_display_hex": "b1b9c04259b2c3b4eae2196d8a5e6a41bac68bf04196ba6a2f1b32cc2f99c0b6",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "5ccb27f024fc1c6b0fcebbd435fadc107889c7819ca66e8b53181336e86fe051e08fa44ebb495702a8b1f71912e4328e28b399a53be94f47d6b2214a8ad77608",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "512090fa065f309cf1f651236cf86b1ccd279a1eb898e53835d8af941ae25466d183",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 2000,
+                "script_pubkey": "5120cd03ef84dd585f3737326fbd21f3b82b0935197544172e10333fb7d33dc0cbf8",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "450c65e3817211666d815af2aead67e8857c54b76aa2f0d2e783ff3aef731ab2",
+              "1": "450bdf4067e0bb8af72d97150d363ba6ed4bf916d2424a83d523ae496ccc964c"
+            },
+            "children_display_hex": {
+              "0": "b21a73ef3aff83e7d2f0a26ab7547c85e867adaef25a816d66117281e3650c45",
+              "1": "4c96cc6c49ae23d5834a42d216f94beda63b360d15972df78abbe06740df0b45"
+            }
+          },
+          {
+            "txid": "450c65e3817211666d815af2aead67e8857c54b76aa2f0d2e783ff3aef731ab2",
+            "txid_display_hex": "b21a73ef3aff83e7d2f0a26ab7547c85e867adaef25a816d66117281e3650c45",
+            "input_previous_outpoint": {
+              "txid": "6f11b615e2243c624bc86be625e982c585dae2f2d74e0aaf24a1545e68ba5372",
+              "txid_display_hex": "7253ba685e54a124af0a4ed7f2e2da85c582e925e66bc84b623c24e215b6116f",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "1f61cd39fda436a58cbdc6ef1c6f468a245b9d25cb151c99bbc831ad676499deb66613d95dc6d59761d3fa5cb09da07438c7733bb7d237670c59f803d53d2aae",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 1000,
+                "script_pubkey": "5120f21efc6efb61aedbb97f65fc280585da4ea18dec030d31569c35622e4eec426c",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {}
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 13,
+        "receiver_script_closures": [
+          "03010040b27520c28687482d959d60d4f7dbdc45a67653def9c5095b2d4843412995c9acda5cc9ac",
+          "20c28687482d959d60d4f7dbdc45a67653def9c5095b2d4843412995c9acda5cc9ad207dfab9062d02a1a1098da4e91af0442cf561a9b057e7f31847bd35d809fe4a6bac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "03010040b27520c28687482d959d60d4f7dbdc45a67653def9c5095b2d4843412995c9acda5cc9ac",
+            "tapleaf_hash": "c8892813c16af827aa55fc26fabd9635bd70211e8a715cf24d1a2b2df2746810",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac06062f98a5ca0d053c2eed877f24e77088d97332a693d8b15f881ac46129607df"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "20c28687482d959d60d4f7dbdc45a67653def9c5095b2d4843412995c9acda5cc9ad207dfab9062d02a1a1098da4e91af0442cf561a9b057e7f31847bd35d809fe4a6bac",
+            "tapleaf_hash": "6062f98a5ca0d053c2eed877f24e77088d97332a693d8b15f881ac46129607df",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0c8892813c16af827aa55fc26fabd9635bd70211e8a715cf24d1a2b2df2746810"
+          }
+        ],
+        "taproot_merkle_root": "bf43fff4c922fa80b62a46ab10d6963b8ccc875f305b16ee30da35d5d0840d08",
+        "taproot_output_key": "f21efc6efb61aedbb97f65fc280585da4ea18dec030d31569c35622e4eec426c",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "55732b61eaa57041c986bf02a03995174c4a0761999d09f3cc8af690a7aa073e",
+          "root_txid_display_hex": "3e07aaa790f68accf3099d9961074a4c179539a002bf86c94170a5ea612b7355",
+          "leaf_count": 13,
+          "serialized_nodes": 25
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "b21a73ef3aff83e7d2f0a26ab7547c85e867adaef25a816d66117281e3650c45",
+        "vtxo_id_wire_hex": "450c65e3817211666d815af2aead67e8857c54b76aa2f0d2e783ff3aef731ab2"
+      }
+    },
+    {
+      "vector_id": "balanced_binary_13_branch_root",
+      "category": "round_branch",
+      "scenario": "balanced_binary_13",
+      "participant_count": 13,
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "",
+        "exit_delta_raw": 0,
+        "exit_locktime_type": "",
+        "legacy_lineage": [
+          {
+            "txid": "55732b61eaa57041c986bf02a03995174c4a0761999d09f3cc8af690a7aa073e",
+            "txid_display_hex": "3e07aaa790f68accf3099d9961074a4c179539a002bf86c94170a5ea612b7355",
+            "input_previous_outpoint": {
+              "txid": "5037e17477099f3304a6fb2a11e0bf7e0215936d8c866aeb3ebfed8e223ba363",
+              "txid_display_hex": "63a33b228eedbf3eeb6a868c6d9315027ebfe0112afba604339f097774e13750",
+              "vout": 0
+            },
+            "input_sequence": 4294967295,
+            "taproot_key_spend_signature": "a4dce0a7dd7a89f68ac6a2b8065e36e6444db68a948284b983467c3596204065a28a83af02bd82439f3f27ad4f9f1dd05ec6beab2e20a31a70111ed48561c425",
+            "taproot_key_spend_sig_byte_len": 64,
+            "taproot_key_spend_sig_is_bip340_64": true,
+            "outputs": [
+              {
+                "vout": 0,
+                "amount": 36000,
+                "script_pubkey": "51200a122917f6f6b7821645bd2811a57ff599f15ec5513ecbcaf5ce858937a526a4",
+                "is_anchor": false
+              },
+              {
+                "vout": 1,
+                "amount": 55000,
+                "script_pubkey": "51202e5abee1a05eea2cd1cf401ea05ce31c37225f6b3cceef8a25d4a438c617c909",
+                "is_anchor": false
+              },
+              {
+                "vout": 2,
+                "amount": 0,
+                "script_pubkey": "51024e73",
+                "is_anchor": true
+              }
+            ],
+            "children": {
+              "0": "ea9ce72cbe7d3f940186af0bb6639fe7261940f299ea3694cf0a13bd9c4f4aae",
+              "1": "a4bbc3a123b62f4932db341b6704752c32bde87887dc6bf95dcf36ba5959a50c"
+            },
+            "children_display_hex": {
+              "0": "ae4a4f9cbd130acf9436ea99f2401926e79f63b60baf8601943f7dbe2ce79cea",
+              "1": "0ca55959ba36cf5df96bdc8778e8bd322c7504671b34db32492fb623a1c3bba4"
+            }
+          }
+        ],
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 13,
+        "receiver_script_closures": null,
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "",
+        "taproot_leaves": null,
+        "taproot_merkle_root": "",
+        "taproot_output_key": "",
+        "transition": null,
+        "tree_summary": {
+          "root_txid": "55732b61eaa57041c986bf02a03995174c4a0761999d09f3cc8af690a7aa073e",
+          "root_txid_display_hex": "3e07aaa790f68accf3099d9961074a4c179539a002bf86c94170a5ea612b7355",
+          "leaf_count": 13,
+          "serialized_nodes": 25
+        },
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "3e07aaa790f68accf3099d9961074a4c179539a002bf86c94170a5ea612b7355",
+        "vtxo_id_wire_hex": "55732b61eaa57041c986bf02a03995174c4a0761999d09f3cc8af690a7aa073e",
+        "vtxo_ingredient_omitted_reason": "Internal tree node script is an aggregated taproot; use round_leaf vectors for a full VtxoIngredient."
+      }
+    },
+    {
+      "vector_id": "fire_escape_transition",
+      "category": "transition_fire_escape",
+      "scenario": "single_vtxo_timeout_exit",
+      "vtxo_ingredient": {
+        "dialect_version": 4,
+        "amount": 100000,
+        "script_pubkey": "51200bff60abf092987a3fd1fab08acf9c64c026df0b11d600f29993887a6c9e2418",
+        "vout": 0,
+        "exit_delta": 144,
+        "sequence": 144,
+        "internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "asp_expiry_script": "029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac",
+        "path": null,
+        "anchor_outpoint": {
+          "txid": "b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1",
+          "txid_display_hex": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+          "vout": 0
+        }
+      },
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac",
+        "exit_delta_raw": 144,
+        "exit_locktime_type": "blocks",
+        "legacy_lineage": null,
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 0,
+        "receiver_script_closures": [
+          "029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac",
+          "2042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ad20161c98b390c66973b5a01abbd0ad5f312f85e44b8e30a2d1e22351639e029a1cac"
+        ],
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
+        "taproot_leaves": [
+          {
+            "closure_type": "CSVMultisigClosure",
+            "script_hex": "029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac",
+            "tapleaf_hash": "f5a57f55c08ae42500d15bd4bc6fd839017404518983a10c010fa3d46e179871",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac03e37442e58d003417ab2bdea6718794dc2ef7330b2c4f200d0e9cca0a817127b"
+          },
+          {
+            "closure_type": "MultisigClosure",
+            "script_hex": "2042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ad20161c98b390c66973b5a01abbd0ad5f312f85e44b8e30a2d1e22351639e029a1cac",
+            "tapleaf_hash": "3e37442e58d003417ab2bdea6718794dc2ef7330b2c4f200d0e9cca0a817127b",
+            "control_block": "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0f5a57f55c08ae42500d15bd4bc6fd839017404518983a10c010fa3d46e179871"
+          }
+        ],
+        "taproot_merkle_root": "2765bde6e989487fe5125ee89b2ba2c21b4117c7102d93da94873cebd63d4f0b",
+        "taproot_output_key": "0bff60abf092987a3fd1fab08acf9c64c026df0b11d600f29993887a6c9e2418",
+        "transition": {
+          "raw_tx_hex": "02000000000101b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a100000000009000000001ac84010000000000225120161c98b390c66973b5a01abbd0ad5f312f85e44b8e30a2d1e22351639e029a1c0340df191222eb47215e67d2518f1f2ab43b7350845a014b312bf5ded79aeff2c0babf70b4425ee42171727a197ff8250e6166e68c14b9fa61c4bbd6f396c4b322d427029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac41c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac03e37442e58d003417ab2bdea6718794dc2ef7330b2c4f200d0e9cca0a817127b00000000",
+          "spent_by_txid": "f10ede18582b94089eab6532455d138b584b6855e4349e56640b953c66fa9435",
+          "spent_by_txid_wire_hex": "3594fa663c950b64569e34e455684b588b135d453265ab9e08942b5818de0ef1",
+          "witness_stack": [
+            "df191222eb47215e67d2518f1f2ab43b7350845a014b312bf5ded79aeff2c0babf70b4425ee42171727a197ff8250e6166e68c14b9fa61c4bbd6f396c4b322d4",
+            "029000b2752042bbf81c5e95884b04b6c1442c16b4e90931d386a03253b9d9ccbe6140a8d6c4ac",
+            "c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac03e37442e58d003417ab2bdea6718794dc2ef7330b2c4f200d0e9cca0a817127b"
+          ]
+        },
+        "tree_summary": null,
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "5b5ade9f69934054d4011ee8493d6d9fae40c76ff5f00bfca287625a7a9048b9",
+        "vtxo_id_wire_hex": "b948907a5a6287a2fc0bf0f56fc740ae9f6d3d49e81e01d4544093699fde5a5b"
+      }
+    },
+    {
+      "vector_id": "forfeit_transition",
+      "category": "transition_forfeit",
+      "scenario": "single_vtxo_forfeit",
+      "reconstruction_metadata": {
+        "asp_expiry_script_hex": "",
+        "exit_delta_raw": 0,
+        "exit_locktime_type": "",
+        "legacy_lineage": null,
+        "lineage_sequential_note": "path steps are ordered from the transaction that spends the L1 batch anchor (tree root) toward the VTXO leaf.",
+        "participant_count": 0,
+        "receiver_script_closures": null,
+        "signature_note": "path[].signature is 64-byte BIP-340 Schnorr (r||s), aggregated MuSig2 taproot key-spend.",
+        "taproot_internal_key": "",
+        "taproot_leaves": null,
+        "taproot_merkle_root": "",
+        "taproot_output_key": "",
+        "transition": {
+          "forfeit_psbt_b64": "cHNidP8BAGsDAAAAAbDfaCI/X3ZNRBS8cFTqLPXz3rtG1UnhZqnDBMmnF3+NAAAAAAD+////AghSAAAAAAAAIlEgebK5Dv529nKv5tl26YmMdjnRa1p6GtE7NqGqkDCU+YYAAAAAAAAAAARRAk5zAAAAAAABASsIUgAAAAAAACJRIIFdSvN09WInm8/Ed7dhfNXZ79e5d1c721KkLFIgBV9bAAAA",
+          "forfeit_txid": "51fcd8b156ff5842879671eb6d0143ece28e1f1ad09f928d3b23b4cf81041989",
+          "forfeit_txid_wire_hex": "89190481cfb4233b8d929fd01a1f8ee2ec43016deb7196874258ff56b1d8fc51",
+          "nsequence": 4294967294,
+          "raw_tx_hex": "0300000001b0df68223f5f764d4414bc7054ea2cf5f3debb46d549e166a9c304c9a7177f8d0000000000feffffff02085200000000000022512079b2b90efe76f672afe6d976e9898c7639d16b5a7a1ad13b36a1aa903094f98600000000000000000451024e7300000000"
+        },
+        "tree_summary": null,
+        "txid_byte_order_note": "All `txid` fields in vtxo_ingredient.anchor_outpoint and legacy lineage use wire/consensus order: hex.EncodeToString(chainhash.Hash[:]) as serialized in prevouts. Bitcoin display / RPC / MsgTx.TxID order is the byte-reversed hex (see *_display_hex fields).",
+        "vtxo_id_display_hex": "8d7f17a7c904c3a966e149d546bbdef3f52cea5470bc14444d765f3f2268dfb0",
+        "vtxo_id_wire_hex": "b0df68223f5f764d4414bc7054ea2cf5f3debb46d549e166a9c304c9a7177f8d"
+      }
+    }
+  ]
+}
